@@ -3,13 +3,12 @@
 @brief	Program to generate symmetry axes for point group symmetries
 @author Bernard Heymann
 @date	Created: 20001119
-@date	Modified: 20191104
+@date	Modified: 20230524
 **/
 
 #include "rwimg.h"
 #include "rwsymop.h"
 #include "symmetry.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -17,7 +16,7 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
-int			img_write_symmetry_views(Bimage* p, Bsymmetry& sym, View ref_view,
+int			img_write_symmetry_views(Bimage* p, Bsymmetry& sym, View2<double> ref_view,
 				Bstring& filename, DataType datatype, double avg, double std);
 
 // Usage assistance
@@ -83,7 +82,7 @@ int 	main(int argc, char **argv)
 	double			z_slope(0);					// Slope along z to adjust the radius
 	Vector3<double>	origin;						// Origin
 	int				set_origin(0); 				// Flag to set origin
-	View			ref_view;					// Reference view
+	View2<double>	ref_view;					// Reference view
 	double			hires(0), lores(0);			// Resolution limits for cross-correlation
 	Bsymmetry		sym;						// Point group
 	Bsymmetry		symnu;						// New point group
@@ -123,8 +122,8 @@ int 	main(int argc, char **argv)
 				find_angle *= M_PI/180.0;
 		}
 		if ( curropt->tag == "change" ) {
-			sym = Bsymmetry(curropt->value.pre(','));
-			symnu = Bsymmetry(curropt->value.post(','));
+			sym = Bsymmetry(curropt->value.pre(',').str());
+			symnu = Bsymmetry(curropt->value.post(',').str());
 		}
 		if ( curropt->tag == "origin" ) {
 			if ( curropt->value[0] == 'c' ) {
@@ -183,11 +182,11 @@ int 	main(int argc, char **argv)
 	
 	double		ti = timer_start();
 
-	if ( show & 1 ) sym_show_operational_matrices(sym);
-	if ( show & 2) sym_show_pdb_matrices(sym);
+	if ( show & 1 ) sym.show_operational_matrices();
+	if ( show & 2) sym.show_pdb_matrices();
 	
 	if ( pgfile.length() )
-		write_pointgroup(pgfile, sym, ref_view);
+		write_pointgroup(pgfile.str(), sym, ref_view);
 	
 	// Read image file
 	int 		dataflag(0);
@@ -274,7 +273,7 @@ int 	main(int argc, char **argv)
 	delete p;
 	delete ptemp;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -283,7 +282,7 @@ int 	main(int argc, char **argv)
 /**
 @brief 	Rotates an image to all symmetry-related views and writes out the resultant images.
 @param 	*p				image to be rotated and saved.
-@param 	*sym			point group symmetry.
+@param 	&sym			point group symmetry.
 @param 	ref_view		reference view (default 0,0,1,0).
 @param 	&filename		output filename (converted to name_??.img)
 @param 	datatype		new data type.
@@ -297,26 +296,24 @@ int 	main(int argc, char **argv)
 	are numbered with an underscore and two digits, starting at 1.
 
 **/
-int			img_write_symmetry_views(Bimage* p, Bsymmetry& sym, View ref_view,
+int			img_write_symmetry_views(Bimage* p, Bsymmetry& sym, View2<double> ref_view,
 				Bstring& filename, DataType datatype, double avg, double std)
 {
-	int				i;
+	int				i(1);
 	Bstring			outname;
 	Bimage*			prot = NULL;
-	View*			v;
-	View*			view = symmetry_get_all_views(sym, ref_view);
+	vector<View2<double>>	views = sym.get_all_views(ref_view);
 
-	for ( i=1, v=view; v; v=v->next, i++ ) {
-		prot = p->rotate(p->size(), *v);
+	for ( auto& v: views ) {
+		prot = p->rotate(p->size(), v);
 		outname = filename.pre_rev('.') + Bstring(i, "_%02d.") + filename.post_rev('.');
 		if ( std ) prot->rescale_to_avg_std(avg, std);
 		prot->change_type(datatype);
 		write_img(outname, prot, 0);
 		delete prot;
+		i++;
 	}
 	
-	kill_list((char *) view, sizeof(View));
-
 	return 0;
 }
 

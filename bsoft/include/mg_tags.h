@@ -3,7 +3,7 @@
 @brief	All STAR and XML file format tags for micrographs and reconstructions
 @author Bernard Heymann
 @date	Created: 20000419
-@date	Modified: 20210728
+@date	Modified: 20230209
 **/
 
 // Do not change the constant names because they are referenced in code
@@ -163,11 +163,18 @@
 
 // Parameters for the CTF
 #define	CTF							"ctf"
+#define	CTF_ID						"ctf.id"
+#define	CTF_SELECT					"ctf.select"
+#define	CTF_FOM						"ctf.fom"
 #define	CTF_VOLTAGE					"ctf.voltage"
 #define	CTF_FOCAL					"ctf.focal_length"
 #define	CTF_APERTURE				"ctf.objective_aperture"
 #define	CTF_CS						"ctf.Cs"
 #define	CTF_CC						"ctf.Cc"
+#define	CTF_TILT_X					"ctf.beam_tilt_x"
+#define	CTF_TILT_Y					"ctf.beam_tilt_y"
+#define	CTF_ABERRATION_ODD			"ctf.aberration_odd"
+#define	CTF_ABERRATION_EVEN			"ctf.aberration_even"
 #define	CTF_ALPHA					"ctf.alpha"
 #define	CTF_DE						"ctf.energy_spread"
 #define	CTF_AMP						"ctf.amp_contrast"
@@ -180,6 +187,10 @@
 #define	CTF_AST_ANG					"ctf.astigmatism_angle"
 #define	CTF_BASELINE				"ctf.baseline"
 #define	CTF_ENVELOPE				"ctf.envelope"
+#define CTF_ABERRATION				"ctf.aberration"
+#define CTF_ABERRATION_N			"ctf.aberration_n"
+#define CTF_ABERRATION_M			"ctf.aberration_m"
+#define CTF_ABERRATION_COEFFICIENT	"ctf.aberration_coefficient"
 
 // Parameters for each individual particle image
 #define PARTICLE				"particle"

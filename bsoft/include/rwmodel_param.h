@@ -1,11 +1,12 @@
 /**
 @file	rwmodel_param.h
 @brief	Header to read and write model dynamics parameters in STAR format
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20100305
-@date	Modified: 20210224
+@date	Modified: 20230717
 **/
 
+//#include "Bmaterial.h"
 #include "rwmodel.h"
 
 #ifndef _Bmodparam_
@@ -55,8 +56,10 @@ public:
 	double		radius;			// Radius for radial force
 	Vector3<double>	point;		// Center of point or radial force
 	Bmodel*		guide;			// Polyhedron guide model
+	int			distancetype;	// 1=harmonic, 2=soft, 3=lennard-jones, 4=morse
 	int			linksteps;		// Number of sampling intervals along a link
-	int			wrap;			// Flag to turn periodic boundaries on
+	Vector3<double>	min, max;	// Boundary of box
+	bool		wrap;			// Flag to turn periodic boundaries on
 	double		sigma;			// Gaussian decay for density fitting
 	double		Edistance;		// Non-linked distance energy
 	double		Eelec;			// Electrostatic energy
@@ -96,117 +99,79 @@ private:
 		cutoff = 10;
 		pointdecay = 0.01;
 		radius = 0;
+		distancetype = 1;
 		linksteps = 3;
 		wrap = 0;
 		sigma = 0;
 	}
 public:
 	Bmodparam()	{ initialize(); }
-} ;
-#endif
-
-#ifndef _Bmaterial_
-#define _Bmaterial_
-#define	MATERIAL_NAME		"material.name"
-#define	MATERIAL_DENSITY	"material.density"
-#define	MATERIAL_DENS_UNIT	"material.density_unit"
-
-class Bmaterial {
-private:
-	string				id;		// Material name
-	double				den;	// Density in g/cm3
-	int					unt;	// Density units: 0 = g/cm3, 1 = Da/Å3, 2 = number/Å3
-	long				sel;	// Selection
-	map<string,Bcomptype>	comp;	// Elemental composition
-public:
-	void		identifier(string s) { id = s; }
-	string		identifier() { return id; }
-	void		select(long i) { sel = i; }
-	long		select() { return sel; }
-	void		density(double d, int u) { den = d; unt = u; }
-	double		density(int u) {
-		if ( u == 0 ) return gram_per_cm3();
-		else if ( u == 1 ) return dalton_per_angstrom3();
-		else return number_per_angstrom3();
+	void			minimum(Vector3<double> v) { min = v; }
+	Vector3<double>	minimum() { return min; }
+	void			maximum(Vector3<double> v) { max = v; }
+	Vector3<double>	maximum() { return max; }
+	Vector3<double>	box() { return max - min; }
+	void		show() {
+//		cout << "Kfriction:                      " << Kfriction << endl;
+		cout << "Kdistance:                      " << Kdistance << " (" << distancetype << ")" << endl;
+		cout << "Klink:                          " << Klink << endl;
+		cout << "Kangle:                         " << Kangle << endl;
+		cout << "Kpolyangle:                     " << Kpolyangle << endl;
+		cout << "Kpolygon:                       " << Kpolygon << endl;
+		cout << "Kpolyplane:                     " << Kpolyplane << endl;
+		cout << "Kpoint and decay:               " << Kpoint << " (" << pointdecay << ")" << endl;
+		cout << "Kradial and radius:             " << Kradial << " (" << radius << ")" << endl;
+		cout << "Kplane:                         " << Kplane << endl;
+		cout << "Box mimimum:                    " << min << endl;
+		cout << "Box maximum:                    " << max << endl;
 	}
-	double		gram_per_cm3() {
-		if ( unt == 1 ) return den*1.0e24/AVOGADRO;
-		else if ( unt == 2 ) return den*mass()*1.0e24/AVOGADRO;
-		return den;
+	void		show_types() {
+		cout << "Component types:" << endl << "#\tName\tMass" << endl;;
+		for ( auto c: comptype )
+			cout << c.second.index() << tab << c.first << tab << c.second.mass() << endl;
 	}
-	double		dalton_per_angstrom3() {
-		if ( unt == 0 ) return AVOGADRO*den/1.0e24;
-		else if ( unt == 2 ) return den*mass();
-		return den;
-	}
-	double		number_per_angstrom3() {
-		if ( unt == 0 ) return AVOGADRO*den/(1.0e24*mass());
-		else if ( unt == 1 ) return den/mass();
-		return den;
-	}
-	double		unit(int u) {
-		if ( u == unt ) return den;
-		if ( u == 0 ) den = gram_per_cm3();
-		else if ( u == 1 ) den = dalton_per_angstrom3();
-		else den = number_per_angstrom3();
-		unt = u;
-		return den;
-	}
-	int			unit() { return unt; }
-	map<string,Bcomptype>&	composition() { return comp; }
-	Bcomptype&	operator[](string s) { return comp[s]; }
-	long		number() {
-		long		n(0);
-		for ( auto i: comp ) n += i.second.component_count();
-		return n;
-	}
-	double		mass() {
-		double		m(0);
-		for ( auto ct: comp ) m += ct.second.mass() * ct.second.component_count();
-		return m;
-	}
-	void		mass(double m) {
-		double		r(m/mass());
-		for ( auto &ct: comp ) ct.second.component_count(ct.second.component_count()*r);
-	}
-	void		update_parameters(map<string,Bcomptype>& types) {
-		for ( auto &it: comp ) {
-			Bcomptype&		ct = it.second;
-			if ( types.find(it.first) != types.end() ) {
-				Bcomptype&	at = types[it.first];
-				ct.identifier(at.identifier());
-				ct.index(at.index());
-				ct.mass(at.mass());
-				ct.charge(at.charge());
-				ct.coefficients(at.coefficients());
+	void		show_links() {
+		long		i(0), j(0);
+		cout << "Link types:" << endl << "#1\t#2\tLength\tDistance" << endl;
+		for ( auto lr: linktype ) {
+			j = 0;
+			for ( auto l: lr ) {
+				cout << i << tab << j << tab << l.length() << tab << l.distance() << endl;
+				j++;
 			}
+			i++;
 		}
 	}
-	void		show() {
-		cout << "Material:                       " << id << endl;
-		cout << "Density:                        " << den;
-		if ( unt == 0 ) cout << " g/cm3" << endl;
-		else if ( unt == 1 ) cout << " Da/A3" << endl;
-		else cout << " #/A3" << endl;
-		cout << "Composition:" << endl;
-		cout << "Element\tCount\tMass" << endl;
-		for ( auto ct: comp )
-			cout << ct.second.identifier() << tab << ct.second.component_count()
-				<< tab << ct.second.mass() << endl;
-		cout << "Mass:                           " << mass() << " Da" << endl << endl;
+	void		show_angles() {
+		long		i(0), j(0), k(0);
+		cout << "Angle types:" << endl << "#1\t#2\t#3\tAngle" << endl;
+		for ( auto am: angletype ) {
+			j = 0;
+			for ( auto ar: am ) {
+				k = 0;
+				for ( auto a: ar ) {
+					cout << i << tab << j << tab << k << tab << a.angle()*180.0/M_PI << endl;
+					k++;
+				}
+				j++;
+			}
+			i++;
+		}
 	}
 } ;
-
 #endif
 
 // Function prototypes
+Bmaterial	material_from_model(Bmodel* model);
 Bmodparam	model_param_generate(Bmodel* model);
 int			model_param_generate(Bmodparam& md, Bmodel* model);
 int			model_param_set_type_indices(Bmodel* model, Bmodparam& mp);
-map<string,Bcomptype> 	read_atom_properties(Bstring& filename);
-map<string,Bmaterial> 	read_material_properties(Bstring& filename);
-int			write_material_properties(Bstring& filename, map<string,Bmaterial> material);
-Bmodparam 	read_dynamics_parameters(Bstring& filename);
-int			update_dynamics_parameters(Bmodparam& md, Bstring& filename);
-int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md);
+int			model_update_reference_parameters(Bmodel* model, Bmodparam& md);
+map<string,Bcomptype> 	read_atom_properties(string& filename);
+map<string,Bmaterial> 	read_material_properties(string& filename);
+map<string,Bmaterial> 	read_material_properties(vector<string> file_list, string paramfile, int flags);
+int			write_material_properties(string filename, map<string,Bmaterial> material);
+Bmodparam 	read_dynamics_parameters(string filename);
+int			update_dynamics_parameters(Bmodparam& md, string filename);
+int		 	write_dynamics_parameters(string filename, Bmodparam& md);
 

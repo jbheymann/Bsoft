@@ -1,6 +1,7 @@
 var class_bstrucfac =
 [
     [ "Bstrucfac", "class_bstrucfac.html#aca45dfe71948e4db1454490ef19e69ef", null ],
+    [ "count", "class_bstrucfac.html#a397951d87129c7cffffc0da5ca5264b4", null ],
     [ "amp", "class_bstrucfac.html#afe6f52c5ced4e2adb883843418168d03", null ],
     [ "fom", "class_bstrucfac.html#ace1571a32a1748503e582dedb9123228", null ],
     [ "index", "class_bstrucfac.html#ab2df0f0be1455f96185ec23fc3c65a0d", null ],

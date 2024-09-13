@@ -44,14 +44,14 @@ int 		main(int argc, char **argv)
 {
 	// Initialize variables
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
-	Vector3<double>	sam;				// Units for the three axes (A/pixel)
-	Vector3<double>	origin;			// New image origin
+	Vector3<double>	sam;						// Units for the three axes (A/pixel)
+	Vector3<double>	origin;						// New image origin
 	int				set_origin(0);				// Flag to set origin
 	Bstring			nuformat("pif");			// New image file format
 	Bstring			nuext;						// New extension after writing
 	Bstring			rawstring;
 	int 			setrescale(0);
-	double			nuavg(0), nustd(0);		// Rescale image
+	double			nuavg(0), nustd(0);			// Rescale image
 	
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -135,7 +135,7 @@ int 		main(int argc, char **argv)
 		}
 	}
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

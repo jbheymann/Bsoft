@@ -361,7 +361,7 @@ int			main(int argc, char* argv[])
 	project_kill(project);
 	if ( projcomp ) project_kill(projcomp);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	return 0;

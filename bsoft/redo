@@ -13,6 +13,10 @@ rm lib/*
 
 make
 
+rm -rf $BINSTALL/lib
+rm -rf $BINSTALL/bin/$1
+rm -rf $BINSTALL/tcltk
+
 cp -r lib $BINSTALL
 cp -r bin/$1 $BINSTALL/bin/
 cp -r tcltk $BINSTALL

@@ -3,7 +3,7 @@
 @brief	Program to analyze icosahedral subtomograms
 @author Bernard Heymann
 @date	Created: 20180427
-@date	Modified: 20201124
+@date	Modified: 20230524
 
 **/
 
@@ -13,7 +13,6 @@
 #include "rwimg.h"
 #include "rwsymop.h"
 #include "symmetry.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -201,13 +200,13 @@ int 	main(int argc, char **argv)
 	delete pmask;
 	delete pfsmask;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
 }
 
-Bimage*		img_read_orient_mask(Bstring& filename, Bimage* pmask, View view)
+Bimage*		img_read_orient_mask(Bstring& filename, Bimage* pmask, View2<double> view)
 {
 	Bimage*		p = read_img(filename, 1, 0);
 	
@@ -277,7 +276,7 @@ long		particle_worst_vertex(Bparticle* vert, Bimage* pref, Bimage* pmask, Bimage
 #ifdef HAVE_GCD
 	dispatch_apply(11, dispatch_get_global_queue(0, 0), ^(size_t i){
 		Bparticle*		v = varr[i];
-		Bimage*			p = img_read_orient_mask(v->fpart, pmask, v->view);
+		Bimage*			p = img_read_orient_mask(v->fpart, pmask, v->view2());
 		v->fom[0] = img_cc(p, pref, pfsmask, hires, lores);
 		delete p;
 	});
@@ -285,7 +284,7 @@ long		particle_worst_vertex(Bparticle* vert, Bimage* pref, Bimage* pmask, Bimage
 #pragma omp parallel for
 	for ( i=0; i<12; ++i ) {
 		Bparticle*		v = varr[i];
-		Bimage*			p = img_read_orient_mask(v->fpart, pmask, v->view);
+		Bimage*			p = img_read_orient_mask(v->fpart, pmask, v->view2());
 		v->fom[0] = img_cc(p, pref, pfsmask, hires, lores);
 		delete p;
 	}
@@ -323,11 +322,11 @@ long		particle_cc_opposite_vertices(Bparticle* vert, Bimage* pmask,
 		vert2->fom[0] = -2;
 	
 	for ( i=0; vert && i<11; vert = vert->next, ++i ) if ( vert->fom[0] < -1 ) {
-		p1 = img_read_orient_mask(vert->fpart, pmask, vert->view);
+		p1 = img_read_orient_mask(vert->fpart, pmask, vert->view2());
 		for ( j=i+1, vert2 = vert->next; vert2 && j<12; vert2 = vert2->next, ++j )
 			if ( vert->view.backward().angle(vert2->view.backward()) > at ) break;
 		if ( j<12 && vert2 ) {
-			p2 = img_read_orient_mask(vert2->fpart, pmask, vert2->view);
+			p2 = img_read_orient_mask(vert2->fpart, pmask, vert2->view2());
 			cc = img_cc(p1, p2, pfsmask, hires, lores);
 			delete p2;
 			vert->fom[0] = vert2->fom[0] = cc;
@@ -363,7 +362,7 @@ long		particle_worst_opposite_vertex(Bparticle* vert, Bimage* pref,
 
 	for ( i=1, vert2 = vert; vert2 && i<=12; vert2 = vert2->next, ++i ) {
 		if ( vert2->sel == 2 ) {
-			p = img_read_orient_mask(vert2->fpart, pmask, vert2->view);
+			p = img_read_orient_mask(vert2->fpart, pmask, vert2->view2());
 			cc = img_cc(p, pref, pfsmask, hires, lores);
 			delete p;
 			if ( vert1 ) {
@@ -389,25 +388,22 @@ long		particle_best_c5(Bparticle* part, Bimage* pref, Bimage* pmask,
 				Bimage* pfsmask, double hires, double lores)
 {
 	long				i, psel(0);	
-	double*				cc = new double[5];
 	
 	Bsymmetry 			sym("C5");
-	View*				views = symmetry_get_all_views(sym, part->view);
-	View*				v;
-	vector<View>		view_arr(5);
-	for ( i=0, v=views; v; v=v->next, ++i ) view_arr[i] = *v;
-	kill_list((char *) views, sizeof(View));
+	vector<View2<double>>	views = sym.get_all_views(part->view2());
 
 #ifdef HAVE_GCD
+	__block	vector<double>  cc(5);
 	dispatch_apply(4, dispatch_get_global_queue(0, 0), ^(size_t i){
-		Bimage*			p = img_read_orient_mask(part->fpart, pmask, view_arr[i]);
+		Bimage*			p = img_read_orient_mask(part->fpart, pmask, views[i]);
 		cc[i] = img_cc(p, pref, pfsmask, hires, lores);
 		delete p;
 	});
 #else
+	vector<double>  	cc(5);
 #pragma omp parallel for
 	for ( i=0; i<5; ++i ) {
-		Bimage*			p = img_read_orient_mask(part->fpart, pmask, view_arr[i]);
+		Bimage*			p = img_read_orient_mask(part->fpart, pmask, views[i]);
 		cc[i] = img_cc(p, pref, pfsmask, hires, lores);
 		delete p;
 	}
@@ -420,11 +416,9 @@ long		particle_best_c5(Bparticle* part, Bimage* pref, Bimage* pmask,
 		if ( part->fom[0] < cc[i] ) {
 			psel = i+1;
 			part->fom[0] = cc[i];
-			part->view = view_arr[i];
+			part->view2(views[i]);
 		}
 	}
-	
-	delete[] cc;
 	
 	return psel;
 }
@@ -706,7 +700,7 @@ long		project_assign_special_vertex_orientations(Bproject* project, Bproject* pr
 
 long		project_analyze_vertices(Bproject* project, double threshold)
 {
-	long				i, i2, imin, npart(0), nvert(0), nodd, noddtot(0);
+	long				i, i2, imin, npart(0), nodd, noddtot(0);
 	long				h, nh(40), bins(nh+1);
 	double				avg, max, min, min2, fommax(2), scale(nh/fommax);
 	vector<double>		fom(12,0);
@@ -755,7 +749,6 @@ long		project_analyze_vertices(Bproject* project, double threshold)
 			}
 			if ( verbose )
 				cout << part->group << tab << avg << tab << i2 << tab << imin << tab << nodd << endl;
-			nvert += i;
 			noddtot += nodd;
 			if ( i < 12 )
 				cerr << "Error: Too few vertices! (" << i << ")" << endl;
@@ -777,7 +770,7 @@ long		project_analyze_vertices(Bproject* project, double threshold)
 
 long		project_analyze_vertices2(Bproject* project, double significance)
 {
-	long				i, npart(0), nvert(0), non, nop, nontot(0), noptot(0);
+	long				i, npart(0), non, nop, nontot(0), noptot(0);
 	double				avg, sig, t;
 	double				avgall(0), sigall(0);
 //	double				alpha(1.796);
@@ -819,7 +812,6 @@ long		project_analyze_vertices2(Bproject* project, double significance)
 			}
 			if ( verbose )
 				cout << part->group << tab << avg << tab << sig << tab << avg/sig << tab << non << tab << nop << endl;
-			nvert += i;
 			nontot += non;
 			noptot += nop;
 			if ( i < 12 )

@@ -9,6 +9,6 @@
 #include "rwmodel.h"
 
 // Function prototypes
-Bmodel*		read_model_xml(Bstring* file_list);
-int			write_model_xml(Bstring& filename, Bmodel* model);
+Bmodel*		read_model_xml(vector<string> file_list);
+int			write_model_xml(string& filename, Bmodel* model);
 

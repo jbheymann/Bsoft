@@ -7,7 +7,6 @@
 **/
 
 #include "rwXPLOR.h"
-#include "linked_list.h"
 #include "Complex.h"
 #include "utilities.h"
 #include <fstream>
@@ -299,11 +298,11 @@ int 	writeXPLORmap(Bimage* p)
 @brief	Writing a XPLOR structure factor file format.
 A structure factor text format used in X-ray crystallography.
 @param	*p			the image structure.
-@return	int					error code (<0 means failure).
+@return	int			error code (<0 means failure).
 **/
 int 	writeXPLORsf(Bimage* p)
 {
-    long   			i, x, y, z, n = 0, nw = 0, freeflag = 0;
+    long   			i, x, y, z, n = 0, freeflag = 0;
 	long			data_size = p->sizeX()*p->sizeY()*p->sizeZ();
     long			h, k, l;
 	float			fom1 = 1;
@@ -342,7 +341,7 @@ int 	writeXPLORsf(Bimage* p)
 						<< "  FOBS=" << data[i].amp() 
 						<< "  PHASE=" << data[i].phi()*180/M_PI 
 						<< "  FOM=" << fom1 << "  TEST=" << freeflag << endl;
-    	    		nw++;
+//    	    		nw++;
 				}
 			}
     	}

@@ -48,9 +48,10 @@ int 		main(int argc, char **argv)
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
 	Vector3<double> origin;						// New image origin
 	int				set_origin(0);				// Flag to set origin
-	Vector3<double>	sam;    			// Pixel size
+	Vector3<double>	sam;    					// Pixel size
     long 			nz(1);						// New z-dimension set to preclude expansion
 	double			threshold(-1e37);			// Threshold for height image
+	double			offset(0);					// Offset for height image
 	int				dir(0);						// Direction for height image
     double 			density(0.74);				// Density within the surface
     double			resmin(1+sqrt(5.0));		// Resolution minimum = 2 phi = 3.236
@@ -67,7 +68,7 @@ int 		main(int argc, char **argv)
 			if ( curropt->values(nz, dir) < 1 )
 				cerr << "-expand: A z dimension must be specified!" << endl;
 		if ( curropt->tag == "threshold" )
-			if ( ( threshold = curropt->value.real() ) < -1e36 )
+			if ( curropt->values(threshold, offset, dir) < 1 )
 				cerr << "-threshold: A threshold must be specified!" << endl;
 		if ( curropt->tag == "invert" )
 			setinvert = 1;
@@ -138,7 +139,7 @@ int 		main(int argc, char **argv)
 	}
 	
 	if ( threshold > -1e36 && p->sizeZ() > 1 ) {
-		pnu = p->surface_to_topograph(threshold, dir);
+		pnu = p->surface_to_topograph(threshold, offset, dir);
 		delete p;
 		p = pnu;
 	}
@@ -160,7 +161,7 @@ int 		main(int argc, char **argv)
 	delete p;
 	delete psd;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

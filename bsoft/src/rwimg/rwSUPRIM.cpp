@@ -13,9 +13,9 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
-View		view_from_suprim_euler(SUPRIMhead* header)
+View2<double>	view_from_suprim_euler(SUPRIMhead* header)
 {
-	View		view;
+	View2<double>	view;
 	
 	view[0] = cos(header->reg[PHI_BP].f)*sin(header->reg[THE_BP].f);
 	view[1] = sin(header->reg[PHI_BP].f)*sin(header->reg[THE_BP].f);
@@ -28,7 +28,7 @@ View		view_from_suprim_euler(SUPRIMhead* header)
 	return view;
 }
 
-int			suprim_euler_from_view(SUPRIMhead* header, View view)
+int			suprim_euler_from_view(SUPRIMhead* header, View2<double> view)
 {
 	if ( acos(view[2]) >  1e-14 )
 		header->reg[PHI_BP].f = atan2(view[1], view[0]);
@@ -257,7 +257,7 @@ int 	writeSUPRIM(Bimage *p)
 	memcpy(ptr + 8, "Bsoft2.0", 8);
 	iptr = (int *) (ptr + 20);
 	*iptr = 24;
-	memcpy(ptr + 24, asctime(p->get_localtime())+4, 20);
+	memcpy(ptr + 24, asctime(p->get_local_time())+4, 20);
 	iptr = (int *) (ptr + 48);
 //	*iptr = 8;
 //	memcpy(ptr + 52, "unknown", 7);

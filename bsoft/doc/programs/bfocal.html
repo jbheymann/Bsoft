@@ -1,0 +1,97 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
+<head>
+<meta name="Author" content="Bernard Heymann">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<!-- Author: Bernard Heymann -->
+<!-- Created: 20141222 -->
+<!-- Modified: 20180924 -->
+<title>Bsoft: bfocal </title>
+<link href="../bsoft.css" rel="stylesheet" type="text/css" />
+<link rel="icon" href="Bsoft_16x16.png" type="image/png" />
+<link rel="icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<script language="JavaScript" type="text/javascript" src="../bsoft.js"></script>
+</head>
+
+<body class="bsoft_layout">
+
+<div id="content">
+
+<h2><i><font color="#000099">Bsoft program</font></i></h2>
+<center><h1><font color="#FF0000">bfocal</font></h1></center>  <h3>Usage: bfocal [options] img.mrc out.pif</h3>
+Processes micrographs taken as a focal series. <br>
+  <h3>Actions (mutually exclusive):</h3>
+<table><tbody>
+<tr><td>-series 20</td><td>Calculate a focal series function: increment and number.</td></tr>
+<tr><td>-fit 1000</td><td>Fit a focal series CTF: focal increment and maximum iterations.</td></tr>
+<tr><td>-extractsphere</td><td>Extract sphere from 3D frequency space.</td></tr>
+<tr><td>-weighsphere</td><td>Weigh a 3D transform with a focal coherent sphere.</td></tr>
+<tr><td>-apply</td><td>Apply the CTF to the input image.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Actions:</h3>
+<table><tbody>
+<tr><td>-zft</td><td>Back transform z columns.</td></tr>
+<tr><td>-center</td><td>Center the simulated image.</td></tr>
+<tr><td>-power</td><td>Convert to intensities.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Parameters:</h3>
+<table><tbody>
+<tr><td>-verbose 7</td><td>Verbosity of output.</td></tr>
+<tr><td>-sampling 1.5,1.5,1.5</td><td>Sampling (A/pixel; a single value can be given).</td></tr>
+<tr><td>-origin 0.8,-10,15.7</td><td>Set the origin (default from input image).</td></tr>
+<tr><td>-size 200,300,50</td><td>Size of focal series (must be specified for focal series).</td></tr>
+<tr><td>-resolution 2.3,120</td><td>Resolution limits for fitting (A).</td></tr>
+<tr><td>-focusstep 37</td><td>Focus increment between images.</td></tr>
+<tr><td>-Bfactor 44</td><td>B-factor (default 0 A^2).</td></tr>
+<tr><td>-beamtilt 5mr,45d</td><td>Beam tilt and direction (radians, mr=millirad, d=degrees).</td></tr>
+<tr><td>-Defocus 1.2,1.0,47</td><td>Defocus average & deviation, and astigmatism angle (default 2 um, 0, 0).</td></tr>
+<tr><td>-Astigmatism 0.3,-34</td><td>Set defocus deviation and astigmatism angle.</td></tr>
+<tr><td>-basetype 2</td><td>Baseline type: (default 1)</td></tr>
+<tr><td></td><td>                         Type 1: Polynomial with 5 coefficients.</td></tr>
+<tr><td></td><td>                         Type 2: Double Gaussian with 5 coefficients.</td></tr>
+<tr><td></td><td>                         Type 3: EMAN style with 4 coefficients.</td></tr>
+<tr><td></td><td>                         Types 4-6: 1-3 with gaussian fit of water ring (only for high resolution limit < 3 A).</td></tr>
+<tr><td>-baseline</td><td>1,1.5,-2.6,12.9,30,118 Baseline type and 4 or 5 coefficients: (default 1,0,0,0,0)</td></tr>
+<tr><td>-envtype 3</td><td>Envelope type: (default 4)</td></tr>
+<tr><td></td><td>                         Type 1: Single gaussian (2 coefficients).</td></tr>
+<tr><td></td><td>                         Type 2: Single gaussian with constant (3 coefficients).</td></tr>
+<tr><td></td><td>                         Type 3: Double gaussian (4 coefficients).</td></tr>
+<tr><td></td><td>                         Type 4: Double gaussian with constant (5 coefficients).</td></tr>
+<tr><td>-envelope 28,-563</td><td>Envelope coefficients: default 1,-10.</td></tr>
+<tr><td></td><td> </td></tr>
+<tr><td></td><td>Microscope parameters:</td></tr>
+<tr><td>-Volt 100</td><td>Set the acceleration voltage (default 300 kV).</td></tr>
+<tr><td>-Amplitude 0.07</td><td>Set the amplitude contrast (default 0.07).</td></tr>
+<tr><td>-Cs 2.0</td><td>Set the spherical aberration, Cs (default 2.0 mm).</td></tr>
+<tr><td>-Cc 2.0</td><td>Set the chromatic aberration, Cc (default 2.0 mm).</td></tr>
+<tr><td>-alpha 0.15</td><td>Set the illumination half-angle (default 0.1 milliradians).</td></tr>
+<tr><td>-energyspread 0.9</td><td>Set the effective energy spread (default 1 eV).</td></tr>
+<tr><td>-aperture 100</td><td>Aperture size (default 100 µm).</td></tr>
+<tr><td>-focallength 2.5</td><td>Focal length (default 3.5 mm).</td></tr>
+<tr><td>-slitwidth 25</td><td>Energy filter slit width (default 0 eV - no filter).</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Input:</h3>
+<table><tbody>
+<tr><td>-jsin file.json</td><td>Input JSON file with CTF parameters.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Output:</h3>
+<table><tbody>
+<tr><td>-jsout file.json</td><td>Output CTF parameters to a JSON file.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table>
+<br>Bsoft version 2.2.0-20230831 (64 bit)<br>
+</div>
+
+<br/>
+
+<div id="footer">
+Generated by bprog.pl on Thu Aug 31 05:35:37 2023
+</div>
+</body>
+</html>

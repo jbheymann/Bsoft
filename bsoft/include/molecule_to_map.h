@@ -11,7 +11,7 @@
 #include "rwatomprop.h"
 #include "symmetry.h"
 
-#define	POTPREFAC	47.87801	// Atomic potential prefactor K = h^2 / (2*PI*e*mo)
+//#define	POTPREFAC	47.87801	// Atomic potential prefactor K = h^2 / (2*PI*e*mo)
 
 // Function prototypes
 Bimage* 	img_from_molecule(Bmolgroup* molgroup, Vector3<double> origin, 

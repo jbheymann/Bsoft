@@ -8,7 +8,6 @@
 
 #include "ps_marker.h"
 #include "ps_plot.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -23,7 +22,7 @@ extern int 	verbose;		// Level of output to the screen
 **/
 int			ps_marker_plots(ofstream* fps, Bstring& title, Bproject* project)
 {
-	long				i(0), width(0), height(0), left(50), bottom(50), nmg(0), nmark(0);
+	long				i(0), width(0), height(0), left(50), bottom(50), nmark(0);
 	double				min_shift(1e10);
 	
 	Bfield*				field = project->field;
@@ -56,7 +55,6 @@ int			ps_marker_plots(ofstream* fps, Bstring& title, Bproject* project)
 				if ( height < p->sizeY() ) height = p->sizeY();
 				delete p;
 			}
-			nmg++;
 		}
 	}
 	if ( verbose & VERB_DEBUG )
@@ -355,7 +353,6 @@ int 		ps_marker_match(Bmarker* set1, Bmarker* set2, Bstring& filename)
 		return -1;
 	}
 	
-	long				num = 0;
 	Bmarker			*m1, *m2;
 	Vector3<double>	min = set1->loc;
 	Vector3<double>	max = set1->loc;
@@ -365,7 +362,6 @@ int 		ps_marker_match(Bmarker* set1, Bmarker* set2, Bstring& filename)
 	for ( m1=set1, m2=set2; m1; m1=m1->next, m2=m2->next ) {
 		min = min.min(m1->loc);
 		max = max.max(m1->loc);
-		num++;
 	}
 	
     long 		w = (long) (max[0] - min[0]);

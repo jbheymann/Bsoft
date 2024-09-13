@@ -1,9 +1,9 @@
 /**
 @file	rwmodel_bild.cpp
 @brief	Library routines to read and write Chimera BILD model parameters
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20080521
-@date	Modified: 20210305
+@date	Modified: 20221115
 **/
 
 
@@ -21,7 +21,7 @@ extern int 	verbose;		// Level of output to the screen
 
 Bcomponent*	component_add_if_not_exist(Vector3<double> loc, Bcomponent** comp, int &number)
 {
-	Bstring			id;
+	string			id;
 	Bcomponent*		comp1 = *comp;
 	if ( comp1 ) comp1 = comp1->find_closest(loc);
 		
@@ -29,7 +29,7 @@ Bcomponent*	component_add_if_not_exist(Vector3<double> loc, Bcomponent** comp, i
 //		if ( comp1->loc.distance(loc) < 0.001 ) break;
 	
 	if ( !comp1 ) {
-//		id = Bstring(++number, "%d");
+//		id = string(++number, "%d");
 //		comp1 = component_add(comp, id);
 		if ( *comp ) comp1 = (*comp)->add(++number);
 		else *comp = comp1 = new Bcomponent(++number);
@@ -44,34 +44,33 @@ Bcomponent*	component_add_if_not_exist(Vector3<double> loc, Bcomponent** comp, i
 @param 	*file_list	list of model parameter file names.
 @return Bmodel*		model parameters.
 **/
-Bmodel*		read_model_bild(Bstring* file_list)
+Bmodel*		read_model_bild(vector<string> file_list)
 {
-	int				i, j, nc, first_comment;
+	int				j, k, nc, first_comment;
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bcomponent*		comp = NULL;
 	Bcomponent*		comp1 = NULL;
 	Bcomponent*		comp2 = NULL;
 	Blink*			link = NULL;
-	Bstring			id, line;
-	Bstring*		filename;
-	Bstring			*tokens, *token;
+	string			id, line;
+	vector<string>	tokens;
 	ifstream		fmod;
 	char			aline[1024];
 	RGBA<float>		rgba(1,1,1,1);
 	Vector3<double>	loc, vec;
 
-	for ( i=1, filename = file_list; filename; filename = filename->next, i++ ) {
+	for ( auto filename: file_list ) {
 		if ( verbose & VERB_LABEL )
-			cout << "Reading file:                   " << *filename << endl;
+			cout << "Reading file:                   " << filename << endl;
 		first_comment = 1;
-		fmod.open(filename->c_str());
+		fmod.open(filename.c_str());
 		if ( fmod.fail() ) return NULL;
-		id = Bstring(i, "%d");
+//		id = string(i, "%d");
 //		mp = model_add(&mp, id);
 //		if ( !model ) model = mp;
-		if ( model ) mp = mp->add(i);
-		else mp = new Bmodel(i);
+		if ( model ) mp = mp->add(base(filename));
+		else mp = new Bmodel(base(filename));
 		link = NULL;
 		comp = NULL;
 		nc = 0;
@@ -79,52 +78,52 @@ Bmodel*		read_model_bild(Bstring* file_list)
 			line = aline;
 			if ( verbose & VERB_DEBUG )
 				cout << "DEBUG read_model_bild: " << line << endl;
-			tokens = line.split();
-			if ( tokens ) {
+			tokens = split(line);
+			if ( tokens.size() ) {
 				if ( verbose & VERB_DEBUG )
-					cout << "DEBUG read_model_bild: " << *tokens;
-				if ( *tokens == ".comment" ) {
+					cout << "DEBUG read_model_bild: " << tokens[0];
+				if ( tokens[0] == ".comment" ) {
 					if ( first_comment ) {
-						for ( token = tokens->next; token; token = token->next )
-							mp->comment() += token->str() + " ";
+						for ( j=1; j<tokens.size(); ++j )
+							mp->comment() += tokens[j] + " ";
 						first_comment = 0;
 					}
-				} else if ( *tokens == ".color" ) {
+				} else if ( tokens[0] == ".color" ) {
 					if ( verbose & VERB_DEBUG )
-						cout << " " << *(tokens->next);
-					if ( isdigit((*tokens)[0]) )
-						for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-							rgba[j] = token->real();
+						cout << " " << tokens[1];
+					if ( isdigit(tokens[1][0]) )
+						for ( j=0; j<tokens.size() && j<3; ++j )
+							rgba[j] = to_real(tokens[j+1]);
 					else
 						;
-				} else if ( *tokens == ".transparency" ) {
-					rgba[3] = tokens->next->real();
-				} else if ( *tokens == ".dot" || *tokens == ".dotat" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+				} else if ( tokens[0] == ".transparency" ) {
+					rgba[3] = to_real(tokens[1]);
+				} else if ( tokens[0] == ".dot" || tokens[0] == ".dotat" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+1]);
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->radius(1);
 					comp->color(rgba);
-				} else if ( *tokens == ".sphere" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+				} else if ( tokens[0] == ".sphere" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+1]);
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
-					if ( token ) comp->radius(token->real());
+					if ( tokens.size() > 4 ) comp->radius(to_real(tokens[4]));
 					comp->color(rgba);
-				} else if ( *tokens == ".m" || *tokens == ".move" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+				} else if ( tokens[0] == ".m" || tokens[0] == ".move" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+1]);
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->color(rgba);
-				} else if ( *tokens == ".mr" || *tokens == ".moverel" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						vec[j] = token->real();
+				} else if ( tokens[0] == ".mr" || tokens[0] == ".moverel" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						vec[j] = to_real(tokens[j+1]);
 					loc += vec;
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->color(rgba);
-				} else if ( *tokens == ".d" || *tokens == ".draw" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+				} else if ( tokens[0] == ".d" || tokens[0] == ".draw" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+1]);
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->color(rgba);
 					if ( comp && comp2 ) {
@@ -132,9 +131,9 @@ Bmodel*		read_model_bild(Bstring* file_list)
 						if ( !mp->link ) mp->link = link;
 						link->color(rgba);
 					}
-				} else if ( *tokens == ".dr" || *tokens == ".drawrel" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						vec[j] = token->real();
+				} else if ( tokens[0] == ".dr" || tokens[0] == ".drawrel" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						vec[j] = to_real(tokens[j+1]);
 					loc += vec;
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->color(rgba);
@@ -143,26 +142,26 @@ Bmodel*		read_model_bild(Bstring* file_list)
 						if ( !mp->link ) mp->link = link;
 						link->color(rgba);
 					}
-				} else if ( *tokens == ".v" || *tokens == ".vector" || *tokens == ".cylinder" ) {
-					for ( j=0, token = tokens->next; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+				} else if ( tokens[0] == ".v" || tokens[0] == ".vector" || tokens[0] == ".cylinder" ) {
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+1]);
 					comp = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp->color(rgba);
-					for ( j=0; token && j<3; token = token->next, j++ )
-						loc[j] = token->real();
+					for ( j=0; j<tokens.size() && j<3; ++j )
+						loc[j] = to_real(tokens[j+4]);
 					comp1 = component_add_if_not_exist(loc, &mp->comp, nc);
 					comp1->color(rgba);
 					if ( comp && comp1 ) {
 						link = link_add(&link, comp, comp1, 0, 1);
 						if ( !mp->link ) mp->link = link;
 						link->color(rgba);
-						if ( token ) link->radius(token->real());
+						if ( tokens.size() > 7 ) link->radius(to_real(tokens[7]));
 						if ( link->radius() < 0.001 ) link->radius(1);
 					}
-				} else if ( *tokens == ".polygon" ) {
+				} else if ( tokens[0] == ".polygon" ) {
 					comp1 = NULL;
-					for ( j=0, token = tokens->next; token; token = token->next ) {
-						loc[j++] = token->real();
+					for ( j=0, k=1; k<tokens.size(); ++j, ++k ) {
+						loc[j] = to_real(tokens[k]);
 						if ( j > 2 ) {
 							j = 0;
 							comp = component_add_if_not_exist(loc, &mp->comp, nc);
@@ -231,29 +230,34 @@ void		bild_arrow(ofstream& fbld, Vector3<double> start, Vector3<double> end, dou
 
 /**
 @brief 	Writes Chimera BILD model parameters.
-@param 	&filename	model parameter file name.
+@param 	filename	model parameter file name.
 @param 	*model		model parameters.
+@param 	splt		flag to split into separate models.
 @return int			models written.
 **/
-int			write_model_bild(Bstring& filename, Bmodel* model)
+int			write_model_bild(string filename, Bmodel* model, int splt)
 {
 	int				n;
 	Bmodel*			mp = NULL;
 	Bcomponent*		comp = NULL;
 	Blink*			link = NULL;
-	Bstring			onename;
+	string			onename;
+	char			format[32];
+
+	snprintf(format, 32, "_%%0%dd.", splt);
 
 	ofstream		fmod;
 
 	for ( n=1, mp = model; mp; mp = mp->next, n++ ) {
 		if ( model->next )
-			onename = filename.pre_rev('.') + Bstring(n, "_%04d.") + filename.post_rev('.');
+//			onename = filename.pre_rev('.') + string(n, format) + filename.post_rev('.');
+			onename = insert(filename, n, splt);
 		else
 			onename = filename;
 		fmod.open(onename.c_str());
 		if ( mp->comment().length() ) {
-//			Bstring*	sa = mp->comment().split("\n");
-//			for ( Bstring* s = sa; s; s = s->next )
+//			string*	sa = mp->comment().split("\n");
+//			for ( string* s = sa; s; s = s->next )
 //				if ( s->length() ) fmod << ".comment " << *s << endl;
 			vector<string>	sa = split(mp->comment(), '\n');
 			for ( auto s: sa )
@@ -275,7 +279,7 @@ int			write_model_bild(Bstring& filename, Bmodel* model)
 
 /**
 @brief 	Converts a model into a representation with views.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	vec_type	0=views, 1=vectors, 2=velocity vectors.
 @param 	color_type	flag to color components.
@@ -284,7 +288,7 @@ int			write_model_bild(Bstring& filename, Bmodel* model)
 	A sphere is drawn for every component with a cylinder indicating its view.
 
 **/
-int			model_to_bild_orientations(Bstring& filename, Bmodel* model, int vec_type, int color_type)
+int			model_to_bild_orientations(string filename, Bmodel* model, int vec_type, int color_type)
 {
 	int				n, selmax;
 	double			vlen, vrad, dmin(1e10), dmax(-1e10), fommin(1e10), fommax(-1e10);
@@ -363,7 +367,7 @@ int			model_to_bild_orientations(Bstring& filename, Bmodel* model, int vec_type,
 
 /**
 @brief 	Converts a model into a representation with views.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	color_type	flag to color components.
 @return int			0, <0 on error.
@@ -371,7 +375,7 @@ int			model_to_bild_orientations(Bstring& filename, Bmodel* model, int vec_type,
 	A sphere is drawn for every component with a cylinder indicating its view.
 
 **/
-int			model_to_bild_view_sphere(Bstring& filename, Bmodel* model, int color_type)
+int			model_to_bild_view_sphere(string filename, Bmodel* model, int color_type)
 {
 	int				n, selmax;
 	double			vrad(TWOPI/360), dmin(1e10), dmax(-1e10), fommin(1e10), fommax(-1e10), fomrange(1);
@@ -446,7 +450,7 @@ int			model_to_bild_view_sphere(Bstring& filename, Bmodel* model, int color_type
 
 /**
 @brief 	Converts a model into a representation with views.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	color_type	flag to color components.
 @return int			0, <0 on error.
@@ -454,7 +458,7 @@ int			model_to_bild_view_sphere(Bstring& filename, Bmodel* model, int color_type
 	A sphere is drawn for every component with a cylinder indicating its view.
 
 **/
-int			model_to_bild_force_vectors(Bstring& filename, Bmodel* model, int color_type)
+int			model_to_bild_force_vectors(string filename, Bmodel* model, int color_type)
 {
 	int				n, selmax;
 	double			vrad(TWOPI/360), dmin(1e10), dmax(-1e10);
@@ -523,7 +527,7 @@ int			model_to_bild_force_vectors(Bstring& filename, Bmodel* model, int color_ty
 
 /**
 @brief 	Converts a model into a representation with view polygons.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	order		polygon order.
 @param 	color_type	flag to color components.
@@ -532,7 +536,7 @@ int			model_to_bild_force_vectors(Bstring& filename, Bmodel* model, int color_ty
 	A sphere is drawn for every component with a cylinder indicating its view.
 
 **/
-int			model_to_bild_view_polygons(Bstring& filename, Bmodel* model, int order, int color_type)
+int			model_to_bild_view_polygons(string filename, Bmodel* model, int order, int color_type)
 {
 	int					i, n, selmax;
 	double				dmin(1e10), dmax(-1e10), fommin(1e10), fommax(-1e10);
@@ -601,7 +605,7 @@ int			model_to_bild_view_polygons(Bstring& filename, Bmodel* model, int order, i
 
 /**
 @brief 	Converts a model into a bild polygon representation.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	color_type	flag to color polygons.
 @return int			0, <0 on error.
@@ -611,7 +615,7 @@ int			model_to_bild_view_polygons(Bstring& filename, Bmodel* model, int order, i
 		2	fom.
 
 **/
-int			model_to_bild_polygons(Bstring& filename, Bmodel* model, int color_type)
+int			model_to_bild_polygons(string filename, Bmodel* model, int color_type)
 {
 	if ( !model->poly ) model_poly_generate(model);
 	
@@ -671,7 +675,7 @@ int			model_to_bild_polygons(Bstring& filename, Bmodel* model, int color_type)
 
 /**
 @brief 	Converts a model into a bild neighbor plane representation.
-@param 	&filename	bild format file name.
+@param 	filename	bild format file name.
 @param 	*model		model structure.
 @param 	color_type	flag to color planes.
 @return int			0, <0 on error.
@@ -681,7 +685,7 @@ int			model_to_bild_polygons(Bstring& filename, Bmodel* model, int color_type)
 		2	fom.
 
 **/
-int			model_to_bild_neighbor_planes(Bstring& filename, Bmodel* model, int color_type)
+int			model_to_bild_neighbor_planes(string filename, Bmodel* model, int color_type)
 {
 	model_set_neighbors(model, 8, 50);
 	

@@ -15,7 +15,7 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
-Bimage*		img_composite_mask(Bstring* file_list, int mask_type);
+Bimage*		img_composite_mask(vector<string>& file_list, int mask_type);
 
 // Usage assistance
 const char* use[] = {
@@ -89,12 +89,8 @@ int 		main(int argc, char **argv)
 	}
 	
 	// Set up image file names and weights
-	int				nfiles(0);
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) {
-		string_add(&file_list, argv[optind++]);
-		nfiles++;
-	}
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
 
 	Bimage*			pmask = NULL;
 	vector<double>	weight;
@@ -126,9 +122,8 @@ int 		main(int argc, char **argv)
 	}
 	
 	delete pmask;
-	string_kill(file_list);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -136,7 +131,7 @@ int 		main(int argc, char **argv)
 
 /**
 @brief 	Generates a composite of multiple masks.
-@param 	*file_list 	list of file names.
+@param 	&file_list 	list of file names.
 @param 	mask_type	type of mask to generate (2/3).
 @return Bimage* 	composite mask (4-byte integer).
 
@@ -144,7 +139,7 @@ int 		main(int argc, char **argv)
 	or a multi-level mask (mask_type = 3).
 
 **/
-Bimage*		img_composite_mask(Bstring* file_list, int mask_type)
+Bimage*		img_composite_mask(vector<string>& file_list, int mask_type)
 {
 	long		nimg(0);
 	Bimage*	 	pmask = img_setup_combined(file_list, nimg);
@@ -153,13 +148,10 @@ Bimage*		img_composite_mask(Bstring* file_list, int mask_type)
 	
 	pmask->change_type(Integer);
 		
-	Bstring*		filename;
 	Bimage*			p = NULL;
-	int				val, bit, base_bit;
-	long			i, j, n, nf, nfiles(0), base_level, max_level;
+	int				val, bit, base_bit(0);
+	long			i, j, n, nf(0), nfiles(file_list.size()), base_level(0), max_level(0);
 
-	for ( nfiles=0, filename = file_list; filename; filename = filename->next ) nfiles++;
-	
 	if ( verbose ) {
 		if ( mask_type == 2 )
 			cout << "Generating a multi-bit mask from " << nfiles << " images:" << endl;
@@ -172,9 +164,8 @@ Bimage*		img_composite_mask(Bstring* file_list, int mask_type)
 	
 	long			imgsize(pmask->image_size());
 	
-	for ( nf=0, base_bit=0, base_level=max_level=0, filename = file_list; 
-			filename && nf<nfiles; filename = filename->next, nf++ ) {
-		p = read_img(*filename, 1, -1);
+	for ( auto& filename: file_list ) {
+		p = read_img(filename, 1, -1);
 		if ( p != NULL ) {
 			if ( verbose & VERB_LABEL )
 				cout << "Adding mask " << nf << endl;
@@ -199,6 +190,8 @@ Bimage*		img_composite_mask(Bstring* file_list, int mask_type)
 			for ( base_bit = 0, val = max_level; val > 0; val >>= 1, base_bit++ ) ; 
 			base_level = max_level;
 		}
+		nf++;
+		if ( nf >= nfiles ) break;
 	}
 	
 	pmask->statistics();

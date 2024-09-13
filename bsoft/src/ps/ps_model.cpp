@@ -1,7 +1,7 @@
 /**
 @file	ps_model.cpp
 @brief	Postscript output for models
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20090203
 @date	Modified: 20190201
 **/
@@ -12,7 +12,6 @@
 #include "model_views.h"
 #include "model_compare.h"
 #include "model_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -49,7 +48,7 @@ int			ps_model_views(Bstring& filename, Bmodel* model, int combined)
 		*fps << "/Data [" << endl << "%x y fom sel" << endl;
 		for ( mp = model; mp; mp = mp->next ) {
 			for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
-				View	v(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]);
+				View2<double>	v(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]);
 				euler = Euler(v);
 				x = euler.phi()*fabs(sin(euler.theta())) + M_PI;
 				y = euler.theta();
@@ -66,7 +65,7 @@ int			ps_model_views(Bstring& filename, Bmodel* model, int combined)
 			*fps << "50 755 moveto (" << title << ": " << mp->identifier() << ") show" << endl;
 			*fps << "/Data [" << endl << "%x y fom sel" << endl;
 			for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
-				View	v(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]);
+				View2<double>	v(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]);
 				euler = Euler(v);
 				x = euler.phi()*fabs(sin(euler.theta())) + M_PI;
 				y = euler.theta();
@@ -89,7 +88,7 @@ int			ps_model_views(Bstring& filename, Bmodel* model, int combined)
 @param 	*model				model parameter structure.
 @param 	&symmetry_string 	symmetry.
 @param 	combined			flag to show all models combined.
-@return int 				0, error if <0.
+@return int 					0, error if <0.
 **/
 int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry_string, int combined)
 {
@@ -105,7 +104,7 @@ int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry
 	
 	ofstream*		fps = ps_open_and_init(filename, title, nm, 600, 800);
 	
-	list<View2<float>>	view;
+	vector<View2<double>>	view;
 	
 	if ( combined ) {
 		*fps << "%%Page: " << i << " " << i << endl;
@@ -113,8 +112,7 @@ int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry
 		*fps << "50 755 moveto (" << title << ": " << model->identifier() << ") show" << endl;
 		*fps << "/Data [" << endl << "%x y fom sel" << endl;
 		view = views_from_models(model);
-		ps_views2(fps, symmetry_string, view, 2);
-//		kill_list((char *) view, sizeof(View));
+		ps_views(fps, symmetry_string, view, 2);
 		*fps << "showpage" << endl;
 	} else {
 		for ( i=1, mp = model; mp; mp = mp->next, i++ ) {
@@ -123,8 +121,7 @@ int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry
 			*fps << "50 755 moveto (" << title << ": " << mp->identifier() << ") show" << endl;
 			*fps << "/Data [" << endl << "%x y fom sel" << endl;
 			view = views_from_model(model);
-			ps_views2(fps, symmetry_string, view, 2);
-//			kill_list((char *) view, sizeof(View));
+			ps_views(fps, symmetry_string, view, 2);
 			*fps << "showpage" << endl;
 		}
 	}

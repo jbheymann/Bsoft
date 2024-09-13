@@ -273,7 +273,7 @@ int 		main(int argc, char **argv)
 	
 	residue_matrix_kill(simat);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

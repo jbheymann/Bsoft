@@ -146,7 +146,7 @@ int			writeIP(Bimage* p)
 //    	"CHANNEL = PMT LOWSENS\r\n"
 //    	"MICRON-MARK = \r\n"
     	"COMMENT\r\n%s",
-		asctime(p->get_localtime()), p->data_offset(), p->sizeX(), p->sizeY(), 
+		asctime(p->get_local_time()), p->data_offset(), p->sizeX(), p->sizeY(), 
 			p->data_type_size(), p->sampling(0)[0], p->sampling(0)[1], p->label().c_str());
 
 	ofstream		fimg(p->file_name());

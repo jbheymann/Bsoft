@@ -43,7 +43,9 @@ long		seq_pair_align(Bmolecule* mol1, Bmolecule* mol2, double gapopen,
 		cout << endl;
 	}
 	
-	Matrix			dp = seq_dot_plot(mol1, mol2, simat);
+	Matrix			dp;
+	
+	dp = seq_dot_plot(mol1, mol2, simat);
 	
 	long			imax = dp_matrix_scoring(dp, gapopen, gapextend);
 	
@@ -99,9 +101,12 @@ int			seq_find_best_offset(Bmolecule* mol1, Bmolecule* mol2,
 	
 	int				offset(0);
 	long   			k, l;
-	Matrix			dot = seq_dot_plot(mol1, mol2, simat);
 	vector<double>	diag(mol1->nres+mol2->nres, 0);
+
+	Matrix			dot;
 	
+	dot = seq_dot_plot(mol1, mol2, simat);
+
 	for ( k=0; k<mol1->nres; k++ ) {
 		for ( l=0; l<mol2->nres; l++ ) {
 			if ( dot[l][k] > 0 ) diag[mol2->nres-l-1+k] += 1;

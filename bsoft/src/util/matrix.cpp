@@ -3,7 +3,7 @@
 @brief	Matrix manipulation functions
 @author Bernard Heymann 
 @date	Created: 20000501
-@date	Modified: 20180723
+@date	Modified: 20240312
 **/
  
 #include "Matrix.h" 
@@ -27,44 +27,6 @@ ostream& operator<<(ostream& output, Matrix& mat) {
 	return output;
 }
 
-/*int			Matrix::multiply_in_place(double* vec)
-{
-	long			i, j;
-	
-	double*		t = new double[n];
-	
-	for ( i=0; i<n; i++ ) {
-		t[i] = 0;
-		for ( j=0; j<n; j++ )
-			t[i] += p[i][j]*vec[j];
-	}
-	
-	for ( i=0; i<n; i++ ) vec[i] = t[i];
-	
-	delete[] t;
-	
-	return 0;
-}*/
-
-int			Matrix::multiply_in_place(vector<double>& vec)
-{
-	if ( vec.size() != n ) return -1;
-	
-	long			i, j;
-	
-	vector<double>	t(n);
-	
-	for ( i=0; i<n; i++ ) {
-		t[i] = 0;
-		for ( j=0; j<n; j++ )
-			t[i] += p[i][j]*vec[j];
-	}
-	
-	for ( i=0; i<n; i++ ) vec[i] = t[i];
-	
-	return 0;
-}
-
 /**
 @brief 	Matrix inversion by LU decomposition.
 @return double	 		determinant.
@@ -77,21 +39,19 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 **/
 double 		Matrix::LU_decomposition()
 {
-	if ( m != n ) {
-		cerr << "Error: rows:" << m << " != columns:" << n << endl;
+	if ( rows() != columns() ) {
+		cerr << "Error: rows:" << rows() << " != columns:" << columns() << endl;
 		return 0;
 	}
 	
-	long 			i, j, k, ibig;
+	long 			i, j, k, ibig, m(rows()), n(columns());
 	double			big, det(1);
-	vector<long>	ind(n);
-	vector<double>	x(n);
-	Matrix			a(n,n);
+	vector<long>	ind(m,0);
+	vector<double>	x(m,0);
+	Matrix			a(m,m);
 
-	for ( i=0; i<n; i++ ) x[i] = ind[i] = 0;
-	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG Matrix::LU_decomposition: n = " << n << endl;
+		cout << "DEBUG Matrix::LU_decomposition: rows = " << m << endl;
 	
 	// Find the largest element in each row for scaling and pivoting
 	// Additionally test for singularity
@@ -99,7 +59,7 @@ double 		Matrix::LU_decomposition()
 		ind[i] = i; 		// Initialize the indices for tracking pivoting
 		big = 0;
 		for ( j=0; j<n; j++ )
-			if ( big < fabs(p[i][j]) ) big = fabs(p[i][j]);
+			if ( big < fabs(d[i][j]) ) big = fabs(d[i][j]);
 		if ( big < 1e-37 ) {
 			cerr << "Error: Singular matrix in Matrix::LU_decomposition" << endl;
 //			if ( verbose & VERB_DEBUG ) {
@@ -115,40 +75,40 @@ double 		Matrix::LU_decomposition()
 	for ( j=0; j<n; j++ ) {
 		for ( i=0; i<j; i++ ) {			// Calculating the upper triangle
 			for ( k=0; k<i; k++ )		//  not the diagonal
-				p[i][j] -= p[i][k]*p[k][j];
+				d[i][j] -= d[i][k]*d[k][j];
 		}
 		big = 0;			// Largest element for pivoting
 		ibig = -1;
 		for ( i=j; i<n; i++ ) { 		// Calculating the lower triangle
 			for ( k=0; k<j; k++ )		//  and diagonal (i==j)
-				p[i][j] -= p[i][k]*p[k][j];
-			if ( x[i]*fabs(p[i][j]) >= big ) { 	// Get the biggest element
-				big = x[i]*fabs(p[i][j]);		//   for pivoting
+				d[i][j] -= d[i][k]*d[k][j];
+			if ( x[i]*fabs(d[i][j]) >= big ) { 	// Get the biggest element
+				big = x[i]*fabs(d[i][j]);		//   for pivoting
 				ibig = i;
 			}
 		}
 		if ( j != ibig ) {						// Interchange rows if necessary
-			for ( k=0; k<n; k++ ) swap(p[ibig][k], p[j][k]);
+			for ( k=0; k<n; k++ ) swap(d[ibig][k], d[j][k]);
 			swap(x[ibig], x[j]); 		// Switch scales
 			swap(ind[ibig], ind[j]);	// Switch indices
 			det = -det; 				// Change the sign of the determinant
 		}
-		if ( p[j][j] == 0 ) p[j][j] = 1e-37;
-		for ( i=j+1; i<n; i++ )	p[i][j] /= p[j][j];	// Divide by pivot element
+		if ( d[j][j] == 0 ) d[j][j] = 1e-37;
+		for ( i=j+1; i<n; i++ )	d[i][j] /= d[j][j];	// Divide by pivot element
 	}
 	
 	// Calculate the determinant
-	for ( i=0; i<n; i++ ) det *= p[i][i];
+	for ( i=0; i<n; i++ ) det *= d[i][i];
 	
 	// Invert matrix
 	for ( k=0; k<n; k++ ) {
 		for ( i=0; i<n; i++ ) x[i] = 0;
 		x[k] = 1;
 		for ( i=0; i<n; i++ )			// Forward substitution
-			for ( j=0; j<i; j++ ) x[i] -= p[i][j]*x[j];
-		for ( i=n-1; i>=0; i-- ) {		// Backward substitution
-			for ( j=i+1; j<n; j++ ) x[i] -= p[i][j]*x[j];
-			x[i] /= p[i][i];
+			for ( j=0; j<i; j++ ) x[i] -= d[i][j]*x[j];
+		for ( i=m-1; i>=0; i-- ) {		// Backward substitution
+			for ( j=i+1; j<n; j++ ) x[i] -= d[i][j]*x[j];
+			x[i] /= d[i][i];
 			a[i][k] = x[i];
 		}
 	}
@@ -157,7 +117,7 @@ double 		Matrix::LU_decomposition()
 	for ( i=0; i<n; i++ ) {
 		j = ind[i]; 					// Find the old row at this position
 		for ( k=0; k<n; k++ ) 			// Pack it back in order into matrix A
-			p[k][j] = a[k][i];
+			d[k][j] = a[k][i];
 	}
 	
 	if ( verbose & VERB_DEBUG )
@@ -176,71 +136,69 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 **/
 double		Matrix::singular_value_decomposition()
 {
-	long			flag, i, its, j, jj, k, l, nm;
+	long			flag, i, its, j, jj, k, l, nm, m(rows()), n(columns());
 	double			anorm, c, f, g, h, s, scale, x, y, z, t;
 
-	vector<double>	w(n);
-	vector<double>	tmp(n);
-	Matrix			v(n,n);
+	vector<double>	w(m,0);
+	vector<double>	tmp(m,0);
+	Matrix			v(m,m);
 
-	for ( i=0; i<n; i++ ) w[i] = tmp[i] = 0;
-	
 	g=scale=anorm=0.0;
 	for (i=0;i<n;i++) {
 		l=i+1;
 		tmp[i]=scale*g;
 		g=s=scale=0.0;
 		if (i <= m) {
-			for (k=i;k<m;k++) scale += fabs(p[k][i]);
+			for (k=i;k<m;k++) scale += fabs(d[k][i]);
 			if (scale) {
 				for (k=i;k<m;k++) {
-					p[k][i] /= scale;
-					s += p[k][i]*p[k][i];
+					d[k][i] /= scale;
+					s += d[k][i]*d[k][i];
 				}
-				f=p[i][i];
+				f=d[i][i];
 				g = -copysign(sqrt(s),f);
 				h=f*g-s;
-				p[i][i]=f-g;
+				d[i][i]=f-g;
 				for (j=l;j<n;j++) {
-					for (s=0.0,k=i;k<m;k++) s += p[k][i]*p[k][j];
+					for (s=0.0,k=i;k<m;k++) s += d[k][i]*d[k][j];
 					f=s/h;
-					for (k=i;k<m;k++) p[k][j] += f*p[k][i];
+					for (k=i;k<m;k++) d[k][j] += f*d[k][i];
 				}
-				for (k=i;k<m;k++) p[k][i] *= scale;
+				for (k=i;k<m;k++) d[k][i] *= scale;
 			}
 		}
 		w[i]=scale *g;
 		g=s=scale=0.0;
-		if (i < m && i != n) {
-			for (k=l;k<n;k++) scale += fabs(p[i][k]);
+		if ( i < m && i != n ) {
+			for (k=l;k<n;k++) scale += fabs(d[i][k]);
 			if (scale) {
 				for (k=l;k<n;k++) {
-					p[i][k] /= scale;
-					s += p[i][k]*p[i][k];
+					d[i][k] /= scale;
+					s += d[i][k]*d[i][k];
 				}
-				f=p[i][l];
+				f=d[i][l];
 				g = -copysign(sqrt(s),f);
 				h=f*g-s;
-				p[i][l]=f-g;
-				for (k=l;k<n;k++) tmp[k]=p[i][k]/h;
+				d[i][l]=f-g;
+				for (k=l;k<n;k++) tmp[k]=d[i][k]/h;
 				for (j=l;j<m;j++) {
-					for (s=0.0,k=l;k<n;k++) s += p[j][k]*p[i][k];
-					for (k=l;k<n;k++) p[j][k] += s*tmp[k];
+					for (s=0.0,k=l;k<n;k++) s += d[j][k]*d[i][k];
+					for (k=l;k<n;k++) d[j][k] += s*tmp[k];
 				}
-				for (k=l;k<n;k++) p[i][k] *= scale;
+				for (k=l;k<n;k++) d[i][k] *= scale;
 			}
 		}
 		t = fabs(w[i])+fabs(tmp[i]);
 		if ( anorm < t ) anorm = t;
 	}
 	
-	for (i=n-1;i>=0;i--) {
+	for (i=m-1;i>=0;i--) {
 		if (i < n-1) {
 			if (g) {
 				for (j=l;j<n;j++)
-					v[j][i]=(p[i][j]/p[i][l])/g;
+					v[j][i]=(d[i][j]/d[i][l])/g;
 				for (j=l;j<n;j++) {
-					for (s=0.0,k=l;k<n;k++) s += p[i][k]*v[k][j];
+					for (s=0.0,k=l;k<n;k++) s += d[i][k]*v[k][j];
 					for (k=l;k<n;k++) v[k][j] += s*v[k][i];
 				}
 			}
@@ -254,20 +212,20 @@ double		Matrix::singular_value_decomposition()
 	for (i=( m < n )? m-1: n-1;i>=0;i--) {
 		l=i+1;
 		g=w[i];
-		for (j=l;j<n;j++) p[i][j]=0.0;
+		for (j=l;j<n;j++) d[i][j]=0.0;
 		if (g) {
 			g=1.0/g;
 			for (j=l;j<n;j++) {
-				for (s=0.0,k=l;k<m;k++) s += p[k][i]*p[k][j];
-				f=(s/p[i][i])*g;
-				for (k=i;k<m;k++) p[k][j] += f*p[k][i];
+				for (s=0.0,k=l;k<m;k++) s += d[k][i]*d[k][j];
+				f=(s/d[i][i])*g;
+				for (k=i;k<m;k++) d[k][j] += f*d[k][i];
 			}
-			for (j=i;j<m;j++) p[j][i] *= g;
-		} else for (j=i;j<m;j++) p[j][i]=0.0;
-		++p[i][i];
+			for (j=i;j<m;j++) d[j][i] *= g;
+		} else for (j=i;j<m;j++) d[j][i]=0.0;
+		++d[i][i];
 	}
 
-	for (k=n-1;k>=0;k--) {
+	for (k=m-1;k>=0;k--) {
 		for (its=0;its<30;its++) {
 			flag=1;
 			for (l=k;l>=0;l--) {
@@ -294,10 +252,10 @@ double		Matrix::singular_value_decomposition()
 					c=g*h;
 					s = -f*h;
 					for (j=0;j<m;j++) {
-						y=p[j][nm];
-						z=p[j][i];
-						p[j][nm]=y*c+z*s;
-						p[j][i]=z*c-y*s;
+						y=d[j][nm];
+						z=d[j][i];
+						d[j][nm]=y*c+z*s;
+						d[j][i]=z*c-y*s;
 					}
 				}
 			}
@@ -353,10 +311,10 @@ double		Matrix::singular_value_decomposition()
 				f=c*g+s*y;
 				x=c*y-s*g;
 				for (jj=0;jj<m;jj++) {
-					y=p[jj][j];
-					z=p[jj][i];
-					p[jj][j]=y*c+z*s;
-					p[jj][i]=z*c-y*s;
+					y=d[jj][j];
+					z=d[jj][i];
+					d[jj][j]=y*c+z*s;
+					d[jj][i]=z*c-y*s;
 				}
 			}
 			tmp[l]=0.0;
@@ -383,9 +341,9 @@ double		Matrix::singular_value_decomposition()
 		
 	for ( j=0; j<n; j++ )
 		for ( i=0; i<m; i++ ) {
-			p[j][i] = 0;
+			d[j][i] = 0;
 			for ( k=0; k<n; k++ )
-				p[j][i] += v[j][k]*u[i][k];
+				d[j][i] += v[j][k]*u[i][k];
 		}
 
 	return 0;
@@ -395,10 +353,10 @@ int			Matrix::jrotate(double s, double tau, long i, long j, long k, long l)
 {
 	double			g, h;
 	
-	g = p[i][j];
-	h = p[k][l];
-	p[i][j] = g - s*(h + g*tau);
-	p[k][l] = h + s*(g - h*tau);
+	g = d[i][j];
+	h = d[k][l];
+	d[i][j] = g - s*(h + g*tau);
+	d[k][l] = h + s*(g - h*tau);
 	
 	return 0;
 }
@@ -411,26 +369,19 @@ The eigenvectors are returned in the columns of the input matrix.
 Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 
 **/
-/*double*		Matrix::jacobi_rotation_old() {
-	vector<double>	v = jacobi_rotation();
-	double*			vo = new double[n];
-	for ( long i=0; i<n; ++i ) vo[i] = v[i];
-	return vo;
-}*/
-
 vector<double>	Matrix::jacobi_rotation()
 {
-	long			j, iq, ip, i, nrot(0);
+	long			j, iq, ip, i, m(rows()), n(columns());
 	double			tresh, theta, tau, t, sm, s, h, g, c;
 	vector<double>	val(n);
 	Matrix			vec(m,n);
 	
 	for ( ip=i=j=0; ip<n; ip++ ) {
 		for ( iq=0; iq<n; iq++, i++ ) {
-			j += ( fabs(p[ip][iq]) < 1e-12 );	// Check if small to prevent too many iterations bailout
+			j += ( fabs(d[ip][iq]) < 1e-12 );	// Check if small to prevent too many iterations bailout
 		}
 		vec[ip][ip] = 1.0;
-		val[ip] = p[ip][ip];
+		val[ip] = d[ip][ip];
 	}
 
 	if ( j == n*n ) return val;			// The matrix is zero
@@ -445,42 +396,44 @@ vector<double>	Matrix::jacobi_rotation()
 
 	for ( i=1; i<=50; i++ ) {
 		sm=0.0;
-		for ( ip=0; ip<n-1; ip++ ) {
+		for ( ip=0; ip<m-1; ip++ ) {
 			for ( iq=ip+1; iq<n; iq++ )
-				sm += fabs(p[ip][iq]);
+				sm += fabs(d[ip][iq]);
 		}
 		if ( sm == 0.0 ) {
-			for ( ip=0; ip<len; ip++ ) d[ip] = vec.d[ip];
+			for ( ip=0; ip<m; ++ip )
+				for ( iq=0; iq<n; ++iq )
+					d[ip][iq] = vec.d[ip][iq];
 			return val;						// Function exit
 		}
 		if ( i < 4 )
 			tresh=0.2*sm/(n*n);
 		else
 			tresh=0.0;
-		for ( ip=0; ip<n-1; ip++ ) {
+		for ( ip=0; ip<m-1; ip++ ) {
 			for ( iq=ip+1; iq<n; iq++ ) {
-				g = 100.0*fabs(p[ip][iq]);
+				g = 100.0*fabs(d[ip][iq]);
 				if ( i > 4 && (double)(fabs(val[ip])+g) == (double)fabs(val[ip])
 							&& (double)(fabs(val[iq])+g) == (double)fabs(val[iq]))
-					p[ip][iq] = 0.0;
-				else if ( fabs(p[ip][iq]) > tresh ) {
+					d[ip][iq] = 0.0;
+				else if ( fabs(d[ip][iq]) > tresh ) {
 					h = val[iq] - val[ip];
 					if ( (double)(fabs(h)+g) == (double)fabs(h))
-						t = p[ip][iq]/h;
+						t = d[ip][iq]/h;
 					else {
-						theta = 0.5*h/p[ip][iq];
+						theta = 0.5*h/d[ip][iq];
 						t = 1.0/(fabs(theta)+sqrt(1.0+theta*theta));
 						if (theta < 0.0) t = -t;
 					}
 					c = 1.0/sqrt(1+t*t);
 					s = t*c;
 					tau = s/(1.0+c);
-					h = t*p[ip][iq];
+					h = t*d[ip][iq];
 					z[ip] -= h;
 					z[iq] += h;
 					val[ip] -= h;
 					val[iq] += h;
-					p[ip][iq] = 0.0;
+					d[ip][iq] = 0.0;
 					for ( j=0; j<ip; j++ ) {
 						jrotate(s, tau, j, ip, j, iq);
 					}
@@ -493,7 +446,7 @@ vector<double>	Matrix::jacobi_rotation()
 					for ( j=0; j<n; j++ ) {
 						vec.jrotate(s, tau, j, ip, j, iq);
 					}
-					nrot++;
+//					nrot++;
 				}
 			}
 		}
@@ -507,9 +460,9 @@ vector<double>	Matrix::jacobi_rotation()
 	error_show("Error in Matrix::jacobi_rotation", __FILE__, __LINE__);
 	cerr << "Too many iterations (" << i << ")" << endl;
 	
-	for ( ip=0; ip<n; ip++ ) {
-		for ( iq=0; iq<n; iq++ ) p[ip][iq] = 0.0;
-		p[ip][ip] = 1.0;
+	for ( ip=0; ip<m; ip++ ) {
+		for ( iq=0; iq<n; iq++ ) d[ip][iq] = 0.0;
+		d[ip][ip] = 1.0;
 		val[ip] = 0;
 	}
 
@@ -522,28 +475,28 @@ long	Matrix::jacobi_rotation_row(long ip, long n, long i, double* val, double* z
 	double		tresh, theta, tau, t, sm, s, h, g, c;
 
 	for ( iq=ip+1; iq<n; iq++ ) {
-		g = 100.0*fabs(p[ip][iq]);
+		g = 100.0*fabs(d[ip][iq]);
 		if ( i > 4 && (double)(fabs(val[ip])+g) == (double)fabs(val[ip])
 					&& (double)(fabs(val[iq])+g) == (double)fabs(val[iq]))
-			p[ip][iq] = 0.0;
-		else if ( fabs(p[ip][iq]) > tresh ) {
+			d[ip][iq] = 0.0;
+		else if ( fabs(d[ip][iq]) > tresh ) {
 			h = val[iq] - val[ip];
 			if ( (double)(fabs(h)+g) == (double)fabs(h))
-				t = p[ip][iq]/h;
+				t = d[ip][iq]/h;
 			else {
-				theta = 0.5*h/p[ip][iq];
+				theta = 0.5*h/d[ip][iq];
 				t = 1.0/(fabs(theta)+sqrt(1.0+theta*theta));
 				if (theta < 0.0) t = -t;
 			}
 			c = 1.0/sqrt(1+t*t);
 			s = t*c;
 			tau = s/(1.0+c);
-			h = t*p[ip][iq];
+			h = t*d[ip][iq];
 			z[ip] -= h;
 			z[iq] += h;
 			val[ip] -= h;
 			val[iq] += h;
-			p[ip][iq] = 0.0;
+			d[ip][iq] = 0.0;
 			for ( j=0; j<ip; j++ ) {
 				jrotate(s, tau, j, ip, j, iq);
 			}
@@ -562,16 +515,7 @@ long	Matrix::jacobi_rotation_row(long ip, long n, long i, double* val, double* z
 	
 	return nrot;
 }
-*/
-/**
-@brief 	Computes all eigenvalues and eigenvectors of a real symmetric matrix.
-@return	double* val			eigenvalues.
-
-The eigenvectors are returned in the columns of the input matrix.
-Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
-
-**/
-/*double*		Matrix::jacobi_rotation_parallel()
+double*		Matrix::jacobi_rotation_parallel()
 {
 	long		j, iq, ip, i, nrot(0);
 	double		tresh, theta, tau, t, sm, s, h, g, c;
@@ -580,10 +524,10 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 	
 	for ( ip=i=j=0; ip<n; ip++ ) {
 		for ( iq=0; iq<n; iq++, i++ ) {
-			j += ( fabs(p[ip][iq]) < 1e-12 );	// Check if small to prevent too many iterations bailout
+			j += ( fabs(d[ip][iq]) < 1e-12 );	// Check if small to prevent too many iterations bailout
 		}
 		(*vec)[ip][ip] = 1.0;
-		val[ip] = p[ip][ip];
+		val[ip] = d[ip][ip];
 	}
 
 	if ( j == n*n ) return val;			// The matrix is zero
@@ -600,7 +544,7 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 		sm=0.0;
 		for ( ip=0; ip<n-1; ip++ ) {
 			for ( iq=ip+1; iq<n; iq++ )
-				sm += fabs(p[ip][iq]);
+				sm += fabs(d[ip][iq]);
 		}
 		if ( sm == 0.0 ) {
 			delete[] b;
@@ -637,8 +581,8 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 	cerr << "Too many iterations (" << i << ")" << endl;
 	
 	for ( ip=0; ip<n; ip++ ) {
-		for ( iq=0; iq<n; iq++ ) p[ip][iq] = 0.0;
-		p[ip][ip] = 1.0;
+		for ( iq=0; iq<n; iq++ ) d[ip][iq] = 0.0;
+		d[ip][ip] = 1.0;
 		val[ip] = 0;
 	}
 
@@ -649,45 +593,26 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 /**
 @brief 	Sorts eigenvalues into descending order and rearranges matrix columns accordingly.
 @param 	val					eigenvalues.
-@return void				.
 
 	The eigenvectors are in the columns.
 	This method uses straight insertion.
 Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 
 **/
-/*void 	Matrix::eigen_sort(double* val)
-{
-	long			k,j,i;
-	double			t;
-
-	for ( i=0; i<n-1; i++ ) {
-		t = val[k=i];
-		for ( j=i+1; j<n; j++ )
-			if ( val[j] >= t ) t = val[k=j];
-		if ( k != i ) {
-			val[k] = val[i];
-			val[i] = t;
-			for ( j=0; j<n; j++ )
-				swap(p[j][i], p[j][k]);
-		}
-	}
-}*/
-
 void 	Matrix::eigen_sort(vector<double>& val)
 {
 	long			k,j,i;
 	double			t;
 
-	for ( i=0; i<n-1; i++ ) {
+	for ( i=0; i<rows()-1; i++ ) {
 		t = val[k=i];
-		for ( j=i+1; j<n; j++ )
+		for ( j=i+1; j<columns(); j++ )
 			if ( val[j] >= t ) t = val[k=j];
 		if ( k != i ) {
 			val[k] = val[i];
 			val[i] = t;
-			for ( j=0; j<n; j++ )
-				swap(p[j][i], p[j][k]);
+			for ( j=0; j<columns(); j++ )
+				swap(d[j][i], d[j][k]);
 		}
 	}
 }
@@ -804,199 +729,4 @@ Vector3<double> principal_axes(vector<Vector3<double>>& coor, Matrix& a)
 	
 	return pax;
 }
-
-// Macros
-#define SQR(x)      ((x)*(x))                        // x^2 
-
-/**
-@brief 	Reduces a symmetric 3x3 matrix to tridiagonal form.
-@param 	A					matrix, replaced by tridiagonal matrix.
-@param 	d					diagonal.
-@param 	e					off-diagonal.
-@return void				.
-
-	Reduces a symmetric 3x3 matrix to tridiagonal form by applying
-	(unitary) Householder transformations:
-	            [ d[0]  e[0]       ]
-	    A = Q . [ e[0]  d[1]  e[1] ] . Q^T
-	            [       e[1]  d[2] ]
-	The function accesses only the diagonal and upper triangular parts of A.
-	
-Reference: 	Kopp (2008).
-
-**/
-void 		dsytrd3(Matrix& A, vector<double>& d, vector<double>& e)
-{
-  const int 		n = 3;
-  int 				i, j;
-  double 			u[3], q[3];
-  double 			omega, f;
-  double 			K, h, g;
-  double 			Q[3][3];
-  
-  // Initialize Q to the identitity matrix
-  for (i=0; i < n; i++)
-  {
-    Q[i][i] = 1.0;
-    for (j=0; j < i; j++)
-      Q[i][j] = Q[j][i] = 0.0;
-  }
-
-  // Bring first row and column to the desired form 
-  h = SQR(A[0][1]) + SQR(A[0][2]);
-  if (A[0][1] > 0)
-    g = -sqrt(h);
-  else
-    g = sqrt(h);
-  e[0] = g;
-  f    = g * A[0][1];
-  u[1] = A[0][1] - g;
-  u[2] = A[0][2];
-  
-  omega = h - f;
-  if (omega > 0.0)
-  {
-    omega = 1.0 / omega;
-    K     = 0.0;
-    for (i=1; i < n; i++)
-    {
-      f    = A[1][i] * u[1] + A[i][2] * u[2];
-      q[i] = omega * f;                  // p
-      K   += u[i] * f;                   // u* A u
-    }
-    K *= 0.5 * SQR(omega);
-
-    for (i=1; i < n; i++)
-      q[i] = q[i] - K * u[i];
-    
-    d[0] = A[0][0];
-    d[1] = A[1][1] - 2.0*q[1]*u[1];
-    d[2] = A[2][2] - 2.0*q[2]*u[2];
-    
-    // Calculate updated A[1][2] and store it in e[1]
-    e[1] = A[1][2] - q[1]*u[2] - u[1]*q[2];
-
-    // Store inverse Householder transformation in Q
-    for (j=1; j < n; j++)
-    {
-      f = omega * u[j];
-      for (i=1; i < n; i++)
-        Q[i][j] = Q[i][j] - f*u[i];
-    }
-
-  }
-  else
-  {
-    for (i=0; i < n; i++)
-      d[i] = A[i][i];
-    e[1] = A[1][2];
-  }
-
-  for ( i=0; i<3; ++i )
-  	for ( j=0; j<3; ++j )
-  		A[j][i] = Q[j][i];
-
-}
-
-/**
-@brief 	Calculates the eigenvalues and normalized eigenvectors of a symmetric 3x3 matrix.
-@param 	A					matrix, replaced by normalized eigenvectors.
-@return double*				eigenvalues.
-
-	Calculates the eigenvalues and normalized eigenvectors of a symmetric 3x3
-	matrix A using the QL algorithm with implicit shifts, preceded by a
-	Householder reduction to tridiagonal form.
-	The function accesses only the diagonal and upper triangular parts of A.
-	
-Reference: 	Kopp (2008).
-
-**/
-vector<double>	dsyevq3(Matrix& A)
-{
-  const int 		n(3);
-  vector<double>	e(3);                   // The third element is used only as temporary workspace
-  double 			g, r, p, f, b, s, c, t; // Intermediate storage
-  int 				nIter;
-  int 				m, k, l, i;
-  vector<double>	w(3);        			/* Array with unordered eigenvalues */
-
-  // Transform A to real tridiagonal form by the Householder method
-  dsytrd3(A, w, e);
-  // Calculate eigensystem of the remaining real symmetric tridiagonal matrix
-  // with the QL method
-  //
-  // Loop over all off-diagonal elements
-  for (l=0; l < n-1; l++)
-  {
-    nIter = 0;
-    while (1)
-    {
-      // Check for convergence and exit iteration loop if off-diagonal
-      // element e(l) is zero
-      for (m=l; m <= n-2; m++)
-      {
-        g = fabs(w[m])+fabs(w[m+1]);
-        if (fabs(e[m]) + g == g)
-          break;
-      }
-      if (m == l)
-        break;
-      
-      if (nIter++ >= 30)
-        return w;
-
-      // Calculate g = d_m - k
-      g = (w[l+1] - w[l]) / (e[l] + e[l]);
-      r = sqrt(SQR(g) + 1.0);
-      if (g > 0)
-        g = w[m] - w[l] + e[l]/(g + r);
-      else
-        g = w[m] - w[l] + e[l]/(g - r);
-
-      s = c = 1.0;
-      p = 0.0;
-      for (i=m-1; i >= l; i--)
-      {
-        f = s * e[i];
-        b = c * e[i];
-        if (fabs(f) > fabs(g))
-        {
-          c      = g / f;
-          r      = sqrt(SQR(c) + 1.0);
-          e[i+1] = f * r;
-          c     *= (s = 1.0/r);
-        }
-        else
-        {
-          s      = f / g;
-          r      = sqrt(SQR(s) + 1.0);
-          e[i+1] = g * r;
-          s     *= (c = 1.0/r);
-        }
-        
-        g = w[i+1] - p;
-        r = (w[i] - g)*s + 2.0*c*b;
-        p = s * r;
-        w[i+1] = g + p;
-        g = c*r - b;
-
-        // Form eigenvectors
-        for (k=0; k < n; k++)
-        {
-         t = A[k][i+1];
-          A[k][i+1] = s*A[k][i] + c*t;
-          A[k][i]   = c*A[k][i] - s*t;
-        }
-      }
-      w[l] -= p;
-      e[l]  = g;
-      e[m]  = 0.0;
-    }
-  }
-  
-  return w;
-}
-
-
-
 

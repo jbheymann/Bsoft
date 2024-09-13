@@ -154,7 +154,7 @@ int		main(int argc, char **argv)
 	// Memory cleanup
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

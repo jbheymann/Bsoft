@@ -915,7 +915,7 @@ double		tomo_z_residual(Bproject* project, Bmarker* mark)
 	Vector3<double>		oriref = project->rec->origin;
 	Vector3<double>		loc, rloc;
 	Matrix3				mat(1);
-	long				n(0);
+//	long				n(0);
 	double				d, R(0), w(0);
 
 	for ( field = project->field; field; field = field->next ) if ( field->select ) {
@@ -931,7 +931,7 @@ double		tomo_z_residual(Bproject* project, Bmarker* mark)
 //				d = loc[1] - rloc[0]*mat[3] - rloc[1]*mat[4] - rloc[2]*mat[5];
 				d = loc[1] - rloc.scalar(mat[1]);
 				R += d*d*mark->fom;
-				n++;
+//				n++;
 				w += mark->fom;
 			}
 		}
@@ -1020,7 +1020,7 @@ double		project_refine(Bproject* project, int do_view, int do_origin, int do_sca
 	double				R, pR, bR(0), d;
 	Bmarker*			model = rec->mark;
 
-	View				v, vt, bv;
+	View2<double>			v, vt, bv;
 	Vector3<double>		ori, oritemp, oribest;
 	Vector3<double>		scale, scaletemp, scalebest;
 	
@@ -1030,7 +1030,7 @@ double		project_refine(Bproject* project, int do_view, int do_origin, int do_sca
 		cout << "Image\tdx\tdy\tsx\tsy\tvx\tvy\tvz\tva\tR" << endl;
 	for ( field = project->field; field; field = field->next ) if ( field->select ) {
 		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select ) {
-			v = View(mg->matrix);
+			v = View2<double>(mg->matrix);
 			ori = mg->origin;
 			scale = mg->scale;
 			v.normalize();

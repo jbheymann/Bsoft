@@ -1,9 +1,9 @@
 /**
 @file	model_mask.cpp
 @brief	Generating a mask from an atomic model
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060301
-@date	Modified: 20200329
+@date	Modified: 20230922
 **/
 
 #include "rwmodel.h"
@@ -12,7 +12,6 @@
 #include "model_util.h"
 #include "matrix_linear.h"
 #include "Vector3.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -52,9 +51,80 @@ Bimage*		model_create_mask(Bmodel* model, Vector3<long> size,
 	p->sampling(sam);
 	
 	long			datasize = p->data_size();
+	long			n(0), ncomp(model->component_count()), nlink(model->link_count());
 	
 	if ( verbose ) {
 		cout << "Generating a model mask:" << endl;
+		cout << "Size:                           " << p->size() << endl;
+		cout << "Origin:                         " << p->image->origin() << endl;
+		cout << "Sampling:                       " << p->sampling(0) << " A/voxel" << endl;
+		cout << "Edge:                           " << edge << endl;
+	}
+
+	for ( comp = model->comp; comp; comp = comp->next ) {
+		loc[0] = (long) (comp->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
+		loc[1] = (long) (comp->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
+		loc[2] = (long) (comp->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
+		p->sphere(loc, comp->radius()/p->sampling(0)[0], width, FILL_USER, 1);
+		if ( verbose & VERB_PROCESS )
+			cout << " " << ++n << "/" << ncomp << "\r" << flush;
+	}
+	
+	for ( n=0, link = model->link; link; link = link->next ) {
+		start[0] = (long) (link->comp[0]->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
+		start[1] = (long) (link->comp[0]->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
+		start[2] = (long) (link->comp[0]->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
+		end[0] = (long) (link->comp[1]->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
+		end[1] = (long) (link->comp[1]->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
+		end[2] = (long) (link->comp[1]->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
+		p->bar(start, end, 2*link->radius()/p->sampling(0)[0], width, FILL_USER, 1);
+		if ( verbose & VERB_PROCESS )
+			cout << " " << ++n << "/" << nlink << "\r" << flush;
+	}
+
+	// Calculate the mask volume
+	for ( i=nv=0; i<datasize; i++ ) if ( (*p)[i] > 0.5 ) nv++;
+	
+	if ( verbose )
+		cout << "Mask volume:                    " << nv * sam.volume() << " A3" << endl << endl;
+	
+	return p;
+}
+
+/**
+@brief 	Calculates a point mask of the components and links of a model structure.
+@param 	*model		model structure.
+@param 	size		size of the new mask.
+@param 	ori			origin of the new mask.
+@param 	sam			pixel size of the new mask.
+@return Bimage*		new mask.
+
+	Each component is used to generate a point at its location.
+	Only the first model in the linked list is used.
+
+**/
+Bimage*		model_create_point_mask(Bmodel* model, Vector3<long> size,
+				Vector3<double> ori, Vector3<double> sam)
+{
+	if ( sam[0] <= 0) sam = sam.max(1);
+
+	long			i, nv;
+	Vector3<long>	loc;
+	Bcomponent*		comp;
+	
+	Bimage*			p = new Bimage(Float, TSimple, size, 1);
+	if ( ori[0] == 0 && ori[1] == 0 && ori[2] == 0 )
+		p->origin(p->default_origin());
+	else
+		p->origin(ori);
+	ori = p->image->origin();
+	p->sampling(sam);
+	
+	long			datasize = p->data_size();
+	long			n(0), ncomp(model->component_count());
+	
+	if ( verbose ) {
+		cout << "Generating a point model mask:" << endl;
 		cout << "Size:                           " << p->size() << endl;
 		cout << "Origin:                         " << p->image->origin() << endl;
 		cout << "Sampling:                       " << p->sampling(0) << " A/voxel" << endl;
@@ -64,19 +134,12 @@ Bimage*		model_create_mask(Bmodel* model, Vector3<long> size,
 		loc[0] = (long) (comp->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
 		loc[1] = (long) (comp->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
 		loc[2] = (long) (comp->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
-		p->sphere(loc, comp->radius()/p->sampling(0)[0], width, FILL_USER, 1);
+		i = p->index(loc, 0);
+		p->set(i, 1);
+		if ( verbose & VERB_PROCESS )
+			cout << " " << ++n << "/" << ncomp << "\r" << flush;
 	}
 	
-	for ( link = model->link; link; link = link->next ) {
-		start[0] = (long) (link->comp[0]->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
-		start[1] = (long) (link->comp[0]->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
-		start[2] = (long) (link->comp[0]->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
-		end[0] = (long) (link->comp[1]->location()[0]/p->sampling(0)[0] + p->image->origin()[0] + 0.5);
-		end[1] = (long) (link->comp[1]->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
-		end[2] = (long) (link->comp[1]->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
-		p->bar(start, end, 2*link->radius()/p->sampling(0)[0], width, FILL_USER, 1);
-	}
-
 	// Calculate the mask volume
 	for ( i=nv=0; i<datasize; i++ ) if ( (*p)[i] > 0.5 ) nv++;
 	
@@ -308,6 +371,7 @@ Bimage*		model_create_level_mask(Bmodel* model, Vector3<long> size,
 	}
 
 	int				level;
+	long			n(0), ncomp(model->component_count());
 	
 	// Calculate the levels
 	for ( level=1, mp = model; mp; mp = mp->next, level++ ) {
@@ -316,6 +380,8 @@ Bimage*		model_create_level_mask(Bmodel* model, Vector3<long> size,
 			loc[1] = (long) (comp->location()[1]/p->sampling(0)[1] + p->image->origin()[1] + 0.5);
 			loc[2] = (long) (comp->location()[2]/p->sampling(0)[2] + p->image->origin()[2] + 0.5);
 			p->sphere(loc, comp->radius()/p->sampling(0)[0], 0, FILL_USER, level);
+			if ( verbose & VERB_PROCESS )
+				cout << " " << ++n << "/" << ncomp << "\r" << flush;
 		}
 	}
 	
@@ -465,7 +531,7 @@ Bmodel*		model_from_multilevel_mask(Bimage* p)
 	double			u = p->sampling(0).volume();
 	Bmodel*			model = NULL;
 	Bmodel*			m = NULL;
-	Bstring			id, comptype("SEG");
+	string			id, comptype("SEG");
 	Bcomponent*		comp = NULL;
 	Bcomptype*		ct;
 	Vector3<double>	coor;
@@ -476,11 +542,9 @@ Bmodel*		model_from_multilevel_mask(Bimage* p)
 	int*			mask = (int *) p->data_pointer();
 	
 	for ( n=i=0; n<p->images(); n++ ) {
-		id = Bstring(n, "Segments_%d");
-//		m = model_add(&m, id);
-//		if ( !model ) model = m;
-		if ( m ) m = m->add(id.str());
-		else model = m = new Bmodel(id.str());
+		id = "Segments_" + to_string(n);
+		if ( m ) m = m->add(id);
+		else model = m = new Bmodel(id);
 		m->mapfile(p->file_name());
 		m->image_number(n);
 		ct = m->add_type(comptype);
@@ -501,7 +565,7 @@ Bmodel*		model_from_multilevel_mask(Bimage* p)
 		}
 		comp = NULL;
 		for ( j=1; j<=p->maximum(); j++ ) if ( num[j] ) {
-//			id = Bstring(j, "%d");
+//			id = string(j, "%d");
 //			comp = component_add(&comp, id);
 //			if ( !m->comp ) m->comp = comp;
 			if ( comp ) comp = comp->add(j);
@@ -540,11 +604,10 @@ Bimage*		model_create_projected_mask(Bmodel* model,
 {
 	if ( sam.volume() <= 0) sam = sam.max(1);
 
-	View*			v;
-	View*			views = asymmetric_unit_views(sym, dang, dang, 1);
+	vector<View2<double>>	views = sym.asymmetric_unit_views(dang, dang, 1);
 	
-	long			i, j, n, nm;
-	long			nv = count_list((char *)views);
+	long			i, j, n(0), nm;
+	long			nv(views.size());
 	double			f, fa(0);
 
 	Bmodel*			mp = model;
@@ -574,8 +637,8 @@ Bimage*		model_create_projected_mask(Bmodel* model,
 
 	if ( verbose & VERB_PROCESS )
 		cout << "Mask\tView\t\t\t\t\tCount\tFraction" << endl;
-	for ( v = views, n=0; v; v = v->next, ++n ) {
-		mat = v->matrix();
+	for ( auto v: views ) {
+		mat = v.matrix();
 		for ( mp = model; mp; mp = mp->next ) {
 			for ( comp = mp->comp; comp; comp = comp->next ) {
 				loc = (mat * comp->location())/p->image->sampling() + ori + 0.5;
@@ -591,8 +654,9 @@ Bimage*		model_create_projected_mask(Bmodel* model,
 		f = nm*1.0/p->image_size();
 		fa += f;
 		if ( verbose & VERB_PROCESS )
-			cout << n+1 << setprecision(4) << tab << *v << tab
+			cout << n+1 << setprecision(4) << tab << v << tab
 				<< nm << tab << f << endl;
+		n++;
 	}
 	
 	fa /= n;

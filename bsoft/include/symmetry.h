@@ -3,11 +3,11 @@
 @brief	Header file for general symmetry functions
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20210116
+@date	Modified: 20230623
 **/
 
-#include "View.h"
-#include "Bstring.h"
+#include "View2.h"
+#include "string_util.h"
 
 #ifndef _Bsymmetry_
 /************************************************************************
@@ -62,7 +62,7 @@ struct Bsymmetry {
 private:
 	int 			pnt;		// Point group (< 1 if a crystal)
 	int 			sp;			// Space group (< 1 if not a crystal)
-	Bstring			lbl;		// Symmetry label string
+	string			lbl;		// Symmetry label string
 	vector<Bsymop>	op; 		// Symmetry operators
 private:
 	void	initialize() {
@@ -70,27 +70,28 @@ private:
 		sp = 0;
 		lbl = "C1";
 	}
-	Bstring		clean_symstring(Bstring& sym) {
+	string		clean_symstring(string& sym) {
 		int					j(0);
 		lbl = "C1";
 		if ( sym.length() < 1 ) return lbl;
 		// Remove leading blanks and convert to upper case
-		lbl = sym.no_space();
+		lbl = sym;
+		remove_spaces(lbl);
 		// Alternate nomenclature for point groups
 		if ( isdigit(lbl[0]) ) {
-			j = lbl.integer();
-			if ( lbl.contains("532") && lbl.contains("90") )
+			j = to_integer(lbl);
+			if ( lbl.find("532") != string::npos && lbl.find("90") != string::npos )
 				lbl = "I90";
-			else if ( lbl.contains("532") )
+			else if ( lbl.find("532") != string::npos )
 				lbl = "I";
-			else if ( lbl.contains("432") )
+			else if ( lbl.find("432") != string::npos )
 				lbl = "O";
-			else if ( lbl.contains("23") )
+			else if ( lbl.find("23") != string::npos )
 				lbl = "T";
 			else if ( j > 1 && lbl[1] == 2 )
-				lbl = Bstring(j, "D%d");
+				lbl = "D" + lbl.substr(0,1);
 			else if ( j > 0 )
-				lbl = Bstring(j, "C%d");
+				lbl = "C" + to_string(j);
 			else
 				lbl = "C1";
 		}
@@ -99,15 +100,15 @@ private:
 	}
 public:
 	Bsymmetry() { initialize(); }
-	Bsymmetry(Bstring sym);
+	Bsymmetry(string sym);
 //	~Bsymmetry() { op.clear(); }
-	void			point(int i) { pnt = i; }
-	int				point() { return pnt; }
-	int				point() const { return pnt; }
-	void			space(int i) { sp = i; }
-	int				space() { return sp; }
-	void			label(Bstring& s) { lbl = s; }
-	Bstring&		label() { return lbl; }
+	void		point(int i) { pnt = i; }
+	int			point() { return pnt; }
+	int			point() const { return pnt; }
+	void		space(int i) { sp = i; }
+	int			space() { return sp; }
+	void		label(string& s) { lbl = s; }
+	string&		label() { return lbl; }
 	int		order() {
 		int		ns(1);
 		for ( auto it = op.begin(); it != op.end(); ++it ) ns *= it->order();
@@ -116,17 +117,53 @@ public:
 	int			operations() { return op.size(); }
 	Bsymop&		operator[](int i) { return op[i]; }
 	vector<Matrix3>	matrices() {
+		long				ns(1), k;
+		Matrix3				mt;
 		vector<Matrix3>		mat;
 		mat.push_back(Matrix3(1));
-		for ( auto it = op.begin(); it != op.end(); ++it )
-			for ( int i = 1; i < it->order(); ++i )
-				mat.push_back(Matrix3(it->axis(), i*M_PI*2.0L/it->order()));
+		for ( auto it = op.begin(); it != op.end(); ++it ) {
+			for ( int i = 1; i < it->order(); ++i ) {
+				mt = Matrix3(it->axis(), i*M_PI*2.0L/it->order());
+				for ( k=0; k<ns; ++k )
+					mat.push_back(mt*mat[k]);
+			}
+			ns *= it->order();
+		}
+//		cout << "Number of matrices = " << mat.size() << endl;
 		return mat;
 	}
 	void		transform(Matrix3& mat) {
 		for ( auto it = op.begin(); it != op.end(); ++it )
 			it->axis(mat * it->axis());
 	}
+	vector<Vector3<double>>	get_axes();
+	View2<double>	reference_symmetry_view();
+	vector<View2<double>>	reference_asymmetric_unit_views() {
+		View2<double>	ref = reference_symmetry_view();
+		return get_all_views(ref);
+	}
+	int 			asymmetric_unit_index(View2<double> theview);
+	Matrix3			rotate_to_axis(long axis, long axis_flag);
+	vector<View2<double>>	get_all_views(View2<double> asu_view);
+	vector<View2<double>>	asymmetric_unit_views(double theta_step, double phi_step, int flag);
+	vector<View2<double>>	asymmetric_unit_views(double theta_step, double phi_step, double alpha_step, int flag);
+	View2<double>	find_asymmetric_unit_view(View2<double> theview);
+	View2<double>	find_closest_symmetric_view(View2<double> view_ref, View2<double> view);
+	vector<View2<double>>	side_views(double side_ang, double theta_step, double phi_step);
+	vector<View2<double>>	side_views(double side_ang, double theta_step, double phi_step, double alpha_step);
+	void			change_views_to_asymmetric_unit(vector<View2<double>>& views) {
+		if ( pnt < 102 ) return;
+		for ( auto& v: views )
+			v = find_asymmetric_unit_view(v);
+	}
+	View2<double>	random_view(View2<double>& asu_view) {
+		vector<View2<double>>	views = get_all_views(asu_view);
+		long			i(order()*random()*0.99999L/get_rand_max());
+		return views[i];
+	}
+	int				show_matrices();
+	int				show_operational_matrices();
+	int				show_pdb_matrices();
 } ;
 #define _Bsymmetry_
 #endif
@@ -134,24 +171,4 @@ public:
 // Function prototypes
 string		symmetry_helical_label(double helix_rise, double helix_angle,
 				int dyad_axis, int cyclic, double seam_shift);
-View		view_symmetry_reference(Bsymmetry& sym);
-Matrix3		symmetry_rotate_to_axis(Bsymmetry& sym, long axis, long axis_flag);
-vector<Vector3<double>>	symmetry_get_axes(Bsymmetry& sym);
-View*		symmetry_get_all_views(Bsymmetry& sym, View asu_view);
-View*		symmetry_get_all_views(Bsymmetry& sym, View* views);
-//Matrix3*	symmetry_get_all_matrices(Bsymmetry& sym, long& nsym);
-vector<Matrix3>	symmetry_get_all_matrices(Bsymmetry& sym);
-View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step, int flag);
-View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step, double alpha_step, int flag);
-View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi_step);
-View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi_step, double alpha_step);
-int 		change_views_to_asymmetric_unit(Bsymmetry& sym, View* view);
-View 		find_asymmetric_unit_view(Bsymmetry& sym, View theview);
-View 		find_closest_symmetric_view(Bsymmetry& sym, View view_ref, View view);
-View* 		reference_asymmetric_unit_views(Bsymmetry& sym);
-View 		random_symmetric_view(View& asu_view, Bsymmetry& sym);
-int 		test_asymmetric_unit_view(View theview, Bsymmetry& sym);
-int			sym_show_matrices(Bsymmetry& sym);
-int			sym_show_operational_matrices(Bsymmetry& sym);
-int			sym_show_pdb_matrices(Bsymmetry& sym);
 

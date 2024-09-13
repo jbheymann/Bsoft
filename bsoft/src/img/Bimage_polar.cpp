@@ -1023,7 +1023,7 @@ int			Bimage::set_radial_distances(double spherical_fraction, Bsymmetry& sym)
 	double				r, rf;
 	Vector3<double>		coor;
 
-	vector<Vector3<double>>	vs = symmetry_get_axes(sym);
+	vector<Vector3<double>>	vs = sym.get_axes();
 	if ( vs.size() < 1 ) return -1;
 	
 	if ( sym.point() < 102 || vs.size() < 2 ) spherical_fraction = 1;

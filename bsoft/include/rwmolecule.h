@@ -3,7 +3,7 @@
 @brief	Header file for reading reflection files
 @author Bernard Heymann
 @date	Created: 19980822
-@date	Modified: 20170509
+@date	Modified: 20220427
 **/
 
 #include "UnitCell.h"
@@ -147,7 +147,7 @@ struct Bbond {
 	The angle between two bonds are defined by the three connected atoms.
 	The structure also holds reference angle length and strength properties.
 *************************************************************************/
-struct Bangle {
+/*struct Bangle {
 	Bangle*		next;	 	// Next angle in linked list
 	Batom*		atom1;		// First atom
 	Batom*		atom2;		// Second atom
@@ -155,7 +155,7 @@ struct Bangle {
 	double		a;			// Reference angle
 	double		k;			// Angle strength
 } ;
-
+*/
 
 /************************************************************************
 @Object: struct Bmolgroup
@@ -188,7 +188,7 @@ struct Bmolgroup {
 	int*			seqflag; 		// Position selection flag
 	Bmolecule*		mol;			// First molecule in group
 	Bbond*			bond;			// First bond for group
-	Bangle*			angle;			// First angle for group
+//	Bangle*			angle;			// First angle for group
 } ;
 #define _Bmolecule_
 #endif
@@ -201,17 +201,18 @@ Bresidue*	residue_add(Bresidue** res, const char* type);
 Bresidue*	residue_add(Bresidue** res, Bstring& type);
 Batom*		atom_add(Batom** atom, const char* type);
 Batom*		atom_add(Batom** atom, Bstring& type);
+Batom*		atom_copy(Batom* atom);
 long		residue_count(Bmolgroup* molgroup);
 long		atom_count(Bmolgroup* molgroup);
 int			atom_clean_type(Batom* atom, const char* type);
 Bbond*		bond_add(Bbond** bond, Batom* atom1, Batom* atom2, double l, double k);
-Bangle*		angle_add(Bangle** angle, Batom* atom1, Batom* atom2, Batom* atom3, double a, double k);
+//Bangle*		angle_add(Bangle** angle, Batom* atom1, Batom* atom2, Batom* atom3, double a, double k);
 int 		molgroup_list_kill(Bmolgroup* molgroup);
 int 		molgroup_kill(Bmolgroup* molgroup);
 int 		molecule_kill(Bmolecule* mol);
 int 		residue_kill(Bresidue* res);
 int			bond_kill(Bbond* bond);
-int			angle_kill(Bangle* angle);
+//int			angle_kill(Bangle* angle);
 Bmolgroup*	molgroup_list_copy(Bmolgroup* molgroup);
 Bmolgroup*	molgroup_copy(Bmolgroup* molgroup);
 Bmolecule* 	molecule_copy(Bmolecule* mol);

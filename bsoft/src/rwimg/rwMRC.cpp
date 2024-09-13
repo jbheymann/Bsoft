@@ -78,7 +78,7 @@ int 	readMRC(Bimage* p, int readdata, int img_select)
 
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Header version:                 " << header->nversion << endl;
-		cout << "Extended header type:           " << exttype << endl;
+		cout << "Extended header type:           " << exttype << " (" << header->nsymbt << ")" << endl;
 	}
 	
     // Determine byte order and swap bytes if from little-endian machine
@@ -184,8 +184,10 @@ int 	readMRC(Bimage* p, int readdata, int img_select)
 	p->standard_deviation(header->arms);
 
 	UnitCell	uc(header->a, header->b, header->c, header->alpha, header->beta, header->gamma);
-	uc.degrees_to_radians();
 	p->unit_cell(uc);
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG readMRC: unit cell = " << uc << endl;
 	
 	if ( header->mx && header->my && header->mz )
 		p->sampling(header->a/header->mx, header->b/header->my, header->c/header->mz);
@@ -307,7 +309,8 @@ int 	writeMRC(Bimage* p)
 	
 	// Map the parameters
 	UnitCell	uc = p->unit_cell();
-//	strncpy(header->map, "MAP ", 4);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG writeMRC: unit cell = " << uc << endl;
 	memcpy(header->map, "MAP ", 4);
 	header->nversion = 20140;
 	set_CCP4_machine_stamp(header->machst);
@@ -375,22 +378,20 @@ int 	writeMRC(Bimage* p)
 		if ( p->images() > 1 ) header->ispg += 400;
 	}
 	
-	int				nsym(0), jflag(1);
-	Bstring			temp;
-	char* 			symop = NULL;
+	int				jflag(1), nsym(0);
+	string			temp;
+	char*			symop = NULL;
 	stringstream    ss;
 
 	if ( jflag ) {
 		ss << p->meta_data() << endl;
 		header->nsymbt = ss.tellp();
 //		cout << "Metadata size: " << header->nsymbt << endl;
-//		strncpy(header->exttype, "JSON", 4);
 		memcpy(header->exttype, "JSON", 4);
 	} else {
 #ifndef NOSYMOP
 		if ( p->space_group() > 0 ) {
 			symop = read_symop(temp, p->space_group(), nsym);
-//			strncpy(header->exttype, "CCP4", 4);
 			memcpy(header->exttype, "CCP4", 4);
 		}
 #endif
@@ -402,7 +403,7 @@ int 	writeMRC(Bimage* p)
 	long 			i;
 	
 	header->nlabl = 10;
-	strncpy(header->labels, p->label().c_str(), 799);
+	p->label().copy(header->labels, 799);
 	header->labels[799] = 0;
 	
 	if ( verbose & VERB_DEBUG ) {
@@ -428,7 +429,7 @@ int 	writeMRC(Bimage* p)
 	
 	if ( header->nsymbt ) {
 		if ( jflag ) fimg << ss.rdbuf();
-		else fimg.write((char *)symop, header->nsymbt);
+		else if ( nsym ) fimg.write((char *)symop, header->nsymbt);
 	}
 	
 	if ( p->data_pointer() ) {
@@ -444,7 +445,6 @@ int 	writeMRC(Bimage* p)
 	
 	fimg.close();
 	
-	if ( symop ) delete[] symop;
 	delete header;
 		
 	return 0;

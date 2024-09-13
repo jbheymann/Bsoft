@@ -3,10 +3,12 @@
 @brief	Generalized matrix class
 @author Bernard Heymann
 @date	Created: 20000501
-@date	Modified: 20180723
+@date	Modified: 20240313
 **/
 
+#include "string_util.h"
 #include "random_numbers.h"
+#include <vector>
 #include <iostream>
 #include <fstream>
 
@@ -21,65 +23,54 @@ extern int 	verbose;		// Level of output to the screen
 class Matrix
 {
 private:
-	long		m, n, len;
-	double*		d;
-	double**	p;
-	void		init() {
-		len = m*n;
-		d = new double[len];
-		p = new double*[m];
-		for ( long i=0; i<m; i++ ) p[i] = d + i*n;
-		for ( long i=0; i<len; i++ ) d[i] = 0;
-//		cout << d << "\t" << &d[8] << "\t" << p[2] << endl;
+	vector<vector<double>>	d;
+	void		resize(long nr, long nc, double fill) {
+		d.resize(nr);
+		for ( auto& r: d ) r.resize(nc, fill);
 	}
-	void		clear() {
-		delete[] d; delete[] p;
-		d = NULL; p = NULL;
+	bool		check_same_size(Matrix& mat) {
+		if ( rows() == mat.rows() && columns() == mat.columns() )
+			return 1;
+		cerr << "Matrices not the same size!" << endl;
+		return 0;
 	}
 public:
-	Matrix() : m(0), n(0) { d = NULL; p = NULL; }
-	Matrix(const Matrix& mat) : m(mat.m), n(mat.n) {
-		init();
-		for ( long i=0; i<len; i++ ) d[i] = mat.d[i];
+	Matrix() { }
+	Matrix(Matrix& mat) {
+		d.resize(mat.rows());
+		for ( long r=0; r<d.size(); ++r )
+			d[r] = mat[r];
 	}
-	Matrix(long rows, long cols) : m(rows), n(cols) {
-		init();
+	Matrix(long rows, long cols) {
+		resize(rows, cols, 0);
 	}
 	Matrix(Bstring& filename) {
-		m = n = 0;
+		long			m(0), n(0);
 		ifstream		fmat(filename.c_str());
 		if ( fmat.fail() ) return;
-		char			buf[10000];
+		string			s;
 		long		 	i(0), j;
-		Bstring			sline, *tokens, *token;
-		while ( fmat.getline(buf, 1024) && strncmp(buf, "matrix_", 7) ) ;
+		vector<string>	token;
+		while ( getline(fmat, s) && !fmat.eof() && s.find("matrix_") == string::npos ) ;
 		if ( verbose & VERB_DEBUG )
-			cout << buf << endl;
-		while ( fmat.getline(buf, 10000) ) {
-			sline = buf;
-			tokens = sline.split();
-					for ( j=0, token = tokens; token; token = token->next ) ++j;
-//			cout << j << tab << sline << endl;
-			if ( tokens ) {
-				if ( *tokens == "_rows" ) {
-					m = tokens->next->integer();
-					if ( m && n ) { init(); }
-//					cout << "Rows: " << m << endl;
-				} else if ( *tokens == "_columns" ) {
-					n = tokens->next->integer();
-					if ( m && n ) { init(); }
+			cout << s << endl;
+		while ( getline(fmat, s) ) {
+			token = split(s);
+			if ( token.size() ) {
+				if ( token[0] == "_rows" ) {
+					m = to_integer(token[1]);
+				} else if ( token[0] == "_columns" ) {
+					n = to_integer(token[1]);
+					if ( m && n ) { resize(m, n, 0); }
 //					cout << "Columns: " << n << endl;
-				} else {
-					for ( j=0, token = tokens; token; token = token->next ) ++j;
+				} else if ( i < m ) {
 					if ( verbose & VERB_DEBUG )
-						cout << "Row " << i+1 << ": " << j << endl;
-					if ( i < m && j >= n ) {
-						for ( j=0, token = tokens; j<n; j++, token = token->next )
-							(*this)[i][j] = token->real();
+						cout << "Row " << i+1 << ": " << token.size() << endl;
+					if ( token.size() >= n ) {
+						for ( j=0; j<n; ++j ) d[i][j] = to_real(token[j]);
 						i++;
 					}
 				}
-				string_kill(tokens);
 			}
 		}
 		fmat.close();
@@ -90,89 +81,116 @@ public:
 		if ( verbose & VERB_DEBUG )
 			cout << filename << " read" << endl;
 	}
-	~Matrix() { clear(); }
 	
 	void	write(Bstring& filename) {
 		ofstream        fmat(filename.c_str());
 		if ( fmat.fail() ) return;
-		long	 		i, j;
+		long	 		j;
 		fmat << "# Matrix written by Bsoft\n\ndata_\n\nmatrix_" << endl;
-		fmat << "_rows" << tab << m << endl;
-		fmat << "_columns" << tab << n << endl;
-		for ( i=0; i<m; i++ ) {
-			fmat << (*this)[i][0];
-			for ( j=1; j<n; j++ ) fmat << " " << (*this)[i][j];
+		fmat << "_rows" << tab << d.size() << endl;
+		fmat << "_columns" << tab << d[0].size() << endl;
+		for ( auto& r: d ) {
+			fmat << r[0];
+			for ( j=1; j<columns(); ++j ) fmat << " " << r[j];
 			fmat << endl;
 		}
 		fmat << endl;
 		fmat.close();
 	}
 	
-	double*	data() { return d; }
-//	double*	row(long i) { while ( i>=m ) i -= m; return p; }
+	long	rows() { return d.size(); }
+	long	columns() { return d[0].size(); }
 	
-	class Row {
-		private:
-			long	n;
-			double*	p;
-		public:
-			Row(long len, double* row) : n(len), p(row) { }
-			double&	operator[](long i) {
-				while ( i>=n ) i -= n;
-				return p[i];
-			}
-	};
-	
-	Row		operator[](long i) {
-		while ( i>=m ) i -= m;
-		return Row(n, p[i]);
-	}
+	vector<double>&	operator[](long i) { return d[i]; }
 
-	Matrix	operator=(const Matrix mat) {
-		clear();
-		m = mat.m; n = mat.n;
-		init();
-		for ( long i=0; i<len; i++ ) d[i] = mat.d[i];
+/*	Matrix	operator=(Matrix& mat) {
+		return Matrix(mat);
+	}
+	
+	Matrix	operator=(Matrix& mat) {
+		d.resize(mat.rows());
+		for ( long r=0; r<d.size(); ++r )
+			d[r] = mat[r];
 		return *this;
+	}
+	Matrix	operator=(const Matrix& mat) {
+		d.resize(mat.rows());
+		for ( long r=0; r<d.size(); ++r )
+			d[r] = mat[r];
+		return *this;
+	}*/
+	Matrix	operator+=(Matrix& mat) {
+		if ( !check_same_size(mat) ) return *this;
+		long		i, j;
+		for ( i=0; i<rows(); i++ )
+			for ( j=0; j<columns(); j++ )
+				d[i][j] += mat[i][j];
+		return *this;
+	}
+	Matrix	operator+(Matrix& mat) {
+		Matrix		numat(*this);
+		numat += mat;
+		return numat;
+	}
+	Matrix	operator-=(Matrix& mat) {
+		if ( !check_same_size(mat) ) return *this;
+		long		i, j;
+		for ( i=0; i<rows(); i++ )
+			for ( j=0; j<columns(); j++ )
+				d[i][j] -= mat[i][j];
+		return *this;
+	}
+	Matrix	operator-(Matrix& mat) {
+		Matrix		numat(*this);
+		numat -= mat;
+		return numat;
 	}
 	Matrix	operator-() {
 		Matrix		mat(*this);
-		for ( long i=0; i<len; i++ ) mat.d[i] = -mat.d[i];
+		for ( auto& r: mat.d )
+			for ( auto& v: r )
+				v = -v;
+		return mat;
+	}
+/*	Matrix	operator*=(Matrix mat) {
+		return *this * mat;
+	}*/
+	Matrix	operator*=(double d) {
+		Matrix		mat(*this);
+		for ( auto& r: mat.d )
+			for ( auto& v: r )
+				v *= d;
 		return mat;
 	}
 	Matrix	operator*(Matrix& mat) {
 		long		i, j, k;
-		Matrix		numat(mat.m, n);
-		if ( m != mat.n ) {
+		Matrix		numat(mat.rows(), columns());
+		if ( rows() != mat.columns() ) {
 			cerr << "Matrix rows not equal to second vector columns!" << endl;
 			return numat;
 		}
-		for ( i=0; i<n; i++ )
-			for ( j=0; j<mat.m; j++ )
-				for ( k=0; k<m; k++ ) numat[i][j] += (*this)[i][k]*mat[k][j];
+		for ( i=0; i<columns(); ++i )
+			for ( j=0; j<mat.rows(); ++j )
+				for ( k=0; k<rows(); ++k ) numat[i][j] += (*this)[i][k]*mat[k][j];
 		return numat;
 	}
 	vector<double>	operator*(vector<double>& vec) {
 		long			i, j;
-		vector<double>	nuvec(m,0);
-		if ( n != vec.size() ) {
+		vector<double>	nuvec(columns(),0);
+		if ( columns() != vec.size() ) {
 			cerr << "Matrix columns not equal to vector size!" << endl;
 			return nuvec;
 		}
-		for ( i=0; i<m; i++ )
-			for ( j=0; j<n; j++ )
+		for ( i=0; i<rows(); i++ )
+			for ( j=0; j<columns(); j++ )
 				nuvec[i] += (*this)[i][j]*vec[j];
 		return nuvec;
 	}
 
-	long	rows() { return m; }
-	long	columns() { return n; }
-	long	size() { return len; }
-
 	void	show_below_cutoff(double d) {
-		for ( long i=0; i<m; ++i ) {
+		for ( long i=0; i<rows(); ++i ) {
 			cout << i;
-			for ( long j=0; j<n; ++j )
+			for ( long j=0; j<columns(); ++j )
 				if ( (*this)[i][j] <= d )
 					cout << tab << j << "," << (*this)[i][j];
 			cout << endl;
@@ -181,16 +199,16 @@ public:
 
 	void	swap_rows_columns(long rc1, long rc2) {
 		long			i;
-		for ( i=0; i<m; i++ ) swap((*this)[i][rc1], (*this)[i][rc2]);
-		for ( i=0; i<n; i++ ) swap((*this)[rc1][i], (*this)[rc2][i]);
+		for ( i=0; i<rows(); ++i ) swap((*this)[i][rc1], (*this)[i][rc2]);
+		for ( i=0; i<columns(); ++i ) swap((*this)[rc1][i], (*this)[rc2][i]);
 	}
 	
 	Matrix	delete_row_column(long rc) {
 		long			i, j, k, l;
-		Matrix			mat(m-1,n-1);
-		for ( i=k=0; i<m; i++ ) {
-			for ( j=l=0; j<n; j++ ) {
-				if ( i != rc && j != rc ) mat[k][l] = p[i][j];
+		Matrix			mat(rows()-1,columns()-1);
+		for ( i=k=0; i<rows(); ++i ) {
+			for ( j=l=0; j<columns(); ++j ) {
+				if ( i != rc && j != rc ) mat[k][l] = d[i][j];
 				if ( j != rc ) l++;
 			}
 			if ( i != rc ) k++;
@@ -198,22 +216,25 @@ public:
 		return mat;
 	}
 
-	Matrix	transpose() const {
-		Matrix			mat(n,m);
-		for ( long i=0; i<n; i++ )
-			for ( long j=0; j<m; j++ )
-				mat[i][j] = p[j][i];
+	Matrix	transpose() {
+		Matrix			mat(columns(),rows());
+		for ( long i=0; i<columns(); i++ )
+			for ( long j=0; j<rows(); j++ )
+				mat[i][j] = d[j][i];
 		return mat;
 	}
 
-	void	fill(double v) { for ( long i=0; i<len; i++ ) d[i] = v; }
-
+	void	fill(double f) {
+		for ( auto& r: d )
+			for ( auto& v: r )
+				v = f;
+	}
 	int		check_for_singularity() {
 		int				c(0);
-		long			i, j, k;
+		long			i, j;
 		double			max;
-		for ( i=k=0; i<m; i++ ) {
-			for ( j=0, max=0; j<n; j++, k++ ) if ( max < fabs(d[k]) ) max = fabs(d[k]);
+		for ( i=0; i<rows(); ++i ) {
+			for ( j=0, max=0; j<columns(); ++j ) if ( max < fabs(d[i][j]) ) max = fabs(d[i][j]);
 			if ( max < 1e-37 ) c |= 1 << i;
 		}
 		return c;
@@ -224,78 +245,71 @@ public:
 	**/
 	void			normalize()
 	{
-		long			i, j, r, c;
+		long			i, r, c;
 		double			err(1);
-		vector<double>	rw(m);
-		vector<double>	cw(n);
+		vector<double>	rw(rows());
+		vector<double>	cw(columns());
 	
 		if ( verbose & VERB_FULL )
 			cout << "Cycle\tError" << endl;
 		for ( i=0; i<100 && err > 1e-20; i++ ) {
-			for ( r=0; r<m; r++ ) rw[r] = 0;	// Row scaling
-			for ( j=r=0; r<m; r++ )
-				for ( c=0; c<n; c++, j++ )
-					rw[r] += d[j];
-			for ( r=0; r<m; r++ ) rw[r] = 1/rw[r];
-			for ( j=r=0; r<m; r++ )
-				for ( c=0; c<n; c++, j++ )
-					d[j] *= rw[r];
+			for ( r=0; r<rows(); r++ ) rw[r] = 0;	// Row scaling
+			for ( r=0; r<rows(); r++ )
+				for ( c=0; c<columns(); c++ )
+					rw[r] += d[r][c];
+			for ( r=0; r<rows(); r++ ) rw[r] = 1/rw[r];
+			for ( r=0; r<rows(); r++ )
+				for ( c=0; c<columns(); c++ )
+					d[r][c] *= rw[r];
 
-			for ( c=0; c<n; c++ ) cw[c] = 0;	// Column scaling
-			for ( j=r=0; r<m; r++ )
-				for ( c=0; c<n; c++, j++ )
-					cw[c] += d[j];
-			for ( c=0; c<n; c++ ) cw[c] = 1/cw[c];
-			for ( j=r=0; r<m; r++ )
-				for ( c=0; c<n; c++, j++ )
-					d[j] *= cw[c];
+			for ( c=0; c<columns(); c++ ) cw[c] = 0;	// Column scaling
+			for ( r=0; r<rows(); r++ )
+				for ( c=0; c<columns(); c++ )
+					cw[c] += d[r][c];
+			for ( c=0; c<columns(); c++ ) cw[c] = 1/cw[c];
+			for ( r=0; r<rows(); r++ )
+				for ( c=0; c<columns(); c++ )
+					d[r][c] *= cw[c];
 
-			for ( err=0, r=0; r<m; r++ ) err += rw[r];
-			for ( c=0; c<n; c++ ) err += cw[c];
-			err = fabs(err/(m + n) - 1);
+			for ( err=0, r=0; r<rows(); r++ ) err += rw[r];
+			for ( c=0; c<columns(); c++ ) err += cw[c];
+			err = fabs(err/(rows() + columns()) - 1);
 			if ( verbose & VERB_FULL )
 				cout << i+1 << "\t" << err << endl;
 		}
 	}
 	void		randomize() {
 		random_seed();
-		long		i, j;
 		double		rm = INT_MAX/4, irm = 10.0L/INT_MAX;
-		for ( i=0; i<m; i++ )
-			for ( j=0; j<n; j++ )
-				p[i][j] = irm*(random() - rm);
+		for ( auto& r: d )
+			for ( auto& v: r )
+				v = irm*(random() - rm);
 	}
-//	int			multiply_in_place(double* vec);
-	int			multiply_in_place(vector<double>& vec);
+	int			multiply_in_place(vector<double>& vec) {
+		if ( vec.size() != columns() ) return -1;
+		long			i, j;
+		vector<double>	t(vec.size(),0);
+		for ( i=0; i<vec.size(); i++ )
+			for ( j=0; j<vec.size(); j++ )
+				t[i] += d[i][j]*vec[j];
+		vec = t;
+		return 0;
+	}
 	double		determinant() { return LU_decomposition(); }
 	double 		LU_decomposition();
-/*	double 		LU_decomposition(double* b) {
-		double	det = LU_decomposition();
-		if ( b ) multiply_in_place(b);
-		return det;
-	}*/
 	double 		LU_decomposition(vector<double>& b) {
 		double	det = LU_decomposition();
 		multiply_in_place(b);
 		return det;
 	}
 	double 		singular_value_decomposition();
-/*	double 		singular_value_decomposition(double* b) {
-		singular_value_decomposition();
-		if ( b ) multiply_in_place(b);
-		return 0;
-	}*/
 	double 		singular_value_decomposition(vector<double>& b) {
 		singular_value_decomposition();
 		multiply_in_place(b);
 		return 0;
 	}
 	int			jrotate(double s, double tau, long i, long j, long k, long l);
-//	double*		jacobi_rotation_old();
 	vector<double>	jacobi_rotation();
-//	long		jacobi_rotation_row(long ip, long n, long i, double* val, double* z, Matrix* vec);
-//	double*		jacobi_rotation_parallel();
-//	void 		eigen_sort(double* val);
 	void 		eigen_sort(vector<double>& val);
 };
 
@@ -306,5 +320,3 @@ ostream& operator<<(ostream& output, Matrix& mat);
 // Function prototypes 
 Vector3<double> principal_axes(Vector3<double> avg, Vector3<double> avg2, Vector3<double> avgx, Vector3<double>* eigenvec);
 Vector3<double> principal_axes(vector<Vector3<double>>& coor, Matrix& eigenvec);
-vector<double>	dsyevq3(Matrix& A);
-void 			dsytrd3(Matrix& A, double d[3], double e[2]);

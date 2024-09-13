@@ -3,7 +3,7 @@
 @brief	A tool to expand models.
 @author Bernard Heymann
 @date	Created: 20090714
-@date	Modified: 20210310
+@date	Modified: 20220210
 **/
 
 #include "rwmodel.h"
@@ -17,19 +17,20 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
+
 /**
-@brief 	Adds a component to a model.
+@brief 	Adds a set of components to a model.
 @param 	*model			model list.
-@param 	&id				model identifier.
-@param 	&type			component type.
-@param 	loc				component location.
-@return Bcomponent*		new component.
+@param 	id				model identifier.
+@param 	type			component type.
+@param 	loc				component locations.
+@return Bcomponent*		last new component.
 
 	The component is added to the model indicated by the ID, the type and
 	the location given.
 
 **/
-Bcomponent*	model_add_component(Bmodel* model, Bstring &id, Bstring &type, Vector3<double> loc)
+Bcomponent*	model_add_components(Bmodel* model, string id, string type, vector<Vector3<double>> loc)
 {
 	if ( !model ) return NULL;
 	
@@ -37,7 +38,7 @@ Bcomponent*	model_add_component(Bmodel* model, Bstring &id, Bstring &type, Vecto
 	
 	if ( id.length() ) {
 		for ( mp = model; mp; mp = mp->next )
-			if ( mp->identifier() == id.str() ) break;
+			if ( mp->identifier() == id ) break;
 		if ( !mp ) mp = model;
 	}
 
@@ -55,10 +56,11 @@ Bcomponent*	model_add_component(Bmodel* model, Bstring &id, Bstring &type, Vecto
 
 	string			cid = to_string(++n);
 	
-//	comp = component_add(&mp->comp, cid);
-	comp = mp->add_component(cid);
-	comp->location(loc);
-	comp->type(ct);
+	for ( auto p: loc ) {
+		comp = mp->add_component(cid);
+		comp->location(p);
+		comp->type(ct);
+	}
 	
 	return comp;
 }
@@ -84,7 +86,7 @@ Bmodel*		model_platonic(Bsymmetry& sym, double radius)
 {
 	string			id("1");
 	Bmodel*			model = new Bmodel(id);
-	model->symmetry(sym.label().str());
+	model->symmetry(sym.label());
 	
 	string			comptype("VER");
 	Bcomptype*		ct = model->add_type(comptype);
@@ -137,8 +139,8 @@ Bmodel*		model_platonic(Bsymmetry& sym, double radius)
 
 	comp->view(View2<float>(comp->location()));
 
-	Vector3<double>	origin;
-	View			ref_view;
+	Vector3<double>		origin;
+	View2<double>		ref_view;
 	model_apply_point_group(model, model->symmetry(), origin, ref_view, 1);
 
 	return model;
@@ -158,9 +160,10 @@ Bmodel*		model_helix(double radius, double helix_rise, double helix_angle, long 
 	double			start = -(ncomp/2.0 - 0.5)*helix_rise;
 //	double			search_radius = 1.2*sqrt(helix_rise*helix_rise + 2*radius*radius*(1 - cos(helix_angle)));
 	string			id("Helix");
-	Bstring			symstr(Bstring(helix_rise, "H%.3g") + Bstring(helix_angle*180.0/M_PI, ",%.3g"));
+//	string			symstr(string(helix_rise, "H%.3g") + string(helix_angle*180.0/M_PI, ",%.3g"));
+	string			symstr = "H" + to_string(helix_rise) + "," + to_string(helix_angle*180.0/M_PI);
 	Bmodel*			model = new Bmodel(id);
-	model->symmetry(symstr.str());
+	model->symmetry(symstr);
 	string			comptype("VER");
 	Bcomptype*		ct = model->add_type(comptype);
 //	Bcomponent*		comp = component_add(&model->comp, id);
@@ -204,7 +207,7 @@ Bmodel*		model_helix(double radius, double helix_rise, double helix_angle, long 
 **/
 Bmodel*		model_random(long ncomp, double comp_radius, double max_radius)
 {
-	Bstring			id("Random");
+	string			id("Random");
 	double			R = ncomp * pow(comp_radius/max_radius, 3);
 		
 	if ( verbose ) {
@@ -226,13 +229,13 @@ Bmodel*		model_random(long ncomp, double comp_radius, double max_radius)
 	double			inner_radius(max_radius - comp_radius);
 	double			d;
 	Bmodel*			model = new Bmodel(id);
-	Bstring			comptype = "VER";
+	string			comptype = "VER";
 	Bcomponent*		comp = NULL;
 	Bcomponent*		comp2 = NULL;
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	for ( i=1; i<=ncomp; i++ ) {
-//		id = Bstring(i, "%d");
+//		id = string(i, "%d");
 //		comp = component_add(&comp, id);
 //		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(i);
@@ -265,7 +268,7 @@ Bmodel*		model_random(long ncomp, double comp_radius, double max_radius)
 **/
 Bmodel*		model_random(long ncomp, double comp_radius, Vector3<double> min, Vector3<double> max)
 {
-	Bstring			id("Random");
+	string			id("Random");
 	Vector3<double>	cmin(min + comp_radius);
 	Vector3<double>	cmax(max - comp_radius);
 	double			R(ncomp * (4.0*M_PI/3.0)*comp_radius*comp_radius*comp_radius/(max - min).volume());
@@ -289,13 +292,13 @@ Bmodel*		model_random(long ncomp, double comp_radius, Vector3<double> min, Vecto
 	long				i;
 	double			d;
 	Bmodel*			model = new Bmodel(id);
-	Bstring			comptype = "VER";
+	string			comptype = "VER";
 	Bcomponent*		comp = NULL;
 	Bcomponent*		comp2 = NULL;
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	for ( i=1; i<=ncomp; i++ ) {
-//		id = Bstring(i, "%d");
+//		id = string(i, "%d");
 //		comp = component_add(&comp, id);
 //		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(i);
@@ -325,7 +328,7 @@ Bmodel*		model_random(long ncomp, double comp_radius, Vector3<double> min, Vecto
 **/
 Bmodel*		model_random_gaussian(long ncomp, double std)
 {
-	Bstring			id("RandomGaussian");
+	string			id("RandomGaussian");
 		
 	if ( verbose ) {
 		cout << "Generating a random gaussian model: " << id << endl;
@@ -336,12 +339,12 @@ Bmodel*		model_random_gaussian(long ncomp, double std)
 	
 	long				i;
 	Bmodel*			model = new Bmodel(id);
-	Bstring			comptype = "VER";
+	string			comptype = "VER";
 	Bcomponent*		comp = NULL;
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	for ( i=1; i<=ncomp; i++ ) {
-//		id = Bstring(i, "%d");
+//		id = string(i, "%d");
 //		comp = component_add(&comp, id);
 //		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(i);
@@ -370,7 +373,7 @@ Bmodel*		model_random_gaussian(long ncomp, double std)
 **/
 Bmodel*		model_random_shell(long ncomp, double radius)
 {
-	Bstring			id("RandomShell");
+	string			id("RandomShell");
 		
 	if ( verbose ) {
 		cout << "Generating a random shell model: " << id << endl;
@@ -382,12 +385,12 @@ Bmodel*		model_random_shell(long ncomp, double radius)
 	
 	long				i;
 	Bmodel*			model = new Bmodel(id);
-	Bstring			comptype = "VER";
+	string			comptype = "VER";
 	Bcomponent*		comp = NULL;
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	for ( i=1; i<=ncomp; i++ ) {
-//		id = Bstring(i, "%d");
+//		id = string(i, "%d");
 //		comp = component_add(&comp, id);
 //		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(i);
@@ -426,7 +429,7 @@ Bmodel*		model_random_shell(long ncomp, double radius)
 **/
 Bmodel*		model_random_shell(long ncomp, double radius, double separation)
 {
-	Bstring			id("RandomShell");
+	string			id("RandomShell");
 		
 	if ( verbose ) {
 		cout << "Generating a random shell model: " << id << endl;
@@ -443,15 +446,12 @@ Bmodel*		model_random_shell(long ncomp, double radius, double separation)
 	if ( pd > 8 ) ncomp = 8*radius*radius/(separation*separation);
 	
 	Bmodel*			model = new Bmodel(id);
-	Bstring			comptype = "VER";
+	string			comptype = "VER";
 	Bcomponent*		comp = NULL;
 	Bcomponent*		comp2 = NULL;
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	for ( i=1; i<=ncomp; i++ ) {
-//		id = Bstring(i, "%d");
-//		comp = component_add(&comp, id);
-//		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(i);
 		else comp = model->add_component(i);
 		comp->type(ct);
@@ -614,9 +614,6 @@ Bmodel*		model_create_fibonacci_sphere(long number, double radius)
 		phi = ga*i;
 		x = cos(phi)*st;
 		y = sin(phi)*st;
-//		id = to_string(++i);
-//		comp = component_add(&comp, id);
-//		if ( !model->comp ) model->comp = comp;
 		if ( comp ) comp = comp->add(++i);
 		else comp = model->add_component(++i);
 		comp->type(ct);
@@ -647,7 +644,7 @@ long		model_subdivide(Bmodel* model, long division)
 	if ( division < 1 ) return ncomp;
 	
 	double			search_radius = 1/pow(2.0,division - 1.0);
-	Bstring			id, comptype("VER");
+	string			id, comptype("VER");
 	Bcomptype*		ct = model->add_type(comptype);
 	
 	if ( model->symmetry() == "I-3" ) search_radius *= 1.44;
@@ -657,7 +654,7 @@ long		model_subdivide(Bmodel* model, long division)
 		for ( j=i, comp2 = comp; comp2 && j<ncomp; comp2=comp2->next, j++ ) {
 			if ( comp != comp2 ) {
 				if ( comp->location().distance(comp2->location()) < search_radius ) {
-//					id = Bstring(++n, "%ld");
+//					id = string(++n, "%ld");
 //					comp3 = component_add(&comp2, id);
 					comp3 = comp2->add(++n);
 					comp3->type(ct);
@@ -1000,7 +997,7 @@ Bmodel*		model_create_ellipse(Vector3<double> axes, double distance)
 				comp->type(ct);
 				comp->location(loc_new);
 				comp->location()[1] = -comp->location()[1];
-//				id = Bstring(++n, "%ld");
+//				id = string(++n, "%ld");
 //				comp = component_add(&comp, id);
 				comp = comp->add(++n);
 				comp->type(ct);

@@ -223,7 +223,7 @@ int 	readTGA(Bimage *p, int readdata)
 	
 	// Allocating the single sub-image and setting its parameters
 
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	p->set_time(t);
 	
 	unsigned char*	nudata;

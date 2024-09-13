@@ -3,7 +3,7 @@
 @brief	A tool to generate polyhedra using the spiral algorithm.
 @author Bernard Heymann
 @date	Created: 20071127
-@date 	Modified: 20080408
+@date 	Modified: 20230524
 **/
 
 #include "rwmodel.h"
@@ -12,7 +12,6 @@
 #include "model_transform.h"
 #include "model_links.h"
 #include "model_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -115,9 +114,10 @@ int 		main(int argc, char **argv)
 	chmod("temp", 0755);
 	
 	Bmodel*		model = NULL;
+	Bmodel*		mp = NULL;
 	
 	if ( use_one ) {
-		model = model_poly_gen_sequence(seq, valence, enantiomorph, requirements, 0);
+		model = model_poly_gen_sequence(seq.str(), valence, enantiomorph, requirements, 0);
 		if ( model )
 			cout << model->identifier() << ": " << seq << ": " << model->symmetry() << endl;
 	} else if ( conetip > 0 && conebody > 0 && conebase > 0 ) {
@@ -132,7 +132,7 @@ int 		main(int argc, char **argv)
 		model = model_poly_gen_permutations(vertices, valence, enantiomorph);
 	}
 
-	i = count_list((char *)model);
+	for ( i=0, mp = model; mp; mp = mp->next ) i++;
 	
 	if ( !i )
 		if ( verbose ) cout << "No model generated!" << endl;
@@ -150,12 +150,12 @@ int 		main(int argc, char **argv)
 	Bstring			filename;
 	if ( optind < argc ) {
 		filename = argv[optind];
-		write_model(filename, model);
+		write_model(filename.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(i);

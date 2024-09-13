@@ -10,7 +10,6 @@
 #include "rwmolecule.h"
 #include "model_links.h"
 #include "model_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -22,18 +21,17 @@ extern int 	verbose;		// Level of output to the screen
 @param 	&paramfile	parameter file.
 @return Bmodel*		model parameters.
 **/
-Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile)
+Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile)
 {
-	Bstring*		filename;
-    Bstring    		atom_select("all");
-	Bstring			id;
+    string    		atom_select("all");
+	string			id;
 	Bmolgroup*		molgroup;
 	Bmolecule*		mol;
 	Bresidue*		res;
 	Batom*			atom;
 	Bbond*			bond;
 	
-	int				i;
+	int				i(0);
 	RGBA<float>		rgba(1,1,1,1);
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
@@ -41,25 +39,22 @@ Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile)
 	Blink*			link = NULL;
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG read_model_molecule: " << *file_list << endl;
+		cout << "DEBUG read_model_molecule: " << file_list[0] << endl;
 	
-	for ( i=1, filename = file_list; filename; filename = filename->next, i++ ) {
+	for ( auto filename: file_list ) {
 		if ( verbose & VERB_LABEL )
-			cout << "Reading file:                   " << *filename << endl;
-		molgroup = read_molecule(*filename, atom_select, paramfile);
-//		id = Bstring(i, "%d");
-//		mp = model_add(&mp, id);
-//		if ( !model ) model = mp;
-		if ( mp ) mp = mp->add(i);
-		else mp = model = new Bmodel(i);
+			cout << "Reading file:                   " << filename << endl;
+		molgroup = read_molecule(filename.c_str(), atom_select.c_str(), paramfile.c_str());
+		if ( mp ) mp = mp->add(++i);
+		else mp = model = new Bmodel(++i);
 		mp->model_type(mp->identifier());
 		if ( molgroup ) {
-			if ( molgroup->id.length() && molgroup->id[0] != ' ') mp->identifier(molgroup->id);
+			if ( molgroup->id.length() && molgroup->id[0] != ' ') mp->identifier(molgroup->id.str());
 			mp->symmetry(molgroup->pointgroup.str());
 			comp = NULL;
 			link = NULL;
 			for ( bond = molgroup->bond; bond; bond = bond->next ) {
-				link = (Blink *) add_item((char **) &link, sizeof(Blink));
+				link = new Blink();
 				if ( !mp->link ) mp->link = link;
 				link->radius(1);
 				link->select(1);
@@ -68,18 +63,13 @@ Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile)
 			for ( mol = molgroup->mol; mol; mol = mol->next ) {
 				for ( res = mol->res; res; res = res->next ) {
 					for ( atom = res->atom; atom; atom = atom->next ) {
-//						id = Bstring(atom->num, "%d");
-//						comp = component_add(&comp, id);
-//						if ( !mp->comp ) mp->comp = comp;
-//						comp = mp->add_component(id);
 						if ( comp ) comp = comp->add(atom->num);
 						else comp = mp->comp = new Bcomponent(atom->num);
 						comp->location(atom->coord);
 						comp->FOM(atom->b);
 						comp->select((int) (atom->q + 0.999));
 						id = atom->type;
-						id = id.no_space();
-//						comp->type = model_add_type_by_id(mp, id);
+//						id = id.no_space();
 						comp->type(mp->add_type(id));
 						for ( bond = molgroup->bond, link = mp->link; bond && link; bond = bond->next, link = link->next ) {
 							if ( atom == bond->atom1 ) link->comp[0] = comp;
@@ -92,7 +82,6 @@ Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile)
 		}
 	}
 
-//	model_list_setup_links(model);
 	models_process(model, model_setup_links);
 	
 	return model;
@@ -104,7 +93,7 @@ Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile)
 @param 	*model		model parameters.
 @return int			models written.
 **/
-int			write_model_molecule(Bstring& filename, Bmodel* model)
+int			write_model_molecule(string& filename, Bmodel* model)
 {
 	int				i, n;
 	Bstring			restype("UNK");
@@ -160,7 +149,8 @@ int			write_model_molecule(Bstring& filename, Bmodel* model)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_model_molecule: atoms converted: " << i << endl;
 
-	molgroup_list_write(filename, molgroup);
+	Bstring			fn(filename);
+	molgroup_list_write(fn, molgroup);
 
 	molgroup_list_kill(molgroup);
 	

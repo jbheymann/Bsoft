@@ -48,8 +48,11 @@ C	1
 
 data_protein
 
+# Perkins, S. J. (1986). "Protein volumes and hydration effects. The calculations of partial specific volumes, neutron scattering matchpoints and 280-nm absorption coefficients for proteins and glycoproteins from amino acid sequences." Eur J Biochem 157(1): 169-180. https://doi.org/10.1111/j.1432-1033.1986.tb09653.x
+
+
 _material.name		"Protein"
-_material.density	1.35
+_material.density	1.38
 
 loop_
 _atom_type.symbol

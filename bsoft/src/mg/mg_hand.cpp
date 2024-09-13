@@ -375,10 +375,10 @@ int  get_handedness_from_tilt_pair(Bimage* mapA, Bimage* mapB, Bmicrograph* mg1,
 	Euler  angles1A;			// Euler angles for first view
 	Euler  angles2A, angles2B;	// Euler angles for second view, hands A & B
 	Euler  euler2;				// Euler angles for second view (input data)
-	View	view1A(particle1->view);	// View vector and angle for first view, hand A
-	View	view1B(view1A);
+	View2<double>	view1A(particle1->view);	// View vector and angle for first view, hand A
+	View2<double>	view1B(view1A);
 	view1B.angle(angle_set_negPI_to_PI(view1B.angle()+M_PI));
-	View	view2;				// View vector and angle for second view (input data)
+	View2<double>	view2;				// View vector and angle for second view (input data)
 
 	Matrix3 rot_matrix1A(1);    // 3x3 matrix for first and predicted second orientations,
 	Matrix3 rot_matrix1B(1);    // for hands A and B

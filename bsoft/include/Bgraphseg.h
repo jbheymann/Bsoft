@@ -179,6 +179,7 @@ public:
 		for ( i=0; i<r.size(); ++i )
 			if ( r[i].index() == i )
 				cout << r[i].joins() << tab << r[i].voxels() << tab << r[i].average() << endl;
+		cout << endl;
 	}
 } ;
 

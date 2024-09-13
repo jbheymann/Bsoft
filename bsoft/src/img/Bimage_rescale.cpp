@@ -711,7 +711,6 @@ void		Bimage::square_root()
 
 /**
 @brief 	Calculates the logarithm of the image data.
-@return int 			0.
 
 	The image is first converted to floating point, or intensities
 	for complex data. The logarithm is calculated to place the minmum at
@@ -753,7 +752,6 @@ void		Bimage::logarithm()
 
 /**
 @brief 	Calculates the exponential of the image data.
-@return int 			0.
 
 	The image is first converted to floating point.
 	The new data replaces the old data.
@@ -952,7 +950,7 @@ Bimage*		Bimage::thickness(double reference, double emfp)
 {
 	if ( reference < 1e-30 ) reference = maximum();
 	
-	long		i;
+	long		i, ds(x*y*z*n);
 	double		v;
 	Bimage*		pthick = new Bimage(Float, TSimple, size(), n);
 	pthick->sampling(sampling(0));
@@ -963,7 +961,7 @@ Bimage*		Bimage::thickness(double reference, double emfp)
 		cout << "Reference intensity:            " << reference << endl << endl;
 	}
 	
-	for ( i=0; i<image_size(); ++i ) {
+	for ( i=0; i<ds; ++i ) {
 		v = (*this)[i];
 		if ( v > 0 && v < reference )
 			pthick->set(i, emfp*log(reference/v));

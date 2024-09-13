@@ -3,7 +3,7 @@
 @brief	Header file for image class
 @author Bernard Heymann
 @date	Created: 19990321
-@date 	Modified: 20211109
+@date 	Modified: 20240904
 **/
 
 //#include <time.h>
@@ -16,16 +16,16 @@
 #include "FSI_Kernel.h"
 #include "Matrix.h"
 #include "Vector3.h"
-#include "View.h"
+#include "View2.h"
 #include "Color.h"
 #include "UnitCell.h"
 #include "symmetry.h"
+#include "timer.h"
 #include "ps_plot.h"
 #include "Bsuperpixel.h"
 #include "Bgraphseg.h"
 
 #include <fstream>
-#include <ctime>
 
 #define NPOLANG	720
 
@@ -44,6 +44,7 @@ enum FourierType {
 	Hermitian = 3,		// Hermitian half: origin = (0,0,0)
 	CentHerm = 4		// Centered hermitian: origin = (0,ny/2,nz/2)
 } ;
+
 #define _fouriertype_
 #endif
 
@@ -139,9 +140,10 @@ public:
 		return image_coordinates(rc[0], rc[1], rc[2]);
 	}
 	void		view(double x, double y, double z, double a) { vx=x; vy=y; vz=z; angle=a; }
-	void		view(View vw) { vx=vw[0]; vy=vw[1]; vz=vw[2]; angle=vw.angle(); }
+	template <typename T>
+	void		view(View2<T> vw) { vx=vw[0]; vy=vw[1]; vz=vw[2]; angle=vw.angle(); }
 	void		view(vector<double> vw) { vx=vw[0]; vy=vw[1]; vz=vw[2]; angle=vw[3]; }
-	View		view() { return View(vx, vy, vz, angle); }
+	View2<double>	view() { return View2<double>(vx, vy, vz, angle); }
 	void		view_angle(double d) { angle = d; }
 	double		view_angle() { return angle; }
 	double		magnification() { return mag; }
@@ -212,6 +214,7 @@ public:
 	bool			check_if_same_image_size(Bimage* p);
 	void			check_sampling();
 	void			check_resolution(double& resolution);
+	void			set_hi_lo_resolution(double& hi, double& lo);
 	bool 			compatible(Bimage* p);
 	// Informational strings
 	void			identifier(Bstring s) { id = s; }
@@ -230,7 +233,10 @@ public:
 	void			meta_data_retain_one_image(long img_num);
 	void			file_name(string s) { metadata["filename"] = s; }
 	string&			file_name() {
-		if ( !metadata.exists("filename") ) metadata["filename"] = "?";
+		if ( !metadata.exists("filename") ) {
+			metadata["filename"] = "?";
+			cerr << "Warning: No proper file name found!" << endl;
+		}
 		return metadata["filename"].value();
 	}
 	Bimage*			find(Bstring fn) {
@@ -252,7 +258,7 @@ public:
 		if ( !metadata.exists("time") ) metadata["time"] = time(NULL);
 		return metadata["time"].integer();
 	}
-	tm*				get_localtime() {
+	tm*				get_local_time() {
 		time_t 			time_sec = get_time();
 		return localtime(&time_sec);
 	}
@@ -312,7 +318,7 @@ public:
 	void			set(long j, RGBA<double> color);
 	void			set(long j, CMYK<double> color);
 	void			set(long j, Vector3<double> vec);
-	void			set(long j, View view);
+	void			set(long j, View2<double> view);
 	void			add(long j, double v) { set(j, (*this)[j] + v); }
 	void			add(long j, Complex<double> cv) { set(j, complex(j) + cv); }
 	void			add(double xx, double yy, double zz, long nn, double v);
@@ -370,6 +376,7 @@ public:
 	void			change_type(char* string);
 	void			change_type(DataType nutype);
 	Bimage*			split_channels();
+	Bimage*			split_channels_to_images();
 	void			combine_channels(long nc, CompoundType ct = TSimple);
 	// Fourier transform management
 	FourierType		fourier_type() { return fouriertype; }
@@ -456,6 +463,21 @@ public:
 	Vector3<double>	real_coordinates(long i) {
 		return image->real_coordinates(coordinates(i));
 	}
+	Vector3<double>	fspace_coordinates(long i) {
+		Vector3<double>	uvw = coordinates(c*i);
+		uvw = uvw/size();
+		for ( long j=0; j<3; ++j )
+			uvw[j] = (uvw[j] < 0.5 )? uvw[j]/image->sampling()[j]: (uvw[j]-1.0)/image->sampling()[j];
+		return uvw;
+	}
+	long			fspace_conjugate_index(long i) {
+		Vector3<double>	uvw = coordinates(c*i);
+		return index_wrap(-uvw);
+	}
+	long			fspace_conjugate_index(Vector3<double> uvw) {
+		uvw *= -real_size();
+		return index_wrap(uvw);
+	}
 	template <typename T>
 	bool			within_boundaries(Vector3<T> loc) {
 		if ( loc[0] >= 0 && loc[0] < x && loc[1] >= 0 && loc[1] < y &&
@@ -489,6 +511,7 @@ public:
 	long			kernel_min(long idx, long ksize);
 	long			kernel_max(long idx, long ksize);
 	double			kernel_average(long idx, long ksize, double tmin, double tmax);
+	double			kernel_sum(long idx, long ksize);
 	double			kernel_neighbor_average(long idx, long ksize);
 	long			kernel_max_neigbor(long idx, long ksize);
 	long			kernel_max_wrap(long idx, long ksize);
@@ -599,7 +622,7 @@ public:
 		return ori;
 	}
 	void			view(double vx, double vy, double vz, double va) { for ( long j=0; j<n; j++ ) image[j].view(vx, vy, vz, va); }
-	void			view(View vw) { for ( long j=0; j<n; j++ ) image[j].view(vw); }
+	void			view(View2<double> vw) { for ( long j=0; j<n; j++ ) image[j].view(vw); }
 	long			space_group() {
 		if ( !metadata.exists("spacegroup") ) metadata["spacegroup"] = 1;
 		return metadata["spacegroup"].integer();
@@ -610,14 +633,30 @@ public:
 		return metadata["pointgroup"].value();
 	}
 	void			symmetry(string grp) { metadata["pointgroup"] = grp; }
-	void			unit_cell(UnitCell uc) {
+	void			unit_cell_check() {
+		UnitCell			uc(ucell);
 		Vector3<double>		u(image->sampling());
+		if ( !isfinite(uc.a()) || uc.a() < 1 ) uc.a(u[0]*x);
+		if ( !isfinite(uc.b()) || uc.b() < 1 ) uc.b(u[1]*y);
+		if ( !isfinite(uc.c()) || uc.c() < 1 ) uc.c(u[2]*z);
+		if ( uc.a() > 100*x*u[0] ) uc.a(u[0]*x);
+		if ( uc.b() > 100*y*u[1] ) uc.b(u[1]*y);
+		if ( uc.c() > 100*z*u[2] ) uc.c(u[2]*z);
+		if ( uc.alpha() > M_PI || uc.beta() > M_PI || uc.gamma() > M_PI ) uc.degrees_to_radians();
+		if ( uc.alpha() < 0.001 || uc.alpha() > M_PI ) uc.alpha(M_PI_2);
+		if ( uc.beta() < 0.001 || uc.beta() > M_PI ) uc.beta(M_PI_2);
+		if ( uc.gamma() < 0.001 || uc.gamma() > M_PI ) uc.gamma(M_PI_2);
 		ucell = uc;
-		if ( !isfinite(ucell.a()) || ucell.a() < u[0]*x ) ucell.a(u[0]*x);
-		if ( !isfinite(ucell.b()) || ucell.b() < u[1]*y ) ucell.b(u[1]*y);
-		if ( !isfinite(ucell.c()) || ucell.c() < u[2]*z ) ucell.c(u[2]*z);
+	}
+	void			unit_cell(UnitCell uc) {
+		ucell = uc;
+		unit_cell_check();
 	}
 	UnitCell		unit_cell() { return ucell; }
+	void			unit_cell_default() {
+		UnitCell			uc(real_size(), M_PI_2, M_PI_2, M_PI_2);
+		ucell = uc;
+	}
 	double			maximum_included_radius();
 	// Data organization changes
 	int				slices_to_images();
@@ -639,12 +678,9 @@ public:
 	long			statistics(long img_num);
 	long			statistics(Bimage* pmask, double& regavg, double& regstd);
 	double			poisson_statistics_check();
-	long 			stats_within_radii(long nn, Vector3<double> loc,
-						double rad_min, double rad_max, double& vavg, double& vstd);
-	long			stats_in_shape(long nn, int type, Vector3<long> start,
-						Vector3<long> end, double& vavg, double& vstd);
-	long			stats_in_poly(long nn, int nvert, Vector3<double>* poly,
-						double& vavg, double& vstd);
+	vector<double>	stats_within_radii(long nn, Vector3<double> loc, double rad_min, double rad_max);
+	vector<double>	stats_in_shape(long nn, int type, Vector3<long> start, Vector3<long> end);
+	vector<double>	stats_in_poly(long nn, int nvert, Vector3<double>* poly);
 	long			stats_in_mask(long nn, Bimage* pmask);
 private:
 	int				kernel_sums(long n, long i, long ik, long nk);
@@ -656,6 +692,7 @@ private:
 	int				kernel_sums(long nn, long i, Bimage* pweight);
 public:
 	int				variance(Bimage* pweight);
+	double			occupied_volume(double threshold=1e-10);
 	int				information();
 	int				subimage_information();
 	int				moments(long max_order);
@@ -678,7 +715,7 @@ public:
 	Bimage*			extract(long nn, Vector3<double> loc, Vector3<long> size,
 						Vector3<double> origin, Matrix3 mat);
 	Bimage*			extract(long nn, Vector3<double> loc, Vector3<long> size,
-						Vector3<double> origin, View view) {
+						Vector3<double> origin, View2<double> view) {
 		return extract(nn, loc, size, origin, view.matrix());
 	}
 	Bimage*			extract_wrap(long nn, Vector3<double> loc, Vector3<long> size,
@@ -703,6 +740,7 @@ public:
 	Bimage*			extract_tetrahedron(Vector3<double>* tet, int fill_type=0, double fill=0);
 	Bimage*			orthogonal_slices(long nn, Vector3<long> voxel,
 						Vector3<long> ext_size);
+	Bimage*			orthogonal_montage(Vector3<long> voxel, Vector3<long> ext_size, int pad=0, int fill_type=0, double fill=0);
 	int				extract_show_chunk(Bimage* pshow, int aflag, long i, long len);
 	Bimage*			extract_show(int aflag);
 	Bimage*			extract_magnify(long nn, Vector3<long> center,
@@ -715,8 +753,12 @@ public:
 	int				replace(long nn, Bimage* img, long nr, double fill);
 	// Whole image manipulations
 	void			clear() { data_size(); for ( long j=0; j<datasize; j++ ) set(j, 0); }
+//	void			clear() { for ( long j=0; j<alloc_size(); ++j ) d.uc[j] = 0; }
 	void			fill(double v) {
 		data_size(); for ( long j=0; j<datasize; j++ ) set(j, v);
+	}
+	void			fill(Complex<double> cv) {
+		for ( long j=0; j<x*y*z*n; j++ ) set(j, cv);
 	}
 	// Density methods
 	double			density(long nn, Vector3<double> coord, double radius, double& sigma);
@@ -728,10 +770,18 @@ public:
 	void			invert();
 	void			reslice(const char* order) { Bstring s(order); reslice(s); s=0; }
 	void			reslice(Bstring order);
+	void			absolute();
 	void			add(double v);
+	void			phase_add(double v);
 	void			multiply(double v);
 	void			multiply(long nn, double v);
 	void			power(double v);
+	void			sine();
+	void			arcsine();
+	void			cosine();
+	void			arccosine();
+	void			tangent();
+	void			arctangent();
 	void			sum_images();
 	void			average_images() { double w(1.0/n); sum_images(); multiply(w); }
 	Bimage*			average_images(bool sd);
@@ -739,6 +789,7 @@ public:
 	void			progressive_sum();
 	void			add(Bimage* p);
 	void			add(long nn, Bimage* p);
+	void			add(Bimage* p, long nn);
 	void			subtract(Bimage* p);
 	void			add(Bimage* p, double scale, double shift);
 	void			add(long nn, Bimage* p, double scale, double shift);
@@ -750,6 +801,7 @@ public:
 	void			inverse(double minval=0);
 	void			largest(Bimage* p);
 	void			smallest(Bimage* p);
+	void			arctangent(Bimage* p);
 	Bimage*			operator+(Bimage& p);
 	Bplot* 			plot();
 	void			vector_to_simple();
@@ -758,12 +810,16 @@ public:
 	Bimage* 		blend(Bimage* p, long number);
 	int 			place(long nn, Bimage* p, Vector3<double> loc,
 						double radius=0, double scale=1, double shift=0, int operation=0);
+	int 			place(Bimage* p, long nn, Vector3<double> loc,
+						double radius=0, int operation=0);
 	int				place_with_addition(Bimage* p, long nn);
 	int				place_with_overlap(Bimage* p, long nn);
 	int				place_central_part(Bimage* p, long nn);
 	int				assemble_tiles(Bimage* pt, int flag=0);
 	double			linear_fit(Bimage* p, Bimage* pmask, double max_exclude);
 	int 			histomatch(Bimage* p, long bins);
+	int				replace_half(Bimage* p);
+	int 			replace_part(Bimage* p, Vector3<double> plane_normal);
 	// Filter methods
 	int				kernel_gaussian(double sigma, double max);
 	int				kernel_laplacian_of_gaussian(double sigma, double max);
@@ -817,8 +873,12 @@ public:
 	Bimage*			nad_2D(double ht, double lambda, double C, double alpha);
 	Bimage*			nad(double ht, long zw, double lambda, double C, double alpha);
 	// Complex type methods
+	void			print_amp_phi();
 	void			simple_to_complex();
+	void			two_to_complex();
 	void			multi_channel_to_complex();
+	Bimage*			complex_split();
+	void			phase_to_complex();
 	void			complex_to_real();
 	void			complex_to_imaginary();
 	void			complex_to_intensities();
@@ -828,10 +888,16 @@ public:
 	void 			complex_conjugate();
 	double			complex_power();
 	double			complex_normalize();
+	int 			complex_invert();
+	int 			complex_add(Complex<double> cv);
+	int 			complex_add_phase(double phi);
+	int 			complex_square();
+	int 			complex_convert(ComplexConversion conv);
 	int				phase_shift(Vector3<double> shift);
 	int 			phase_shift(long nn, Vector3<double> shift);
 	int				phase_shift_to_origin();
 	int				phase_shift_to_center();
+	int 			complex_geometric_invert();
 	int 			complex_multiply(Bimage* p);
 	int 			complex_product(Bimage* p);
 	int 			complex_conjugate_product(Bimage* p, int norm=0);
@@ -844,35 +910,49 @@ public:
 	Bimage* 		unpack_combined_transform();
 	int 			combined_complex_product();
 	int 			combined_complex_product(Bimage* pmask);
-	int 			combined_complex_product(double hires, double lores);
-	int 			combined_complex_product(double hires, double lores, Bimage* pmask);
+//	int 			combined_complex_product(double hires, double lores);
+	int 			combined_complex_product(double hires, double lores, Bimage* pmask=NULL);
+	int				combined_complex_product(int norm, double hires, double lores,
+						double phi_fac=0, Bimage* pmask=NULL);
 	int 			combined_complex_product_implicit_mask(double hires, double lores);
 	double			merge_amplitudes_and_phases(Bimage* pamp);
 	double			merge_amplitudes_and_phases(Bimage* pref, double res_hi, double res_lo);
-	Bimage*			intensities_phase_colored(double scale);
+	Bimage*			intensities_phase_colored(double scale, bool phase_shift=1);
+	Bimage*			intensities_with_part_phase_colored(Vector3<double> plane_normal);
+	Bimage*			polar_plot(double max_amp);
+	int				side_band(Vector3<double> plane_normal);
 	int				phase_colour_wheel();
 	// FFT methods
 	fft_plan		fft_setup(fft_direction dir, int opt=0);
+	int 			fft(fft_direction dir, int norm_flag=1, ComplexConversion conv=NoConversion);
+//	int 			fft(fft_direction dir, int norm_flag);
+	int 			fft(fft_plan plan, int norm_flag=1, ComplexConversion conv=NoConversion);
+//	int 			fft(fft_plan plan, int norm_flag=1);
+	int 			fftp(fft_plan plan, int norm_flag=1, ComplexConversion conv=NoConversion);
 	int 			fft() { return fft(FFTW_FORWARD); }
 	int 			fft_back() {
-		fft(FFTW_BACKWARD);
-		fourier_type(NoTransform);
-		complex_to_real();
+		fft(FFTW_BACKWARD, 1, Real);
+//		fourier_type(NoTransform);
+//		complex_to_real();
 		return 0;
 	}
-	int 			fft(fft_direction dir);
-	int 			fft_back(fft_plan plan, bool norm_flag=1) {
-		fft(plan, norm_flag);
-		fourier_type(NoTransform);
-		complex_to_real();
+	int 			fft_back(fft_plan plan, int norm_flag=1) {
+		fft(plan, norm_flag, Real);
+//		fft(plan, norm_flag);
+//		fourier_type(NoTransform);
+//		complex_to_real();
 		return 0;
 	}
-	int 			fft(fft_direction dir, bool norm_flag);
-	int 			fft(fft_plan plan, bool norm_flag=1);
+	int				fft(fft_direction dir, Vector3<long> tile_size, int norm_flag=1);
+	int				fftxy(fft_direction dir, int norm_flag=1);
+	int 			fftxy() { return fftxy(FFTW_FORWARD, 1); }
+	int				fftz(fft_direction dir, int norm_flag=1);
+	int 			fftz() { return fftz(FFTW_FORWARD, 1); }
 	Vector3<double>	change_transform_size(Vector3<long> nusize);
 	// Power spectrum methods
 	int				power_spectrum(int flags=0);
 	Bimage*			powerspectrum_tiled(long img_num, Vector3<long> tile_size, int flags=0);
+	Bimage*			powerspectrum_tiled_exact(long img_num, Vector3<long> tile_size, int flags=0);
 	Bimage*			powerspectrum_tilt_axis(long img_num, Vector3<long> tile_size,
 						double tilt_axis, double tilt_offset, int flags=0);
 	Bimage*			defocus_scale(long nn, double df, double df2, double iCL2, int fill_type);
@@ -882,16 +962,21 @@ public:
 						double tilt_axis, double tilt_angle, double tilt_offset, 
 						double defocus, double iCL2, int flags=0);
 	vector<double>	powerspectrum_isotropy(long n, double& lores, double& hires);
+	double			average_line(long xx, long yy, long zz, long nn, long len, int dir);
+	long			fix_power_spectrum(int dir, double ratio);
+	Bplot*			plot_radial_powerspectrum(double resolution, int ps_flags);
 	// Frequency space interpolation and reconstruction
 	long			fspace_maximum_radius(double resolution, double sampling_ratio=1);
 	int				fspace_background();
 	Complex<double>	fspace_interpolate(long img_num, Vector3<double> m, FSI_Kernel* kernel);
 	int				fspace_2D_interpolate(Complex<float> cv, Vector3<double> m,
 						double part_weight, int interp_type);
-	int				fspace_pack_2D(Bimage* p, Matrix3 mat, double hi_res,
-						double lo_res, Vector3<double> scale, double part_weight=1, int interp_type=0);
-	int				fspace_pack_2D(Bimage* p, View asu_view, Bsymmetry& sym, double hi_res,
-						double lo_res, Vector3<double> scale, double part_weight=1, int interp_type=0);
+	int				fspace_pack_2D(Bimage* p, Matrix3 mat, double hi_res, double lo_res,
+						Vector3<double> scale, double ewald_wavelength=0,
+						double part_weight=1, int interp_type=0);
+	int				fspace_pack_2D(Bimage* p, View2<double> asu_view, Bsymmetry& sym, double hi_res,
+						double lo_res, Vector3<double> scale, double ewald_wavelength=0,
+						double part_weight=1, int interp_type=0);
 	long			fspace_pack_2D_into_central_section(Bimage* p,
 						long ft_size, double scale, double hi_res, double lo_res, 
 						Matrix3 matr, Matrix3 mat);
@@ -902,6 +987,7 @@ public:
 	long			fspace_reconstruction_snr();
 	int				fspace_translate(Vector3<double> shift);
 	int				fspace_translate(long nn, Vector3<double> shift);
+	Bimage*			fspace_rotate(Matrix3 mat, FSI_Kernel* kernel);
 	int				fspace_resize(double scale, double res_hi, double res_lo);
 	Bimage*			fspace_resize(Bimage* pref);
 	// Amplitude weighting methods
@@ -924,6 +1010,7 @@ public:
 	int 			fspace_weigh_ramp(double resolution, fft_plan planf, fft_plan planb);
 	int 			fspace_weigh_ramp(double resolution, double axis, fft_plan planf, fft_plan planb);
 	int 			fspace_weigh_B_factor(double B, double resolution=0);
+	int 			fspace_butterworth_band(double res_hi, double res_lo, int order=16);
 	int 			fspace_weigh_C_curve(double resolution=0);
 	int 			fspace_weigh_LoG(double resolution, double sigma);
 	int 			fspace_weigh_RPS_curve(Bplot* plot, double resolution=0);
@@ -939,21 +1026,28 @@ public:
 	int 			fspace_positive();
 	// Friedel symmetry
 	double			friedel_check();
+	double			friedel_difference();
 	int 			friedel_apply();
 	// Projection methods
 	Bimage*			project(char axis, int flags=1);
 	Bimage*			rotate_project(Matrix3 mat, Vector3<double> translate,
-						double radial_cutoff, int norm_flag=1);
-	Bimage* 		project(View* view, int norm_flag=1);
-	Bimage*			central_section(Matrix3 mat, double resolution, FSI_Kernel* kernel);
-	Bimage*     	project(View* view, double resolution, FSI_Kernel* kernel);
-	int 			back_project(Bimage* p, double resolution, double axis, 
+						double radial_cutoff, bool norm_flag=1);
+	Bimage* 		project(vector<View2<double>>& views, bool norm_flag=1);
+	Bimage*			central_section(Matrix3 mat, double resolution, FSI_Kernel* kernel, double wavelength=0);
+	Bimage*     	project(vector<View2<double>>& views, double resolution, FSI_Kernel* kernel,
+						double wavelength=0, int ewald_flag=0, bool back=1, ComplexConversion conv = NoConversion);
+	int 			back_project(Bimage* p, double resolution, double axis,
 						fft_plan planf, fft_plan planb);
+	int				ewald_sphere(double volt, double t);
+	int				opposite_ewald();
+	Bimage*			append_opposite_ewald();
+	int				combine_ewald();
+	int				phase_grating(double volt);
 	// Resolution measures
 	Bimage*			resolution_prepare(Bimage* p);
 	Bimage*			resolution_prepare(Bimage* p, fft_plan plan);
 	Bplot*			fsc_dpr(double hi_res, double sampling_ratio=1, int flag=0);
-	Bplot*			fsc(double hi_res, double sampling_ratio=1);
+	Bplot*			fsc(double hi_res, double sampling_ratio, vector<double>& fsccut);
 	Bplot*			fsc(Bimage* p, double hi_res, double sampling_ratio=1);
 	Bimage*			fsc_shell(Bimage* p, double hi_res, double* cutoff, 
 						int thickness, int step, int minrad, int maxrad, 
@@ -989,15 +1083,18 @@ public:
 						fft_plan planf, fft_plan planb) {
 		return cross_correlate(p, hires, lores, NULL, planf, planb);
 	}*/
+	Bimage* 		cross_correlate(Bimage* p, int norm, double hires, double lores, double phi_fac=0, Bimage* pmask=NULL);
 	double			correlation_coefficient(Vector3<double> shift);
 	Vector3<double>	find_shift_in_transform(double shift_limit);
 	Bimage* 		cross_correlate_fspace(Bimage* p, double hires, double lores, double shift_limit);
 	Bimage* 		cross_correlate(Bimage* p, double hires, double lores,
 						Bimage* pmask, fft_plan planf, fft_plan planb);
+	Bimage* 		cross_correlate(Bimage* p, int norm, double hires, double lores, double phi_fac,
+						Bimage* pmask, fft_plan planf, fft_plan planb);
 	Bimage* 		cross_correlate_two_way(Bimage* p, double hires,
 						double lores, fft_plan planf, fft_plan planb);
 	Bimage* 		cross_correlate_validate(Bimage* p, Bimage* pmask);
-	Vector3<double>	rotate_cross_correlate(Bimage* pref, View view,
+	Vector3<double>	rotate_cross_correlate(Bimage* pref, View2<double>& view,
 						double hires, double lores, double search_radius, Bimage* pmask,
 						double& cc, fft_plan planf, fft_plan planb);
 	double			rotate_cross_correlate_two_way(Bimage* pref,
@@ -1013,6 +1110,9 @@ public:
 	Vector3<double>	find_shift(Bimage* pref, Bimage* pmask, double hires,
 						double lores, double radius, double sigma, int refine_flag,
 						fft_plan planf, fft_plan planb, double& cc);
+	Vector3<double>	find_shift(Bimage* pref, Bimage* pmask, int norm, double hires,
+						double lores, double phi_fac, double radius, double sigma, int refine_flag,
+						fft_plan planf, fft_plan planb, double& cc);
 	Vector3<double>	find_shift(long nn, Bimage* pref, Bimage* pmask,
 						double hi_res, double lo_res, double shift_limit, 
 						fft_plan planf, fft_plan planb);
@@ -1027,18 +1127,19 @@ public:
 	Vector3<double>	fit_peak();
 	int				refine_peak_new();
 	int				refine_peak();
+	int				refine_peak(long kernel_size);
 	Bimage*			find_peaks(long kernelsize);
 	Vector3<double>*	find_peaks(double excl_dist, long& ncoor, double& threshold_min, 
 						double& threshold_max, double pix_min=2, double pix_max=10);
 	double			ccmap_confidence(long nn);
 	double			peak_sigma(long nn, Vector3<long> coor, long kernel_size);
-	double			search_views(Bimage* ptemp, View* view,
+	double			search_views(Bimage* ptemp, vector<View2<double>>& views,
 						double hires, double lores, double search_radius,
-						Bimage* pmask, View& currview, Vector3<double>& currshift);
-	double			search_volume_view(Bimage* ptemp, View view,
+						Bimage* pmask, View2<double>& currview, Vector3<double>& currshift);
+	double			search_volume_view(Bimage* ptemp, View2<double>& view,
 						double hires, double lores, Bimage* pmask, 
 						double threshold, Bimage* pfit);
-	Bimage*			search_volume(Bimage* ptemp, View* view, double alpha, 
+	Bimage*			search_volume(Bimage* ptemp, vector<View2<double>>& views, double alpha,
 						double alpha_step, double hires, double lores, 
 						Bimage* pmask, double threshold);
 	// Alignment methods
@@ -1047,15 +1148,18 @@ public:
 	Bimage*			align_progressive(long nref, Bimage* pmask, 
 						double hi_res, double lo_res, double shift_limit,
 						fft_plan planf, fft_plan planb);
+	Bimage*			align_local(long nref, Bimage* pmask,
+						double hi_res, double lo_res, double shift_limit,
+						fft_plan planf, fft_plan planb);
 	vector<Vector3<double>>	align(long ref_num, long window, long step, Bimage* pmask,
 						double hi_res, double lo_res, double shift_limit, 
-						double edge_width, double gauss_width, Vector3<long> bin);
+						double edge_width, double gauss_width, Vector3<long> bin, int mode=0);
 	JSvalue			align_fast(long ref_num, Bimage* pmask,
 						double hi_res, double lo_res, double shift_limit, 
 						double edge_width, double gauss_width);
 	Bimage*			fspace_sum(int shift=0);
 	Bimage*			fspace_shift_sum() { return fspace_sum(1); }
-	Bimage*			fspace_subset_sums(int subset, int flag=0);
+	Bimage*			fspace_subset_sums(long& subset, int flag=0);
 	Bplot*			fspace_ssnr(long nimg, double res_hi, double sampling_ratio);
 	Bplot*			fspace_subset_ssnr(int subset, double res_hi, double sampling_ratio, int flag=0);
 	double			correlate_annuli(Bimage* polref,
@@ -1118,9 +1222,9 @@ public:
 	int				calculate_background(int flag=0);
 	int				calculate_background(Bimage* pmask, long nn, int flag=0);
 	int				calculate_background(Bimage* pmask, int flag=0);
-	int				correct_background(long nn, int flag);
-	int				correct_background(int flag=0);
-	int				correct_background(Bimage* pmask, int flag=0);
+	long			correct_background(long nn, int flag);
+	long			correct_background(int flag=0);
+	long			correct_background(Bimage* pmask, int flag=0);
 	int				subtract_background();
 	int				shift_background(double bkg);
 	// Histogram methods
@@ -1158,9 +1262,9 @@ public:
 	Bimage*			montage(int first, int cols, int rows, int skip=0, int flipy=0);
 	// Editing methods
 	int				shape(int type, Vector3<long> rect, Vector3<double> start,
-						double width, int fill_type=0, double fill=0);
+						double width, int fill_type=0, double fill=0, bool wrap=0);
 	int				shape(long nn, int type, Vector3<long> rect, Vector3<double> start,
-						double width, int fill_type=0, double fill=0);
+						double width, int fill_type=0, double fill=0, bool wrap=0);
 	int				line(Vector3<double> start, Vector3<double> end, double width, int fill_type=0, double fill=0);
 	Bimage*			edge_mask(int type, Vector3<long> rect,
 						Vector3<double> start, double width);
@@ -1168,16 +1272,19 @@ public:
 						double width, int fill_type=0, double fill=0);
 	int				edge(long nn, int type, Vector3<long> rect, Vector3<double> start,
 						double width, int fill_type=0, double fill=0);
+	Bimage*			extract_edge_difference();
 	int				hanning_taper(double fill=0);
 	int				sphere(Vector3<double> center, double radius,
-						double width=0, int fill_type=0, double fill=0);
+						double width=0, int fill_type=0, double fill=0, bool wrap=0);
 	int				cylinder(Vector3<double> center, double radius,
-						double height, double width, int fill_type=0, double fill=0);
-	int				gaussian_sphere(long nn, Vector3<double> center, double sigma, double amp);
+						double height, double width, int fill_type=0, double fill=0, bool wrap=0);
+	int				gaussian_sphere(long nn, Vector3<double> center, double sigma, double amp, bool wrap=0);
 	int				shell(Vector3<double> center, double minrad,
 						double maxrad, double width, int fill_type=0, double fill=0);
 	int				shell(long nn, Vector3<double> center, double minrad,
 						double maxrad, double width, int fill_type=0, double fill=0);
+	int				shell_wrap(Vector3<double> center, double minrad,
+						double maxrad, double width, int fill_type, double fill);
 	int				shell_wrap(long nn, Vector3<double> center, double minrad,
 						double maxrad, double width, int fill_type=0, double fill=0);
 	int				bar(Vector3<double> start, Vector3<double> end,
@@ -1203,18 +1310,18 @@ public:
 	int				rotate();
 	int				rotate(double angle);
 	int				rotate(Vector3<double> axis, double angle);
-	int				rotate(View view);
-	int				rotate(Vector3<double> translate, View view);
+	int				rotate(View2<double> view);
+	int				rotate(Vector3<double> translate, View2<double> view);
 	int				rotate(Matrix3 mat);
 	int				rotate(Vector3<double> translate, Matrix3 mat);
 	Bimage*			rotate(Vector3<long> nusize);
 	Bimage*			rotate(Vector3<long> nusize, double angle);
 	Bimage*			rotate(Vector3<long> nusize, Vector3<double> axis, double angle);
-	Bimage*			rotate(Vector3<long> nusize, View view);
-	Bimage*			rotate(Vector3<long> nusize, Vector3<double> translate, View view);
+	Bimage*			rotate(Vector3<long> nusize, View2<double> view);
+	Bimage*			rotate(Vector3<long> nusize, Vector3<double> translate, View2<double> view);
 	Bimage*			rotate(Vector3<long> nusize, Matrix3 mat);
-	int				rotate_and_add(Bimage* p, Vector3<double> origin, View view);
-	Bimage*			orient(View* views);
+	int				rotate_and_add(Bimage* p, Vector3<double> origin, View2<double> view);
+	Bimage*			orient(vector<View2<double>>& views);
 	int				mirror();
 	int 			shift(Vector3<double> vec, int fill_type=0, double fill=0);
 	int 			shift(long nn, Vector3<double> vec, int fill_type=0, double fill=0);
@@ -1231,23 +1338,23 @@ public:
 						double scalemax, double step);
 	Bimage*			scale_to_reference(Bimage* pref, Bimage* pmask=NULL);
 	// Symmetry methods
-	double 			symmetrize(Bstring& symmetry_string, int flag) {
-		View	ref_view;
+	double 			symmetrize(string& symmetry_string, int flag) {
+		View2<double>	ref_view;
 		return symmetrize(symmetry_string, ref_view, flag);
 	}
 	double 			symmetrize(Bsymmetry sym, int flag) {
-		View	ref_view;
+		View2<double>	ref_view;
 		return symmetrize(sym, ref_view, flag);
 	}
-	double 			symmetrize(Bstring& symmetry_string, View ref_view, int flag) {
+	double 			symmetrize(string& symmetry_string, View2<double> ref_view, int flag) {
 		Bsymmetry 	sym(symmetry_string);
 		return symmetrize(sym, ref_view, flag);
 	}
 	double 			symmetrize_cyclic(int cyclic, int flag) {
-		Bstring		symmetry_string(cyclic, "C%d");
+		string		symmetry_string = "C" + to_string(cyclic);
 		return symmetrize(symmetry_string, flag);
 	}
-	double 			symmetrize(Bsymmetry sym, View ref_view, int flag);
+	double 			symmetrize(Bsymmetry sym, View2<double> ref_view, int flag);
 	double 			check_point_group(Bstring& check_string);
 	double 			find_cyclic_point_group(Bsymmetry& sym,
 						int binfac, double hires, double lores);
@@ -1335,9 +1442,9 @@ public:
 	Bimage*			radial_coverage(double threshold, double rad_step=1);
 	// Topological methods
 	Bimage*			topograph_to_surface(Bimage* psd, long nz, double density, double resolution);
-	Bimage*			surface_to_topograph(double threshold, int dir=0);
+	Bimage*			surface_to_topograph(double threshold, double offset=0, int dir=1);
 	Bimage*			rotate_height(Matrix3 mat, Vector3<double> translate, double threshold=0);
-	Bimage* 		height(View* views, double threshold=0);
+	Bimage* 		height(vector<View2<double>>& views, double threshold=0);
 	// Binning methods
 	int 			integer_interpolation(int integer_factor);
 	int 			integer_interpolation(int integer_factor, int odd);
@@ -1362,6 +1469,10 @@ public:
 	int				noise_poisson(double ravg);
 	int				noise_logistical(double ravg, double rstd);
 	int				noise_spectral(double alpha);
+	int 			noise_uniform_distance(long number);
+	int 			noise_gaussian_distance(long number, double stdev);
+	int 			uniform_random_phases();
+	int				gaussian_random_phases(double ravg, double rstd);
 	// Binary masks
 	long			mask(Bimage* pmask, double fill);
 	long			to_mask() { return to_mask((max + min)/2); }
@@ -1382,6 +1493,9 @@ public:
 	long 			mask_fill(Vector3<long> voxel);
 	long			mask_shell(Vector3<double> origin, double rad_min, double rad_max) {
 		return shell(origin, rad_min, rad_max, 0.1, FILL_USER, 1.99);
+	}
+	long			mask_shell_wrap(Vector3<double> origin, double rad_min, double rad_max) {
+		return shell_wrap(origin, rad_min, rad_max, 0.1, FILL_USER, 1.99);
 	}
 	long			mask_plane(Vector3<double> origin, Vector3<double> normal);
 	long			mask_rectangle(double length, double width,
@@ -1455,6 +1569,7 @@ public:
 						double complexity=0, long min_size=0);
 	Bimage*			graph_segments_to_image(GSgraph& g);
 	Bimage*			graph_segments_to_mask(GSgraph& g);
+	long			graph_segments_list(GSgraph& g);
 	int				superpixels_update(Bimage* pmask, vector<long> vstep,
 				double colorweight, vector<Bsuperpixel>& seg);
 	vector<Bsuperpixel>	superpixels_from_mask(long cc, long step);

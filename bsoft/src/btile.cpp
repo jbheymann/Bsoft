@@ -3,11 +3,12 @@
 @brief	Program to split an image into overlapping tiles
 @author Bernard Heymann
 @date	Created: 20040712
-@date	Modified: 20160601
+@date	Modified: 20240405
 **/
 
 #include "rwmg.h"
 #include "mg_processing.h"
+#include "mg_img_proc.h"
 #include "rwimg.h"
 #include "file_util.h"
 #include "utilities.h"
@@ -42,8 +43,11 @@ const char* use[] = {
 "-first 5                 Number given to the first file (default 0).",
 "-digits 3                Number of digits inserted before the last period in the output file name (default 3).",
 " ",
-"Parameters for reconstructions:",
+"Parameter for reconstructions:",
 "-recid rec_1             Reconstruction ID to use.",
+" ",
+"Parameter for output file:",
+"-images part             Image type to encode for tiles.",
 " ",
 "Output:",
 "-output output.star      Output parameter file.",
@@ -62,6 +66,7 @@ int 	main(int argc, char **argv)
 	int 			first_number(0);			// Number given to first file
 	int 			digits(3);					// File number size
 	Bstring			recid;						// Reconstruction ID to tile
+	Bstring			img_type;					// Image type for output tiles
 	Bstring			outfile;					// Output micrograph parameter file
 	
 	int				optind;
@@ -90,6 +95,7 @@ int 	main(int argc, char **argv)
 			if ( recid.length() < 1 )
 				cerr << "-recid: A reconstruction ID must be specified!" << endl;
 		}
+		if ( curropt->tag == "images" ) img_type = curropt->value;
 		if ( curropt->tag == "output" )
 			outfile = curropt->filename();
     }
@@ -99,7 +105,9 @@ int 	main(int argc, char **argv)
 	
 	Bstring				filename = argv[optind++];
 	Bproject*			project = NULL;
-	Breconstruction*	rec;
+	Bmicrograph*		mg = NULL;
+	Breconstruction*	rec = NULL;
+	Bparticle*			part = NULL;
 	
 	if ( file_type(filename) == Micrograph ) {
 		project = read_project(filename);
@@ -111,15 +119,21 @@ int 	main(int argc, char **argv)
 		}
 		filename = rec->frec;
 		if ( sampling[0] > 0 ) rec->voxel_size = sampling;
+		mg = mg_find_first(project);
 	}
 
-	Bimage*		p = read_img(filename, 1, -1);
+	Bimage*				p = read_img(filename, 1, -1);
 	if ( p == NULL ) bexit(-1);
     
 	if ( optind >= argc ) bexit(0);
 	
 	if ( sampling.volume() > 0 ) p->sampling(sampling);
 
+	if ( outfile.length() ) {
+		if ( !project )
+			project = project_create_from_image(p, "mg");
+		mg = mg_find_first(project);
+	}
 	
 	if ( argc > optind ) {
 		Bstring					filename(argv[optind]);
@@ -141,7 +155,19 @@ int 	main(int argc, char **argv)
 			Vector3<long>	start, step(size-overlap);
 			Bimage*			ptile = p->extract_tiles(0, start, p->size(), size, step, 1);
 			ptile->change_type(nudatatype);
-			write_img(argv[optind], ptile, 0);
+			write_img(filename, ptile, 0);
+			if ( mg ) {
+				mg->fpart = filename;
+				mg->pixel_size = ptile->image->sampling();
+				mg->box_size = ptile->size();
+				for ( long n=0; n<ptile->images(); ++n ) {
+					part = particle_add(&part, n+1);
+					if ( !mg->part ) mg->part = part;
+					part->loc = ptile->image[n].origin();
+					part->pixel_size = ptile->image[n].sampling();
+					part->ori = ptile->size()/2;
+				}
+			}
 			delete ptile;
 		}
 	}
@@ -154,7 +180,7 @@ int 	main(int argc, char **argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

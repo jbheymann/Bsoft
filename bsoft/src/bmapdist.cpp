@@ -11,7 +11,6 @@
 #include "mg_img_proc.h"
 #include "Matrix.h"
 #include "cluster.h"
-#include "linked_list.h"
 #include "file_util.h"
 #include "utilities.h"
 #include "options.h"
@@ -191,7 +190,7 @@ int 		main(int argc, char **argv)
 	project_kill(project);
 	delete pmask;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

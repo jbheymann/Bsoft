@@ -1,9 +1,9 @@
 /**
 @file	model_mechanics.cpp
 @brief	Functions to do molecular mechanics
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010828
-@date	Modified: 20210318
+@date	Modified: 20230717
 **/
 
 #include "model_mechanics.h"
@@ -15,7 +15,6 @@
 #include "random_numbers.h"
 #include "symmetry.h"
 #include "Vector3.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -45,7 +44,8 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 		return 0;
 	}
 
-	if ( !model->poly ) model_poly_generate(model);
+	if ( !model->poly && ( md.Kpolyangle || md.Kpolygon || md.Kpolyplane ) )
+		model_poly_generate(model);
 
 	if ( max_shift < 1 ) max_shift = 1e30;
 	
@@ -69,15 +69,7 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 		} else {
 			cout << "Minimizing model " << model->identifier() << ":" << endl;
 		}
-		cout << "Kdistance:                      " << md.Kdistance << endl;
-		cout << "Klink:                          " << md.Klink << endl;
-		cout << "Kangle:                         " << md.Kangle << endl;
-		cout << "Kpolyangle:                     " << md.Kpolyangle << endl;
-		cout << "Kpolygon:                       " << md.Kpolygon << endl;
-		cout << "Kpolyplane:                     " << md.Kpolyplane << endl;
-		cout << "Kpoint and decay:               " << md.Kpoint << " (" << md.pointdecay << ")" << endl;
-		cout << "Kradial and radius:             " << md.Kradial << " (" << md.radius << ")" << endl;
-		cout << "Kplane:                         " << md.Kplane << endl;
+		md.show();
 		if ( md.guide ) {
 			cout << "Guide model:                    " << md.guide->identifier() << endl;
 			cout << "Kguide:                         " << md.Kguide << endl;
@@ -89,14 +81,15 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 			cout << "Kernel size:                    " << ksize << endl;	
 		}
 		cout << "Maximum shift per iteration:    " << max_shift << " A" << endl;
-		cout << "Model mass:                     " << model_mass(model) << " Da" << endl << endl;
+		cout << "Model mass:                     " << model_mass(model) << " Da" << endl;
+		cout << "Model density:                  " << model_mass(model)/md.box().volume() << " Da/A3" << endl << endl;
 	}
 	
 
 	long			i, iter(0);
 	int				h[ETERMS];
 	double			E[ETERMS], E0[ETERMS], Epot0(0);
-	for ( i=0; i<ETERMS; i++ ) {
+	for ( i=0; i<ETERMS; ++i ) {
 		E[i] = E0[i] = 0;
 		h[i] = 0;
 	}
@@ -113,20 +106,20 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 	if ( md.Kguide > 0 ) h[10] = 1;
 	if ( md.Kmap ) h[11] = 1;
 	
-	Bstring*		head_list = NULL;
-	Bstring*		head;
-	string_add(&head_list, "Elink     ");
-	string_add(&head_list, "Eangle    ");
-	string_add(&head_list, "Epolyangle");
-	string_add(&head_list, "Epolygon  ");
-	string_add(&head_list, "Epolyplane");
-	string_add(&head_list, "Edistance ");
-	string_add(&head_list, "Eelectrostatic ");
-	string_add(&head_list, "Epoint    ");
-	string_add(&head_list, "Eradial   ");
-	string_add(&head_list, "Eplane    ");
-	string_add(&head_list, "Eguide    ");
-	string_add(&head_list, "Emap      ");
+	vector<string>	head(ETERMS);
+	i=0;
+	head[i++]  = "Elink     ";
+	head[i++]  = "Eangle    ";
+	head[i++]  = "Epolyangle";
+	head[i++]  = "Epolygon  ";
+	head[i++]  = "Epolyplane";
+	head[i++]  = "Edistance ";
+	head[i++]  = "Eelectrostatic ";
+	head[i++]  = "Epoint    ";
+	head[i++]  = "Eradial   ";
+	head[i++]  = "Eplane    ";
+	head[i++]  = "Eguide    ";
+	head[i++]  = "Emap      ";
 	
 
 	model_calculate_deviations(model, md);
@@ -138,23 +131,27 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 //	if ( verbose & VERB_PROCESS ) {
 	if ( verbose ) {
 		cout << "Iter";
-		for ( i=0, head = head_list; i<ETERMS && head; i++, head = head->next ) if ( h[i] )
-			cout << tab << *head;
+		for ( i=0; i<ETERMS; ++i ) if ( h[i] )
+			cout << tab << head[i];
 		cout << "\tEpotential";
 		if ( mm_type ) cout << "\tEkinetic";
 		cout << endl;
 	}
 	for ( iter=1; iter<=max_iter; iter++ ) {
 		model_zero_forces(model);
-		E[0] = md.Elink = model_link_energy(model, md);
-		E[1] = md.Eangle = model_angle_energy(model, md);
+//		E[0] = md.Elink = model_link_energy(model, md);
+		E[0] = md.Elink = model_link_energy(model, md.Klink, md.wrap, md.box());
+//		E[1] = md.Eangle = model_angle_energy(model, md);
+		E[1] = md.Eangle = model_angle_energy(model, md.Kangle);
 		E[2] = md.Epolyangle = model_polygon_angle_energy(model, md.Kpolyangle);
 		E[3] = md.Epolygon = model_polygon_energy(model, md.Kpolygon);
 		E[4] = md.Epolyplane = model_polygon_plane_energy(model, md.Kpolyplane);
 		E[5] = md.Edistance = model_distance_energy(model, md);
+//		E[5] = md.Edistance = model_distance_energy(model, md.Kdistance);
 //		E[5] = md.Edistance = model_grid_distance_energy(model, md);
 //		E[5] = md.Edistance = model_neighbor_distance_energy(model, md);
 		E[6] = md.Eelec = model_electrostatic_energy(model, md);
+//		E[6] = md.Eelec = model_electrostatic_energy(model, md.Kelec);
 		E[7] = md.Epoint = model_point_force(model, md.point, md.Kpoint, md.pointdecay);
 		E[8] = md.Eradial = model_radial_energy(model, md.point, md.radius, md.Kradial);
 		E[9] = md.Eplane = model_neighbor_plane_energy(model, md.Kplane);
@@ -193,9 +190,8 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 	if ( verbose ) {
 		cout << endl << endl;
 		cout << "EnergyTerm\tStart    \tEnd      \tChange" << endl;
-		for ( i=0, head = head_list; i<ETERMS && head; i++, head = head->next ) if ( h[i] ) {
-			cout << *head << tab << E0[i] << tab << E[i] << tab << E[i] - E0[i] << endl;
-		}
+		for ( i=0; i<ETERMS; ++i ) if ( h[i] )
+			cout << head[i] << tab << E0[i] << tab << E[i] << tab << E[i] - E0[i] << endl;
 		cout << "Epotential\t" << Epot0 << tab << md.Epot << tab << md.Epot - Epot0 << endl;
 		if ( mm_type ) cout << "Ekinetic\t\t" << md.Ekin << endl;
 		cout << "Gyration radius\t" << gyrad0 << tab << gyrad << tab << gyrad - gyrad0 << endl;
@@ -240,6 +236,120 @@ int			model_minimize(Bmodel* model, double max_shift)
 	return n;
 }
 
+double			model_average_linklength(Bmodel* model)
+{
+	int					n(0);
+	double				linklength(0);
+	Blink*				link;
+	
+	for ( link = model->link; link; link = link->next, n++ )
+		linklength += link->length();
+	
+	if ( n ) linklength /= n;
+	
+	return linklength;
+}
+
+
+/**
+@brief 	Regularizes a model.
+@param 	*model		model structure.
+@param 	max_iter	maximum number of iterations.
+@param 	distance	reference distance.
+@param 	Kdistance	distance strength constant.
+@param 	Klink		link strength constant.
+@param 	Kpolyangle	angle strength constant.
+@param 	Kpolygon	polygon regularity constant.
+@param 	Kpolyplane	polygon planarity constant.
+@param 	Kpoint		force away from the center-of-mass.
+@param 	decay		point force decay constant.
+@return int			0.
+
+	Only the first model in the linked list is used.
+**/
+int			model_regularize(Bmodel* model, int max_iter, double distance,
+				double Kdistance, double Klink, double Kpolyangle, double Kpolygon,
+				double Kpolyplane, double Kpoint, double decay)
+{
+	if ( !model->select() ) {
+		cout << "No model selected for regularization!" << endl << endl;
+		return 0;
+	}
+	
+	double			linklength = model_average_linklength(model);
+	
+	double			max_shift = 0.1*linklength;
+	
+	if ( max_shift < 1 ) max_shift = 0.1*distance;
+	
+	if ( max_shift < 1 ) max_shift = 10;
+	
+	if ( verbose ) {
+		cout << "Regularizing a model:" << endl;
+		cout << "Reference distance:             " << distance << " A" << endl;
+		cout << "Kdistance:                      " << Kdistance << endl;
+		cout << "Link length:                    " << linklength << " A" << endl;
+		cout << "Klink:                          " << Klink << endl;
+		cout << "Kpolyangle:                     " << Kpolyangle << endl;
+		cout << "Kpolygon:                       " << Kpolygon << endl;
+		cout << "Kpolyplane:                     " << Kpolyplane << endl;
+		cout << "Kpoint:                         " << Kpoint << " (" << decay << ")" << endl;
+		cout << "Maximum shift per iteration:    " << max_shift << " A" << endl << endl;
+	}
+
+	long			iter(0);
+	double			Edist0(0), Elink0(0), Eangle0(0), Epoly0(0), Eplane0(0), Epoint0(0), E0(0);
+	double			Edist(0), Elink(0), Eangle(0), Epoly(0), Eplane(0), Epoint(0), E(0);
+
+	model_calculate_deviations(model);
+	
+	Vector3<double>	refcom = model_center_of_mass(model);
+	Vector3<double>	box;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Iter\tEdist\tElink\tEangle\tEpoly\tEplane\tEpoint\tE" << endl;
+	for ( iter=1; iter<=max_iter; iter++ ) {
+		model_zero_forces(model);
+		Edist = model_lennard_jones_energy(model, Kdistance, distance, 0, box);
+		Elink = model_link_energy(model, Klink, 0, box);
+		Eangle = model_polygon_angle_energy(model, Kpolyangle);
+		Epoly = model_polygon_energy(model, Kpolygon);
+		Eplane = model_polygon_plane_energy(model, Kpolyplane);
+		Epoint = model_point_force(model, refcom, Kpoint, decay);
+		E = Edist + Elink + Eangle + Epoly + Eplane + Epoint;
+		if ( iter == 1 ) {
+			Edist0 = Edist;
+			Elink0 = Elink;
+			Eangle0 = Eangle;
+			Epoly0 = Epoly;
+			Eplane0 = Eplane;
+			Epoint0 = Epoint;
+			E0 = E;
+		}
+		model_minimize(model, max_shift);
+		model_shift(model, refcom - model_center_of_mass(model));
+		if ( verbose & VERB_PROCESS )
+			cout << iter << tab << Edist << tab << Elink << tab << Eangle << tab
+				<< Epoly << tab << Eplane << tab << Epoint << tab << E << endl;
+	}
+	
+	if ( verbose ) {
+		cout << endl << "\tEdistance\tElinklength\tEangledev\tEpolyreg\tEpolyplane\tEpointdist\tE" << endl;
+		cout << "Start:\t" << Edist0 << tab << Elink0 << tab << Eangle0 << tab <<
+			Epoly0 << tab << Eplane0 << tab << Epoint0 << tab << E0 << endl;
+		cout << "End:\t" << Edist << tab << Elink << tab << Eangle << tab <<
+			Epoly << tab << Eplane << tab << Epoint << tab << E << endl;
+		cout << "Change:\t" << Edist - Edist0 << tab << Elink - Elink0 << tab <<
+			Eangle - Eangle0 << tab << Epoly - Epoly0 << tab << Eplane - Eplane0 << tab <<
+			Epoint - Epoint0 << tab << E - E0 << endl << endl;
+	}
+	
+	model_calculate_deviations(model);
+	
+	return 0;
+}
+
+
 /**
 @brief 	Model dynamics using the velocity verlet integrator.
 @param 	*model			model structure.
@@ -283,20 +393,23 @@ double		model_verlet(Bmodel* model, double timestep, double Kfriction, double ve
 @param 	*link		link.
 @param 	d0			reference distance between components.
 @param 	Kd			distance force constant.
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return double		link energy.
 
 	The harmonic energy function:
 		E = Kd*(d - d0)^2
 	The force is zero when d = reference link length (d0).
 **/
-double		component_harmonic_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd)
+double		component_harmonic_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd, bool wrap, Vector3<double> box)
 {
 	if ( d0 <= 0 || Kd <= 0 ) return 0;
 	
 	double			d, dev, fac, E(0);
 	Vector3<double>	v, F;
 
-	v = comp1->location() - comp2->location();
+	if ( wrap ) v = vector3_difference_PBC(comp1->location(), comp2->location(), box);
+	else v = comp1->location() - comp2->location();
 	d = v.length();
 	dev = d - d0;
 	E = Kd*dev*dev;
@@ -308,7 +421,7 @@ double		component_harmonic_potential(Bcomponent* comp1, Bcomponent* comp2, doubl
 	}
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG component_harmonic_potential: c1=" << comp1->identifier() << 
+		cout << "DEBUG component_harmonic_potential: c1=" << comp1->identifier() <<
 			" c2=" << comp2->identifier() << " Kd=" << Kd << " d0=" << d0 << " E=" << E << endl;
 
 	return E;
@@ -320,13 +433,15 @@ double		component_harmonic_potential(Bcomponent* comp1, Bcomponent* comp2, doubl
 @param	comp2		second component.
 @param 	d0			reference distance between components.
 @param 	Kd			distance force constant.
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return	double		distance energy.
 
 	The soft sphere potential is given by:
 		E = Kd*(d0/d)^12
 	The potential is set to zero for d > 3*d0;
 **/
-double		component_soft_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd)
+double		component_soft_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd, bool wrap, Vector3<double> box)
 {
 	if ( d0 <= 0 || Kd <= 0 ) return 0;
 	
@@ -334,7 +449,9 @@ double		component_soft_potential(Bcomponent* comp1, Bcomponent* comp2, double d0
 	double			rd2, rd6, rd12;
 	Vector3<double>	v, F;
 
-	v = comp2->location() - comp1->location();	// Points from 1 to 2
+	if ( wrap ) v = vector3_difference_PBC(comp1->location(), comp2->location(), box);
+	else v = comp1->location() - comp2->location();
+//	v = comp2->location() - comp1->location();	// Points from 1 to 2
 	d2 = v.length2();
 	if ( d2 < 9*d02 ) {
 		rd2 = d02/d2;
@@ -356,6 +473,8 @@ double		component_soft_potential(Bcomponent* comp1, Bcomponent* comp2, double d0
 @param	comp2		second component.
 @param 	d0			reference distance between components.
 @param 	Kd			distance force constant.
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return	double		distance energy.
 
 	The Lennard-Jones potential is given by:
@@ -363,7 +482,7 @@ double		component_soft_potential(Bcomponent* comp1, Bcomponent* comp2, double d0
 	The force is zero when d = d0.
 	The potential is set to zero for d > 3*d0;
 **/
-double		component_lennard_jones_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd)
+double		component_lennard_jones_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd, bool wrap, Vector3<double> box)
 {
 	if ( d0 <= 0 || Kd <= 0 ) return 0;
 	
@@ -371,7 +490,9 @@ double		component_lennard_jones_potential(Bcomponent* comp1, Bcomponent* comp2, 
 	double			rd2, rd6, rd12;
 	Vector3<double>	v, F;
 
-	v = comp2->location() - comp1->location();	// Points from 1 to 2
+	if ( wrap ) v = vector3_difference_PBC(comp1->location(), comp2->location(), box);
+	else v = comp1->location() - comp2->location();
+//	v = comp2->location() - comp1->location();	// Points from 1 to 2
 	d2 = v.length2();
 	if ( d2 < 9*d02 ) {
 		rd2 = d02/d2;
@@ -393,6 +514,8 @@ double		component_lennard_jones_potential(Bcomponent* comp1, Bcomponent* comp2, 
 @param	comp2		second component.
 @param 	d0			reference distance between components.
 @param 	Kd			distance force constant.
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return	double		distance energy.
 
 	The Morse potential is given by:
@@ -401,7 +524,7 @@ double		component_lennard_jones_potential(Bcomponent* comp1, Bcomponent* comp2, 
 	The force is zero when d = d0.
 	The potential is set to zero for d > 3*d0;
 **/
-double		component_morse_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd)
+double		component_morse_potential(Bcomponent* comp1, Bcomponent* comp2, double d0, double Kd, bool wrap, Vector3<double> box)
 {
 	if ( d0 <= 0 || Kd <= 0 ) return 0;
 	
@@ -409,7 +532,9 @@ double		component_morse_potential(Bcomponent* comp1, Bcomponent* comp2, double d
 	double			ef, ef1, a = 6/d0;
 	Vector3<double>	v, F;
 
-	v = comp2->location() - comp1->location();	// Points from 1 to 2
+	if ( wrap ) v = vector3_difference_PBC(comp1->location(), comp2->location(), box);
+	else v = comp1->location() - comp2->location();
+//	v = comp2->location() - comp1->location();	// Points from 1 to 2
 	d = v.length();
 	if ( d < 3*d0 ) {
 		ef = exp(a*(d0 - d));
@@ -491,7 +616,7 @@ double		component_radial_potential(Bcomponent* comp, Vector3<double> point, doub
 	return E;
 }
 
-double		component_distance_potential(Bcomponent* comp1, Bcomponent* comp2, double Kd, int type)
+double		component_distance_potential(Bcomponent* comp1, Bcomponent* comp2, double Kd, int type, bool wrap, Vector3<double> box)
 {
 	double			rd(1), E(0);
 
@@ -499,16 +624,16 @@ double		component_distance_potential(Bcomponent* comp1, Bcomponent* comp2, doubl
 
 	switch ( type ) {
 		case 1:
-			E += component_harmonic_potential(comp1, comp2, rd, Kd);
+			E += component_harmonic_potential(comp1, comp2, rd, Kd, wrap, box);
 			break;
 		case 2:
-			E += component_soft_potential(comp1, comp2, rd, Kd);
+			E += component_soft_potential(comp1, comp2, rd, Kd, wrap, box);
 			break;
 		case 3:
-			E += component_lennard_jones_potential(comp1, comp2, rd, Kd);
+			E += component_lennard_jones_potential(comp1, comp2, rd, Kd, wrap, box);
 			break;
 		case 4:
-			E += component_morse_potential(comp1, comp2, rd, Kd);
+			E += component_morse_potential(comp1, comp2, rd, Kd, wrap, box);
 			break;
 //		default:
 	}
@@ -603,6 +728,7 @@ double		model_distance_energy(Bmodel* model, Bmodparam& md)
 	double			rd, Kd, E(0);
 	Bcomponent*		comp;
 	Bcomponent*		comp2;
+	Vector3<double>	box = md.box();
 	
 	for ( comp = model->comp; comp->next; comp = comp->next ) if ( comp->select() && comp->type()->index() >= 0 ) {
 		for ( comp2 = comp->next; comp2; comp2 = comp2->next ) if ( comp2->select() && comp2->type()->index() >= 0 ) {
@@ -619,16 +745,16 @@ double		model_distance_energy(Bmodel* model, Bmodparam& md)
 					" Kd=" << Kd << " d0=" << rd << endl;
 			switch ( lt.select() ) {
 				case 1:
-					E += component_harmonic_potential(comp, comp2, rd, Kd);
+					E += component_harmonic_potential(comp, comp2, rd, Kd, md.wrap, box);
 					break;
 				case 2:
-					E += component_soft_potential(comp, comp2, rd, Kd);
+					E += component_soft_potential(comp, comp2, rd, Kd, md.wrap, box);
 					break;
 				case 3:
-					E += component_lennard_jones_potential(comp, comp2, rd, Kd);
+					E += component_lennard_jones_potential(comp, comp2, rd, Kd, md.wrap, box);
 					break;
 				case 4:
-					E += component_morse_potential(comp, comp2, rd, Kd);
+					E += component_morse_potential(comp, comp2, rd, Kd, md.wrap, box);
 					break;
 //				default:
 			}
@@ -666,6 +792,7 @@ double		model_grid_distance_energy(Bmodel* model, Bmodparam& md)
 
 	int				dodist;
 	long			i, ii, x, y, z, xx, yy, zz, ix, iy, iz;
+	Vector3<double>	box = md.box();
 	
 	md.Edistance = md.Eelec = 0;
 	
@@ -697,7 +824,7 @@ double		model_grid_distance_energy(Bmodel* model, Bmodparam& md)
 //										if ( latom2->atom == latom->atom->next->next ) dononbond = 0;
 //									}
 									if ( dodist ) {
-										md.Edistance += component_distance_potential(comp1, comp2, md.Kdistance, 4);
+										md.Edistance += component_distance_potential(comp1, comp2, md.Kdistance, 4, md.wrap, box);
 									}
 								}
 							}
@@ -743,6 +870,7 @@ double		model_neighbor_distance_energy(Bmodel* model, Bmodparam& md)
 	double			rd, Kd, E(0);
 	Bcomponent*		comp;
 	Bcomponent*		comp2;
+	Vector3<double>	box = md.box();
 	
 	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
 		i = comp->type()->index();
@@ -757,16 +885,16 @@ double		model_neighbor_distance_energy(Bmodel* model, Bmodparam& md)
 					Kd = md.Kdistance * lt.Kdistance();
 					switch ( lt.select() ) {
 						case 1:
-							E += component_harmonic_potential(comp, comp2, rd, Kd);
+							E += component_harmonic_potential(comp, comp2, rd, Kd, md.wrap, box);
 							break;
 						case 2:
-							E += component_soft_potential(comp, comp2, rd, Kd);
+							E += component_soft_potential(comp, comp2, rd, Kd, md.wrap, box);
 							break;
 						case 3:
-							E += component_lennard_jones_potential(comp, comp2, rd, Kd);
+							E += component_lennard_jones_potential(comp, comp2, rd, Kd, md.wrap, box);
 							break;
 						case 4:
-							E += component_morse_potential(comp, comp2, rd, Kd);
+							E += component_morse_potential(comp, comp2, rd, Kd, md.wrap, box);
 							break;
 //						default:
 					}
@@ -787,6 +915,8 @@ double		model_neighbor_distance_energy(Bmodel* model, Bmodparam& md)
 @param 	*model		model structure.
 @param 	Kd			distance force constant.
 @param 	d0			reference distance between components.
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return double		distance energy.
 
 	The soft sphere potential is given by:
@@ -794,7 +924,7 @@ double		model_neighbor_distance_energy(Bmodel* model, Bmodparam& md)
 	The potential is set to zero for d > 3*d0;
 	Only the first model in the linked list is used.
 **/
-double		model_soft_sphere_energy(Bmodel* model, double Kd, double d0)
+double		model_soft_sphere_energy(Bmodel* model, double Kd, double d0, bool wrap, Vector3<double> box)
 {
 	if ( Kd <= 0 ) return 0;
 	
@@ -804,7 +934,7 @@ double		model_soft_sphere_energy(Bmodel* model, double Kd, double d0)
 	
 	for ( comp = model->comp; comp->next; comp = comp->next )
 		for ( comp2 = comp->next; comp2; comp2 = comp2->next )
-			E += component_soft_potential(comp, comp2, d0, Kd);
+			E += component_soft_potential(comp, comp2, d0, Kd, wrap, box);
 
 	return E;
 }
@@ -814,6 +944,8 @@ double		model_soft_sphere_energy(Bmodel* model, double Kd, double d0)
 @param 	*model		model structure.
 @param 	Kd			distance force constant (Kd).
 @param 	d0			reference distance between components (d0).
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return double		distance energy.
 
 	The Lennard-Jones potential is given by:
@@ -822,7 +954,7 @@ double		model_soft_sphere_energy(Bmodel* model, double Kd, double d0)
 	The potential is set to zero for d > 3*d0;
 	Only the first model in the linked list is used.
 **/
-double		model_lennard_jones_energy(Bmodel* model, double Kd, double d0)
+double		model_lennard_jones_energy(Bmodel* model, double Kd, double d0, bool wrap, Vector3<double> box)
 {
 	if ( Kd <= 0 ) return 0;
 	
@@ -832,7 +964,7 @@ double		model_lennard_jones_energy(Bmodel* model, double Kd, double d0)
 	
 	for ( comp = model->comp; comp->next; comp = comp->next )
 		for ( comp2 = comp->next; comp2; comp2 = comp2->next )
-			E += component_lennard_jones_potential(comp, comp2, d0, Kd);
+			E += component_lennard_jones_potential(comp, comp2, d0, Kd, wrap, box);
 
 	return E;
 }
@@ -842,6 +974,8 @@ double		model_lennard_jones_energy(Bmodel* model, double Kd, double d0)
 @param 	*model		model structure.
 @param 	Kd			distance force constant (Kd).
 @param 	d0			reference distance between components (d0).
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return double		distance energy.
 
 	The Morse potential is given by:
@@ -851,7 +985,7 @@ double		model_lennard_jones_energy(Bmodel* model, double Kd, double d0)
 	The potential is set to zero for d > 3*d0;
 	Only the first model in the linked list is used.
 **/
-double		model_morse_energy(Bmodel* model, double Kd, double d0)
+double		model_morse_energy(Bmodel* model, double Kd, double d0, bool wrap, Vector3<double> box)
 {
 	if ( Kd <= 0 ) return 0;
 	
@@ -861,7 +995,7 @@ double		model_morse_energy(Bmodel* model, double Kd, double d0)
 	
 	for ( comp = model->comp; comp->next; comp = comp->next )
 		for ( comp2 = comp->next; comp2; comp2 = comp2->next )
-			E += component_morse_potential(comp, comp2, d0, Kd);
+			E += component_morse_potential(comp, comp2, d0, Kd, wrap, box);
 
 	return E;
 }
@@ -884,6 +1018,7 @@ double		model_link_energy(Bmodel* model, Bmodparam& md)
 	int				i, j;
 	double			E(0);
 	Blink*			link;
+	Vector3<double>	box = md.box();
 	
 	for ( link = model->link; link; link = link->next ) {
 //		i = link->comp[0]->type()->index()*md.ntype + link->comp[1]->type()->index();
@@ -893,7 +1028,7 @@ double		model_link_energy(Bmodel* model, Bmodparam& md)
 		j = link->comp[1]->type()->index();
 		Blinktype&	lt = md.linktype[i][j];
 		E += component_harmonic_potential(link->comp[0], link->comp[1],
-				lt.length(), md.Klink * lt.Klength());
+				lt.length(), md.Klink * lt.Klength(), md.wrap, box);
 	}
 
 	return E;
@@ -903,6 +1038,8 @@ double		model_link_energy(Bmodel* model, Bmodparam& md)
 @brief 	Calculates the model link energy.
 @param 	*model		model structure.
 @param 	Klink		link force constant (Kl).
+@param	wrap		flag to wrap coordinates.
+@param	box			simulation box boundaries.
 @return double		link energy.
 
 	The link potential is a harmonic function:
@@ -910,7 +1047,7 @@ double		model_link_energy(Bmodel* model, Bmodparam& md)
 	The force is zero when d = reference link length (l0).
 	Only the first model in the linked list is used.
 **/
-double		model_link_energy(Bmodel* model, double Klink)
+double		model_link_energy(Bmodel* model, double Klink, bool wrap, Vector3<double> box)
 {
 	if ( Klink <= 0 ) return 0;
 	
@@ -918,7 +1055,7 @@ double		model_link_energy(Bmodel* model, double Klink)
 	Blink*			link;
 	
 	for ( link = model->link; link; link = link->next )
-		E += component_harmonic_potential(link->comp[0], link->comp[1], link->length(), Klink);
+		E += component_harmonic_potential(link->comp[0], link->comp[1], link->length(), Klink, wrap, box);
 
 	return E;
 }
@@ -961,6 +1098,19 @@ double		model_angle_energy(Bmodel* model, Bmodparam& md)
 		}
 	}
 	
+	return E;
+}
+
+double		model_angle_energy(Bmodel* model, double Kangle)
+{
+	if ( Kangle <= 0 ) return 0;
+	
+	double			E(0);
+	Bangle*			angle;
+	
+	for ( angle = model->angle; angle; angle = angle->next )
+		E += component_angular_potential(angle->comp[0], angle->comp[1], angle->comp[2], angle->angle(), Kangle);
+
 	return E;
 }
 
@@ -1525,7 +1675,11 @@ int			model_calculate_deviations(Bmodel* model)
 	Vector3<double>		d1, d2;
 	Bcomponent			*comp1, *comp2, *comp3;
 	Blink*				link;
+	Bangle*				ang;
 	Bpolygon*			poly;
+	
+	if ( verbose )
+		cout << "        \tCount\tAverage\tDeviation" << endl;
 	
 	for ( n=0, ll=dd=0, link = model->link; link; link = link->next, n++ ) {
 		d = link->comp[0]->location().distance(link->comp[1]->location());
@@ -1540,7 +1694,27 @@ int			model_calculate_deviations(Bmodel* model)
 	}
 	
 	if ( verbose )
-		cout << "Link average and deviation:     " << ll << " " << dd << " A" << endl;
+		cout << "Links    \t" << n << tab << ll << tab << dd << endl;
+	
+	for ( n=0, aa=ad=0, ang = model->angle; ang; ang = ang->next ) {
+		d1 = ang->comp[1]->location() - ang->comp[0]->location();
+		d2 = ang->comp[1]->location() - ang->comp[2]->location();
+		a = d1.angle(d2);
+		aa += a;
+		a -= ang->angle();
+		ad += a*a;
+		n++;
+	}
+	
+	if ( n ) {
+		aa /= n;
+		ad = sqrt(ad/n);
+	}
+	
+	if ( verbose )
+		cout << "Angles   \t" << n << tab << aa*180.0/M_PI << tab << ad*180.0/M_PI << endl;
+
+	if ( !model->poly ) return 0;
 	
 	for ( n=0, aa=ad=0, poly = model->poly; poly; poly = poly->next ) if ( poly->closed() ) {
 		ar = M_PI*(1 - 2.0L/poly->size());
@@ -1564,7 +1738,7 @@ int			model_calculate_deviations(Bmodel* model)
 	}
 	
 	if ( verbose )
-		cout << "Angle average and deviation:    " << aa*180.0/M_PI << " " << ad*180.0/M_PI << " degrees" << endl << endl;
+		cout << "Angles   \t" << n << tab << aa*180.0/M_PI << tab << ad*180.0/M_PI << endl;
 
 	return 0;
 }
@@ -1584,9 +1758,12 @@ int			model_calculate_deviations(Bmodel* model, Bmodparam& md)
 	
 	for ( n=0, ll=dd=0, link = model->link; link; link = link->next, n++ ) {
 		i = link->comp[0]->type()->index();
+//		cout << link->comp[0]->description()[0] << tab << i << tab << link->comp[0]->type()->identifier() << tab;
 		j = link->comp[1]->type()->index();
+//		cout << link->comp[1]->description()[0] << tab << j << tab << link->comp[1]->type()->identifier() << tab;
 		d = link->comp[0]->location().distance(link->comp[1]->location());
 		Blinktype&		lt = md.linktype[i][j];
+//		cout << d << tab << lt.length() << endl;
 		ll += d;
 		d -= lt.length();
 		dd += d*d;
@@ -1610,10 +1787,12 @@ int			model_calculate_deviations(Bmodel* model, Bmodparam& md)
 				kk = comp2->type()->index();
 				Bangletype&		at = md.angletype[ii][jj][kk];
 //				i = (comp->type()->index()*md.ntype + comp1->type()->index())*md.ntype + comp2->type()->index();
+//				cout << ii << tab << jj << tab << kk << tab << at.angle() << endl;
 				if ( at.angle() ) {
 					d1 = comp1->location() - comp->location();
 					d2 = comp2->location() - comp->location();
 					a = d1.angle(d2);
+//					cout << ii << tab << jj << tab << kk << tab << at.angle() << tab << a << endl;
 					aa += a;
 					a -= at.angle();
 					ad += a*a;
@@ -1662,115 +1841,4 @@ int			model_calculate_deviations(Bmodel* model, Bmodparam& md)
 	return 0;
 }
 
-
-double			model_average_linklength(Bmodel* model)
-{
-	int					n(0);
-	double				linklength(0);
-	Blink*				link;
-	
-	for ( link = model->link; link; link = link->next, n++ )
-		linklength += link->length();
-	
-	if ( n ) linklength /= n;
-	
-	return linklength;
-}
-
-/**
-@brief 	Regularizes a model.
-@param 	*model		model structure.
-@param 	max_iter	maximum number of iterations.
-@param 	distance	reference distance.
-@param 	Kdistance	distance strength constant.
-@param 	Klink		link strength constant.
-@param 	Kpolyangle	angle strength constant.
-@param 	Kpolygon	polygon regularity constant.
-@param 	Kpolyplane	polygon planarity constant.
-@param 	Kpoint		force away from the center-of-mass.
-@param 	decay		point force decay constant.
-@return int			0.
-
-	Only the first model in the linked list is used.
-**/
-int			model_regularize(Bmodel* model, int max_iter, double distance, 
-				double Kdistance, double Klink, double Kpolyangle, double Kpolygon, 
-				double Kpolyplane, double Kpoint, double decay)
-{
-	if ( !model->select() ) {
-		cout << "No model selected for regularization!" << endl << endl;
-		return 0;
-	}
-	
-	double			linklength = model_average_linklength(model);
-	
-	double			max_shift = 0.1*linklength;
-	
-	if ( max_shift < 1 ) max_shift = 0.1*distance;
-	
-	if ( max_shift < 1 ) max_shift = 10;
-	
-	if ( verbose ) {
-		cout << "Regularizing a model:" << endl;
-		cout << "Reference distance:             " << distance << " A" << endl;
-		cout << "Kdistance:                      " << Kdistance << endl;
-		cout << "Link length:                    " << linklength << " A" << endl;
-		cout << "Klink:                          " << Klink << endl;
-		cout << "Kpolyangle:                     " << Kpolyangle << endl;
-		cout << "Kpolygon:                       " << Kpolygon << endl;
-		cout << "Kpolyplane:                     " << Kpolyplane << endl;
-		cout << "Kpoint:                         " << Kpoint << " (" << decay << ")" << endl;
-		cout << "Maximum shift per iteration:    " << max_shift << " A" << endl << endl;
-	}
-
-	long			iter(0);
-	double			Edist0(0), Elink0(0), Eangle0(0), Epoly0(0), Eplane0(0), Epoint0(0), E0(0);
-	double			Edist(0), Elink(0), Eangle(0), Epoly(0), Eplane(0), Epoint(0), E(0);
-
-	model_calculate_deviations(model);
-	
-	Vector3<double>	refcom = model_center_of_mass(model);
-	
-	if ( verbose & VERB_PROCESS )
-		cout << "Iter\tEdist\tElink\tEangle\tEpoly\tEplane\tEpoint\tE" << endl;
-	for ( iter=1; iter<=max_iter; iter++ ) {
-		model_zero_forces(model);
-		Edist = model_lennard_jones_energy(model, Kdistance, distance);
-		Elink = model_link_energy(model, Klink);
-		Eangle = model_polygon_angle_energy(model, Kpolyangle);
-		Epoly = model_polygon_energy(model, Kpolygon);
-		Eplane = model_polygon_plane_energy(model, Kpolyplane);
-		Epoint = model_point_force(model, refcom, Kpoint, decay);
-		E = Edist + Elink + Eangle + Epoly + Eplane + Epoint;
-		if ( iter == 1 ) {
-			Edist0 = Edist;
-			Elink0 = Elink;
-			Eangle0 = Eangle;
-			Epoly0 = Epoly;
-			Eplane0 = Eplane;
-			Epoint0 = Epoint;
-			E0 = E;
-		}
-		model_minimize(model, max_shift);
-		model_shift(model, refcom - model_center_of_mass(model));
-		if ( verbose & VERB_PROCESS )
-			cout << iter << tab << Edist << tab << Elink << tab << Eangle << tab 
-				<< Epoly << tab << Eplane << tab << Epoint << tab << E << endl;
-	}
-	
-	if ( verbose ) {
-		cout << endl << "\tEdistance\tElinklength\tEangledev\tEpolyreg\tEpolyplane\tEpointdist\tE" << endl;
-		cout << "Start:\t" << Edist0 << tab << Elink0 << tab << Eangle0 << tab << 
-			Epoly0 << tab << Eplane0 << tab << Epoint0 << tab << E0 << endl;
-		cout << "End:\t" << Edist << tab << Elink << tab << Eangle << tab << 
-			Epoly << tab << Eplane << tab << Epoint << tab << E << endl;
-		cout << "Change:\t" << Edist - Edist0 << tab << Elink - Elink0 << tab << 
-			Eangle - Eangle0 << tab << Epoly - Epoly0 << tab << Eplane - Eplane0 << tab << 
-			Epoint - Epoint0 << tab << E - E0 << endl << endl;
-	}
-	
-	model_calculate_deviations(model);
-	
-	return 0;
-}
 

@@ -135,7 +135,7 @@ int 	writeMFF(Bimage* p)
 	header->ndiva = (int) (uc.a()/p->sampling(0)[0]);     // Unit cell size in pixels
 	header->ndivb = (int) (uc.b()/p->sampling(0)[1]);
 	header->ndivc = (int) (uc.c()/p->sampling(0)[2]);
-	strncpy(header->title, p->label().c_str(), 80);
+	p->label().copy(header->title, 80);
 	
 	header->pad1    = 80;			// Padding fields
     header->pad2[0] = 80;

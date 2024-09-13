@@ -12,7 +12,6 @@
 #include "rwmodel.h"
 #include "model_transform.h"
 #include "marker.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -117,7 +116,7 @@ int 		main(int argc, char **argv)
 		project_set_mg_pixel_size(project, sam);
 	
 	if ( tempfile.length() ) {
-		temp = read_model(tempfile, paramfile);		
+		temp = read_model(tempfile.str(), paramfile.str());
 		if ( !temp ) {
 			cerr << "Error: Input template file " << tempfile << " not read!" << endl;
 			bexit(-1);
@@ -125,7 +124,7 @@ int 		main(int argc, char **argv)
 	}
 
 	if ( consolidate.length() ) {
-		model = read_model(consolidate, paramfile);		
+		model = read_model(consolidate.str(), paramfile.str());
 		if ( !model ) {
 			cerr << "Error: No model read!" << endl;
 			bexit(-1);
@@ -144,17 +143,17 @@ int 		main(int argc, char **argv)
 
 	// Write an output parameter format file if a name is given
     if ( partmodfile.length() ) {
-		write_model(partmodfile, model);
+		write_model(partmodfile.str(), model);
 	}
 
 	if ( markmodfile.length() ) {
-		write_model(markmodfile, model);
+		write_model(markmodfile.str(), model);
 	}
 	
 	project_kill(project);
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -181,8 +180,8 @@ int 		main(int argc, char **argv)
 Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 {
 	int					i;
-	Bstring				id("1");
-	Bstring				comptype = "PRT";
+	string				id("1");
+	string				comptype("PRT");
 	Breconstruction*	rec;
 	Bparticle*			part;
 	Bmodel*				model = NULL;
@@ -191,15 +190,13 @@ Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 	Bcomponent*			comp = NULL;
 	Bcomptype*			ct = NULL;
 	Bimage				*p;
-	Bstring				partfile, newpartfile, modfile;
+	string				partfile, newpartfile, modfile;
 	Vector3<double>		origin, shift;
 	Matrix3				mat;
 	
 	if ( verbose ) 
 		cout << "Generating models from particles:" << endl << "Reconstruction\tParticle\tModel" << endl;
 	for ( i=1, rec = project->rec; rec; rec = rec->next, i++ ) {
-//		mp = model_add(&mp, rec->id);
-//		if ( !model ) model = mp;
 		if ( mp ) mp = mp->add(rec->id.str());
 		else model = mp = new Bmodel(rec->id.str());
 		mp->FOM(rec->fom);
@@ -209,32 +206,35 @@ Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 //		mp->comment = project->comment;
 		comp = NULL;
 		for ( part = rec->part; part; part = part->next ) {
-//			id = Bstring(part->id, "%d");
-//			comp = component_add(&mp->comp, id);
 			if ( comp ) comp = comp->add(part->id);
 			else mp->comp = comp = new Bcomponent(part->id);
 			comp->location((part->loc - rec->origin) * rec->voxel_size);
-			View	v(part->view.backward());
+			View2<double>	v(part->view2().backward());
 			comp->view(View2<float>(v[0],v[1],v[2],v[3]));
 			comp->FOM(part->fom[0]);
 			comp->select(part->sel);
-//			comp->type = ct = model_add_type_by_id(mp, id);
 			ct = model->add_type(id);
 			comp->type(ct);
 			if ( part->fpart.length() ) {
-				partfile = part->fpart;
-				modfile = partfile.pre_rev('.') + ".star";
-				newpartfile = partfile.pre_rev('.') + "_std." + partfile.post_rev('.');
+				partfile = part->fpart.str();
+//				modfile = partfile.pre_rev('.') + ".star";
+//				newpartfile = partfile.pre_rev('.') + "_std." + partfile.post_rev('.');
+				modfile = base(partfile) + ".star";
+				newpartfile = base(partfile) + "_std." + extension(partfile);
 			} else if ( rec->fpart.length() ) {
-				partfile = rec->fpart;
-				modfile = partfile.pre_rev('.') + Bstring(part->id, "_%03d.star");
-				newpartfile = partfile.pre_rev('.') + Bstring(part->id, "_%03d.") + partfile.post_rev('.');
+				partfile = rec->fpart.str();
+//				modfile = partfile.pre_rev('.') + Bstring(part->id, "_%03d.star");
+//				newpartfile = partfile.pre_rev('.') + Bstring(part->id, "_%03d.") + partfile.post_rev('.');
+				modfile = base(partfile) + "_" + to_string(part->id) + ".star";
+				newpartfile = base(partfile) + "_" + to_string(part->id) + "." + extension(partfile);
 				ct->image_number(part->id - 1);
 			} else {
-				modfile = rec->frec.pre_rev('.') + Bstring(part->id, "_%03d.star");
+//				modfile = rec->frec.pre_rev('.') + Bstring(part->id, "_%03d.star");
+				modfile = rec->frec.str();
+				modfile = base(modfile) + "_" + to_string(part->id) + ".star";
 			}
 			if ( partfile.length() ) {
-				ct->file_name(newpartfile.str());
+				ct->file_name(newpartfile);
 				if ( flags & 1 ) {
 					if ( ( p = read_img(partfile, 1, ct->image_number()) ) == NULL ) {
 						error_show("project_model_generate", __FILE__, __LINE__);
@@ -247,14 +247,14 @@ Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 					shift = origin - part->ori;
 					p->origin(part->ori);
 					p->rotate(shift, part->view);
-					part->view = View(0,0,1,0);
+					part->view = View2<double>(0,0,1,0);
 					part->ori = origin;
 					write_img(ct->file_name(), p, 0);
 					delete p;
 				}
 			}
 			if ( flags & 2 ) {
-				ct->file_name(modfile.str());
+				ct->file_name(modfile);
 				ct->image_number(0);
 				if ( temp ) {
 //					partmod = model_copy(temp);
@@ -267,8 +267,8 @@ Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 				} else partmod = new Bmodel(comp->identifier());
 				partmod->FOM(part->fom[0]);
 				partmod->select(part->sel);
-				partmod->mapfile(partfile.str());
-				if ( flags & 1 ) partmod->mapfile(newpartfile.str());
+				partmod->mapfile(partfile);
+				if ( flags & 1 ) partmod->mapfile(newpartfile);
 //				partmod->comment = mp->comment;
 				write_model(modfile, partmod);
 				model_kill(partmod);
@@ -315,9 +315,7 @@ int			project_model_consolidate(Bproject* project, Bmodel* model)
 //			mp->identifier() = rec->id + Bstring(part->id, "_%04d");
 			if ( part->fpart.length() ) mp->mapfile(part->fpart.str());
 //			model_shift(mp, (part->loc - rec->origin)*rec->voxel_size);
-			View			v(part->view);
-			View2<float>	v2(v[0],v[1],v[2],v[3]);
-			model_rotate(mp, v2, origin, (part->ori - rec->box_size/2)*rec->voxel_size);
+			model_rotate(mp, part->view2(), origin, (part->ori - rec->box_size/2)*rec->voxel_size);
 		}
 	}
 	

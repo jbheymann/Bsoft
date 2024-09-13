@@ -109,7 +109,7 @@ Bbond*		md_generate_molecular_bond_list(Bmolgroup* molgroup, Bmd* md)
 		return molgroup->bond;
 	}
 	
-	long 		natom = 0, nbond = 0;
+	long 		nbond(0);
 	double		dist, bondlength;
 	Bbond*		bond = NULL;
 	Bbond*		bondlist = NULL;
@@ -118,10 +118,9 @@ Bbond*		md_generate_molecular_bond_list(Bmolgroup* molgroup, Bmd* md)
 	Bresidue*	res;
 	Batom*  	atom, *atom2;
 	
-    for ( natom=0, mol = molgroup->mol; mol; mol = mol->next ) {
+    for ( mol = molgroup->mol; mol; mol = mol->next ) {
 		for( res = mol->res; res; res = res->next ) {
 			for ( atom = res->atom; atom->next; atom = atom->next ) {
-				natom++;
 				for ( atom2 = atom->next; atom2; atom2 = atom2->next ) {
 					bondlength = md_find_bond_length(atom, atom2, md->bond);
 					if ( md->wrap )
@@ -340,14 +339,14 @@ int			md_show_bonds(Bmolgroup* molgroup)
 	return nbond;
 }
 
-/**
+/*
 @brief 	Shows the angles and angular sizes.
 @param 	*molgroup	molecule group.
 @return int			number of angles.
 
 	Uses the angle list defined for the molecule group.
-**/
-int			md_show_angles(Bmolgroup* molgroup)
+*/
+/*int			md_show_angles(Bmolgroup* molgroup)
 {
 	int				nang;
 	Bangle*			angle = NULL;
@@ -360,6 +359,7 @@ int			md_show_angles(Bmolgroup* molgroup)
 	
 	return nang;
 }
+*/
 
 /**
 @brief 	Shows the number of bonds and the valency per atom.
@@ -411,7 +411,7 @@ int			md_show_bond_stats(Bmolgroup* molgroup)
 	This function uses the bond list for the molecule group to find bonds
 	to the same atom and set an angle structure with the corresponding angle.
 	The angle is defined in the molecular dynamics structure.
-**/
+*/
 /*Bangle*		md_generate_angle_list(Bmolgroup* molgroup, Bmd* md)
 {
 	Bbond*			bondlist = molgroup->bond;
@@ -481,7 +481,7 @@ int			md_show_bond_stats(Bmolgroup* molgroup)
 @return int			0.
 
 	The angles are taken from an angle type list.
-**/
+*/
 /*int			md_angle_list_set_parameters(Bangle* anglelist, Bangletype* angletype)
 {
 	Bangle*			angle;
@@ -745,9 +745,9 @@ double		md_calculate_deviations(Bmolgroup* molgroup, int wrap)
 	double			dist, bond_dev = 0, da, angle_dev = 0;
 	Vector3<double>	d1, d2;
 	Bbond*			bond;
-	Bangle*			angle;
+//	Bangle*			angle;
 	Bbond*			bondlist = molgroup->bond;
-	Bangle*			anglelist = molgroup->angle;
+//	Bangle*			anglelist = molgroup->angle;
 	
 	if ( verbose & VERB_FULL )
 		cout << "Bond#\tAtom1\tAtom2\tdLength\tStrength" << endl;
@@ -771,7 +771,7 @@ double		md_calculate_deviations(Bmolgroup* molgroup, int wrap)
 	}
 	
 	cout << "Bond deviation:                 " << bond_dev << " A" << endl;
-	
+/*
 	if ( verbose & VERB_FULL )
 		cout << "Angle#\tAtom1\tAtom2\tAtom3\tdAngle\tStrength" << endl;
 	for ( n=0, angle = anglelist; angle; angle = angle->next, n++ ) {
@@ -797,7 +797,7 @@ double		md_calculate_deviations(Bmolgroup* molgroup, int wrap)
 	}
 	
 	cout << "Angle deviation:                " << angle_dev*180.0/M_PI << " degrees" << endl << endl;
-	
+*/
 	return bond_dev;
 }
 

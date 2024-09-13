@@ -1,7 +1,7 @@
 /**
 @file	mg_select.cpp
 @brief	Functions for micrograph processing
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010206
 @date	Modified: 20210515
 **/
@@ -10,7 +10,6 @@
 #include "mg_select.h"
 #include "mg_tags.h"
 #include "qsort_functions.h"
-#include "linked_list.h"
 #include "math_util.h"
 #include "random_numbers.h"
 #include "utilities.h"
@@ -1326,6 +1325,9 @@ long		project_show_part_parameter(Bproject* project, Bstring& tag)
 			}
 		}
 	}
+	
+	if ( verbose )
+		cout << "Number of particles:                " << npart << " (" << nsel << ")" << endl << endl;
 	
 	return nsel;
 }

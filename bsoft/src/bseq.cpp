@@ -196,7 +196,7 @@ int 	main(int argc, char **argv)
 	
 	molgroup_kill(molgroup);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

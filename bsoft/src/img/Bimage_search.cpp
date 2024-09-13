@@ -1,13 +1,12 @@
 /**
 @file	Bimage_search.cpp
 @brief	Searches orientation space for the best fit of a 3D map to a template.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20021027
-@date	Modified: 20160608
+@date	Modified: 20230524
 **/
 
 #include "Bimage.h"
-//#include "rwimg.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -18,7 +17,7 @@ extern int 	verbose;		// Level of output to the screen
 /**
 @brief 	Searches a 2D/3D density map for a template.
 @param 	*ptemp			the template to be searched for.
-@param 	*views			list of views to search.
+@param 	&views			list of views to search.
 @param 	hires			high resolution limit.
 @param 	lores			low resolution limit.
 @param 	search_radius	radius for shift search.
@@ -31,23 +30,13 @@ extern int 	verbose;		// Level of output to the screen
 	The views must be calculated externally to allow for custom sets.
 
 **/
-double		Bimage::search_views(Bimage* ptemp, View* views,
+double		Bimage::search_views(Bimage* ptemp, vector<View2<double>>& views,
 				double hires, double lores, double search_radius,
-				Bimage* pmask, View& currview, Vector3<double>& currshift)
+				Bimage* pmask, View2<double>& currview, Vector3<double>& currshift)
 {
-	long 				i, nviews, ibest(0);
+	long 				i, nviews(views.size()), ibest(0);
 	double				best(-1e37);
-	View				bestview;
-	View*				v;
-
-	for ( nviews=0, v=views; v; v=v->next ) nviews++;
-		
-	View*				view_arr = new View[nviews];
-	double*				cc = new double[nviews];
-	Vector3<double>*	translate = new Vector3<double>[nviews];
 	
-	for ( i=0, v=views; v; v=v->next, i++ ) view_arr[i] = *v;
-			
 	if ( search_radius < 0 ) search_radius = ptemp->sizeX()/4;
 	
 	change_type(Float);
@@ -84,14 +73,18 @@ double		Bimage::search_views(Bimage* ptemp, View* views,
 	fft_plan		planb = fft_setup_plan(ptemp->size(), FFTW_BACKWARD, 1);
 
 #ifdef HAVE_GCD
+	__block vector<Vector3<double>>	translate(nviews);
+	__block vector<double>			cc(nviews,0);
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t k){
-		translate[k] = rotate_cross_correlate(ptemp, view_arr[k], hires, lores,
+		translate[k] = rotate_cross_correlate(ptemp, views[k], hires, lores,
 			search_radius, pmask, cc[k], planf, planb);
 	});
 #else
+	vector<Vector3<double>>	translate(nviews);
+	vector<double>			cc(nviews,0);
 #pragma omp parallel for
 	for ( i=0; i<nviews; i++ ) {
-		translate[i] = rotate_cross_correlate(ptemp, view_arr[i], hires, lores,
+		translate[i] = rotate_cross_correlate(ptemp, views[i], hires, lores,
 			search_radius, pmask, cc[i], planf, planb);
 	}
 #endif
@@ -105,30 +98,23 @@ double		Bimage::search_views(Bimage* ptemp, View* views,
 		}
 		if ( verbose & VERB_RESULT )
 			cout << i << tab << setprecision(2) << translate[i] << tab
-					<< setprecision(4) << view_arr[i] << tab << cc[i] << endl;
+					<< setprecision(4) << views[i] << tab << cc[i] << endl;
 	}
-
-	bestview = view_arr[ibest];
 
     fft_destroy_plan(planf);
     fft_destroy_plan(planb);
 	
 	image->origin(ptemp->image->origin() + translate[ibest]);
-	view(bestview);
+	view(views[ibest]);
 	image->FOM(best);
 	
 	if ( verbose )
 		cout << "Best view:\t" << ibest << tab << setprecision(2) << translate[ibest] << tab
-					<< setprecision(4) << bestview << tab << best << endl;
+					<< setprecision(4) << views[ibest] << tab << best << endl;
 
-	delete[] cc;
-	delete[] view_arr;
-	
-	currview = bestview;
+	currview = views[ibest];
 	currshift = translate[ibest];
 	
-	delete[] translate;
-
 	return best;
 }
 
@@ -148,7 +134,7 @@ double		Bimage::search_views(Bimage* ptemp, View* views,
 	The views must be calculated externally to allow for custom sets.
 
 **/
-double		Bimage::search_volume_view(Bimage* ptemp, View view,
+double		Bimage::search_volume_view(Bimage* ptemp, View2<double>& view,
 				double hires, double lores, Bimage* pmask, 
 				double threshold, Bimage* pfit)
 {
@@ -192,7 +178,7 @@ double		Bimage::search_volume_view(Bimage* ptemp, View view,
 /**
 @brief 	Searches a 2D/3D density map for a template.
 @param 	*ptemp		the template to be searched for.
-@param 	*view		views.
+@param 	&views		views.
 @param 	alpha		rotation around view vector, <0 = use 2*PI (radians).
 @param 	alpha_step	angular step size around view vector (radians).
 @param 	hires		high resolution limit.
@@ -205,17 +191,16 @@ double		Bimage::search_volume_view(Bimage* ptemp, View view,
 	The views must be calculated externally to allow for custom sets.
 
 **/
-Bimage*		Bimage::search_volume(Bimage* ptemp, View* view, double alpha, 
+Bimage*		Bimage::search_volume(Bimage* ptemp, vector<View2<double>>& views, double alpha,
 				double alpha_step, double hires, double lores, 
 				Bimage* pmask, double threshold)
 {
 	int				mode(0);		// Mode: 0=global, 1=refine, 2=symmetry
-	long			i, nviews;
+	long			i, nviews(0);
 	double			alpha_min(0);
 	double			alpha_max(TWOPI - alpha_step/2);
 	double			a;
 	double			fommin(1), fommax(0), fomavg(0), fomstd(0);
-	View*			v;
 	
 	if ( alpha >= 0 ) {			// Case of refinement
 		mode = 1;
@@ -236,18 +221,11 @@ Bimage*		Bimage::search_volume(Bimage* ptemp, View* view, double alpha,
 		ori = size()/2;
 		origin(ori);
 	}
-	
-	for ( nviews=0, v=view; v; v=v->next ) 
-		for ( a=alpha_min; a<=alpha_max; a+=alpha_step ) nviews++;
-		
-	View*			view_arr = new View[nviews];
-	
-	for ( i=0, v=view; v; v=v->next ) 
-		for ( a=alpha_min; a<=alpha_max; a+=alpha_step, i++ ) {
-			view_arr[i] = *v;
-			if ( mode < 2 ) view_arr[i][3] = a;
-		}
-		
+
+	if ( mode < 2 ) views = view_list_expand_angles(views, alpha_min, alpha_max, alpha_step);
+
+	nviews = views.size();
+
 	if ( verbose ) {
 		cout << "Finding a template in a map:" << endl;
 		cout << "Number of views:                " << nviews << endl;
@@ -263,9 +241,9 @@ Bimage*		Bimage::search_volume(Bimage* ptemp, View* view, double alpha,
 		cout << "View\tCCmax" << endl;
 
 	for ( i=0; i<nviews; i++ ) {
-		fommax = search_volume_view(ptemp, view_arr[i], hires, lores, pmask, threshold, pfit);
+		fommax = search_volume_view(ptemp, views[i], hires, lores, pmask, threshold, pfit);
 		if ( verbose )
-			cout << view_arr[i] << tab << fommax << endl;
+			cout << views[i] << tab << fommax << endl;
 	}
 	
 	for ( i=0, fommax=-1, fommin=1, fomavg=fomstd=0; i<datasize; i++ ) {
@@ -276,8 +254,6 @@ Bimage*		Bimage::search_volume(Bimage* ptemp, View* view, double alpha,
 		fomstd += a*a;
 	}
 
-	delete[] view_arr;
-	
 	if ( verbose ) {
 		fomavg /= datasize;
 		fomstd = fomstd/datasize - fomavg*fomavg;

@@ -1,12 +1,12 @@
 /**
 @file	model_color.h
 @brief	Functions to color models.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20080206
 @date	Modified: 20210319
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes 
 int			model_color_uniformly(Bmodel* model, RGBA<float> color);

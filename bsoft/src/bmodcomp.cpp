@@ -100,21 +100,20 @@ int 		main(int argc, char **argv)
 	double			ti = timer_start();
 
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*		model = read_model(file_list, paramfile.str());		
 
 	if ( all ) models_process(model, model_reset_selection);
 	
 	Bmodel*		refmodel = NULL;		
 	if ( reffile.length() )
-		refmodel = read_model(reffile, paramfile);		
+		refmodel = read_model(reffile.str(), paramfile.str());
 
 	if ( !model->poly ) model_poly_generate(model);
 
@@ -159,17 +158,17 @@ int 		main(int argc, char **argv)
 	}
 	
 	if ( outfile.length() ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	if ( refoutfile.length() ) {
-		write_model(refoutfile, refmodel);
+		write_model(refoutfile.str(), refmodel);
 	}
 
 	if ( model != refmodel ) model_kill(model);
 	model_kill(refmodel);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

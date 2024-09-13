@@ -249,7 +249,7 @@ long		project_replace_parameters(Bproject* project, Bproject* proj_source, Bstri
 				nrec += rec_replace_parameters(rec, rec_source, which);
 		}
 		if ( verbose )
-			cout << "Reconstructions updated:        " << nmg << endl << endl;
+			cout << "Reconstructions updated:        " << nrec << endl << endl;
 	}
 	
 

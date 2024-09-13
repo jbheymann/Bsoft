@@ -92,15 +92,14 @@ int 		main(int argc, char **argv)
 	double			ti = timer_start();
 
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*		model = read_model(file_list, paramfile.str());		
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -114,7 +113,7 @@ int 		main(int argc, char **argv)
 	Bimage*			map = NULL;
 	
 	if ( mapfile.length() && size.volume() ) {
-		model_set_map_filenames(model, mapfile);
+		model_set_map_filenames(model, mapfile.str());
 		map = img_from_model(model, origin, size, sam, sigma);
 		if ( nudatatype == Unknown_Type ) nudatatype = map->data_type();
 		map->change_type(nudatatype);
@@ -124,12 +123,12 @@ int 		main(int argc, char **argv)
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

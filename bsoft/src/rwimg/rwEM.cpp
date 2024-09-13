@@ -158,7 +158,7 @@ int 	writeEM(Bimage* p)
         default : header->stamp[3] = 1;
     }
     
-	strncpy(header->label, p->label().c_str(), 80);
+	p->label().copy(header->label, 80);
 	
 	p->data_offset(EMSIZE);
 	

@@ -1,14 +1,20 @@
 /**
 @file	mol_tags.h
 @brief	All STAR file format tags for molecules and molecular parameters
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000419
-@date	Modified: 20190603
+@date	Modified: 20220929
 **/
 
 // Do not change the constant names because they are referenced in code
 // Changes in the tag strings will not affect program execution
 //  but old data files will be uninterpretable
+
+// Entry identifier
+#define ENTRY_ID				"pdbx_database_status.entry_id"
+
+// Molecules/chains
+#define MOL_ID					"struct_asym.id"
 
 // Crystallographic unit cell
 #define	CELL_A					"cell.length_a"
@@ -78,6 +84,26 @@
 #define ATOM_CHARGE 			"atom_site.charge" 
 #define ATOM_FOOTNOTE_ID 		"atom_site.footnote_id"
 
+// Helix range parameters
+#define HELIX_ID				"struct_conf.pdbx_PDB_helix_id"
+#define HELIX_CHAIN				"struct_conf.beg_label_asym_id"
+#define HELIX_RESIDUE1			"struct_conf.beg_label_comp_id"
+#define HELIX_RESIDUE2			"struct_conf.end_label_comp_id"
+#define HELIX_RESNUM1			"struct_conf.beg_label_seq_id"
+#define HELIX_RESNUM2			"struct_conf.end_label_seq_id"
+
+// Sheet range parameters
+#define SHEET_ID				"struct_sheet_range.sheet_id"
+#define SHEET_STRAND_ID			"struct_sheet_range.id"
+#define SHEET_CHAIN				"struct_sheet_range.beg_label_asym_id"
+#define SHEET_RESIDUE1			"struct_sheet_range.beg_label_comp_id"
+#define SHEET_RESIDUE2			"struct_sheet_range.end_label_comp_id"
+#define SHEET_RESNUM1			"struct_sheet_range.beg_label_seq_id"
+#define SHEET_RESNUM2			"struct_sheet_range.end_label_seq_id"
+#define SHEET_ORDER_ID			"struct_sheet_order.sheet_id"
+#define SHEET_ORDER_STRAND_ID	"struct_sheet_order.range_id_2"
+#define SHEET_ORDER_SENSE		"struct_sheet_order.sense"
+
 // Protein residue properties
 #define RESPROP_CODON			"residue_property.codon"
 #define RESPROP_CODE1 			"residue_property.code1"	
@@ -124,4 +150,28 @@
 #define MOLECULE_FOM			"molecule.fom"
 #define MOLECULE_SELECT			"molecule.select"
 
+// Chemical models
+#define CHEMICAL_ID				"chem_comp.id"
+#define CHEMICAL_NAME			"chem_comp.name"
+#define CHEMICAL_PDB			"chem_comp.pdbx_type"
+#define CHEMICAL_FOMRULA		"chem_comp.formula"
+#define CHEMICAL_WEIGHT			"chem_comp.formula_weight"
+#define CHEMICAL_ONE			"chem_comp.one_letter_code"
+#define CHEMICAL_THREE			"chem_comp.three_letter_code"
+
+// Chemical atoms
+#define CHEMICAL_ATOM_RES		"chem_comp_atom.comp_id"
+#define CHEMICAL_ATOM_ID		"chem_comp_atom.atom_id"
+#define CHEMICAL_ATOM_ID_ALT	"chem_comp_atom.alt_atom_id"
+#define CHEMICAL_ATOM_SYMBOL	"chem_comp_atom.type_symbol"
+#define CHEMICAL_ATOM_CHARGE	"chem_comp_atom.charge"
+#define CHEMICAL_ATOM_X			"chem_comp_atom.model_Cartn_x"
+#define CHEMICAL_ATOM_Y			"chem_comp_atom.model_Cartn_y"
+#define CHEMICAL_ATOM_Z			"chem_comp_atom.model_Cartn_z"
+#define CHEMICAL_ATOM_XI		"chem_comp_atom.pdbx_model_Cartn_x_ideal"
+#define CHEMICAL_ATOM_YI		"chem_comp_atom.pdbx_model_Cartn_y_ideal"
+#define CHEMICAL_ATOM_ZI		"chem_comp_atom.pdbx_model_Cartn_z_ideal"
+#define CHEMICAL_ATOM_IDP		"chem_comp_atom.pdbx_component_atom_id"
+#define CHEMICAL_ATOM_RESP		"chem_comp_atom.pdbx_component_comp_id"
+#define CHEMICAL_ATOM_NUMBER	"chem_comp_atom.pdbx_ordinal"
 

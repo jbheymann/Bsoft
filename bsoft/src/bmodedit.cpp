@@ -3,7 +3,7 @@
 @brief	A tool to create and edit models.
 @author Bernard Heymann
 @date	Created: 20090714
-@date	Modified: 20180314
+@date	Modified: 20220210
 **/
 
 #include "rwmodel.h"
@@ -37,8 +37,9 @@ const char* use[] = {
 "-symmetry O-3            New model type based on symmetry (T, O and I).",
 //"-type tetrahedron        New model type: tetrahedron, cube, octahedron, dodecahedron,",
 //"                         icosahedron, helix.",
+"-box 120,80,50           Generate model within a box starting at {0,0,0}.",
 "-shell 134.2             Generate a spherical shell with the given radius.",
-"-fibonacci 244,50        Generate a fibonacci sphere: number of components and radius.",
+"-fibonacci 244           Generate a fibonacci sphere with the given radius.",
 "-icosahedron 238.5,3,1   Generate an icosahedral shell with the given radius and divisions,",
 "                         and a flag to make it spherical.",
 "-circle 527,243          Generate a circle with the given radius and z offset.",
@@ -47,10 +48,10 @@ const char* use[] = {
 "-cylinder 88.3,155       Generate a cylinder with the given radius and length.",
 "-spindle 88.3,9.5        Generate a spindle with the radius and packing separation.",
 "-lattice 3,5,2,1         Generate a lattice with the number of unit cells and a flag for hexagonal packing.",
-"-randomfill 56           Random model with a number of non-overlapping components (use with -componentradius).",
-"-randomshell 87          Random model with a number of components on a shell.",
-"-gaussian 44,30.7        Random model with a number of gaussian distributed components and standard deviation.",
-"-peaks cc.map            Generate a model from peaks in a map.",
+"-randomfill 56           Random spherical model with the given radius (use with -points & -componentradius).",
+"-randomshell 87          Random shell model with the given radius (use with -points & -componentradius).",
+"-gaussian 30.7           Random model with gaussian distributed components with the given standard deviation.",
+"-peaks cc.map            Generate a model from peaks in a cross correlation map.",
 " ",
 "Actions:",
 "-all                     Reset selection to all models and components before other selections.",
@@ -59,12 +60,13 @@ const char* use[] = {
 "-id model1               Set model identifier.",
 "-settype VER             Set all component types.",
 "-changetype VER,KRN      Change component type name.",
-"-add -56,3.45,-123       Add a component (define model with -id and type with -settype).",
+"-add -56,3.45,-123       Add a component (define model with -id and type with -settype, can be repeated).",
 "-associate TRS,trs.pdb   Associate a component type with a file name.",
 "-linklength 56.3         Generate links with this maximum length.",
 "-rdf 1.2                 Calculate the radial distribution function with the given sampling (angstrom).",
 "-consolidate 85.4        Consolidate models: components are considered the same if within the given distance.",
 "-translate 12.3,95,-10.5 Shift along a vector (x,y,z).",
+"-trim 200,230,180        Trim to new box size (use with -translate).",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
@@ -78,6 +80,7 @@ const char* use[] = {
 "-radius 54.7             Model radius (default 100 angstrom).",
 "-points 152              Number of points.",
 "-separation 2.5          Separation distance between points.",
+"-density 0.3             Density in number per unit volume.",
 " ",
 "Input:",
 "-parameters param.star   Input parameter file.",
@@ -94,9 +97,10 @@ int 		main(int argc, char **argv)
 {
     /* Initialize variables */
 	Bstring			create(0);					// ID of new model
-	Bstring			symmetry_string;			// Point group for new model type
+	string			symmetry_string;			// Point group for new model type
+	Vector3<double>	box;						// Size of box
 	double			shell_radius(-1);			// Radius of sphere
-	long			fibonacci(0);				// Number of components for Fibonacci sphere
+	long			fibo_radius(0);				// Number of components for Fibonacci sphere
 	int				ico_divisions(0);			// Number of divisions for icosahedral sphere
 	int				sphere_flag(0);				// Flag to make the icosahedral shell spherical
 	double			circle_radius(0);			// Circle radius
@@ -108,9 +112,10 @@ int 		main(int argc, char **argv)
 	double			spindle_rad(0), packing(0);	// Spindle radius and packing separation
 	Vector3<long>	lattice;					// Size of lattice
 	int				lattice_type(0);			// Lattice type: 0=cubic, 1=hexagonal
-	long			ncomp(0);					// Number of components for random models
-	int				model_shell(0);				// Flag to indicate random sphere model
-	double			model_std(0);				// Standard deviation for random gaussian model
+	double			density(0);					// Density of components in number per unit volume
+	double			gauss_stdev(0);				// Standard deviation for random gaussian model
+	double			random_sphere_radius(0);	// Radius for a random sphere model
+	double			random_shell_radius(0);		// Radius for a random shell model
 	int 			all(0);						// Keep selection as read from file
 	int				replace(0);					// Default action is to add models
 	Bstring			reduce;						// Reduce linked components and write sub-model
@@ -120,9 +125,9 @@ int 		main(int argc, char **argv)
 	Bstring			associate_type;				// Component type
 	Bstring			associate_file;				// Component type file name
 	Vector3<double>	shift;						// Translate
+	Vector3<double>	trim;						// New enclosing box
 	Bstring			peakmap;					// Map with peaks to generate a new model
-	int				newcomp(0);					// Flag to indicate new component
-	Vector3<double>	newloc;						// New component location
+	vector<Vector3<double>>	newloc;				// New component locations
 	double			linklength(0);				// Link length for generating links
 	double			rdf_interval(0);			// Calculate RDF at this sampling (0=not)
 	double			consolidate(0);				// Cutoff to consider components the same
@@ -149,12 +154,14 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "create" ) create = curropt->value;
 		if ( curropt->tag == "symmetry" )
 			symmetry_string = curropt->symmetry_string();
+		if ( curropt->tag == "box" )
+			box = curropt->vector3();
 		if ( curropt->tag == "shell" )
 			if ( ( shell_radius = curropt->value.real() ) < 1 )
 				cerr << "-shell: The radius must be specified!" << endl;
 		if ( curropt->tag == "fibonacci" )
-			if ( curropt->values(fibonacci, points) < 1 )
-				cerr << "-fibonacci: The number of components must be specified!" << endl;
+			if ( ( fibo_radius = curropt->value.real() ) < 1 )
+				cerr << "-fibonacci: A radius must be specified!" << endl;
 		if ( curropt->tag == "icosahedron" ) {
 			if ( curropt->values(shell_radius, ico_divisions, sphere_flag) < 1 )
 				cerr << "-icosahedron: The radius and divisions must be specified!" << endl;
@@ -181,16 +188,14 @@ int 		main(int argc, char **argv)
 			if ( curropt->values(lattice[0], lattice[1], lattice[2], lattice_type) < 3 )
 				cerr << "-lattice: All three dimensions must be specified!" << endl;
 		if ( curropt->tag == "randomfill" )
-			if ( ( ncomp = curropt->value.integer() ) < 1 )
-				cerr << "-randomfill: The number of components must be specified!" << endl;
-		if ( curropt->tag == "randomshell" ) {
-			if ( ( ncomp = curropt->value.integer() ) < 1 )
-				cerr << "-randomshell: The number of components must be specified!" << endl;
-			else model_shell = 1;
-		}
+			if ( ( random_sphere_radius = curropt->value.real() ) < 1 )
+				cerr << "-randomfill: A sphere radius must be specified!" << endl;
+		if ( curropt->tag == "randomshell" )
+			if ( ( random_shell_radius = curropt->value.real() ) < 1 )
+				cerr << "-randomshell: A shell radius must be specified!" << endl;
 		if ( curropt->tag == "gaussian" )
-			if ( curropt->values(ncomp, model_std) < 2 )
-				cerr << "-gaussian: The number of components and standard deviation must be specified!" << endl;
+			if ( ( gauss_stdev = curropt->value.real() ) < 1 )
+				cerr << "-gaussian: A standard deviation must be specified!" << endl;
 		if ( curropt->tag == "all" ) all = 1;
 		if ( curropt->tag == "replace" ) replace = 1;
 		if ( curropt->tag == "reduce" )
@@ -212,17 +217,15 @@ int 		main(int argc, char **argv)
 		}
 		if ( curropt->tag == "peaks" )
 			peakmap = curropt->filename();
-		if ( curropt->tag == "add" ) {
-			if ( curropt->values(newloc[0], newloc[1], newloc[2]) < 3 )
-				cerr << "-add: Three coordinates must be specified!" << endl;
-			else
-				newcomp = 1;
-		}
+		if ( curropt->tag == "add" )
+			newloc.push_back(curropt->vector3());
 		if ( curropt->tag == "translate" ) {
 			shift = curropt->vector3();
         	if ( shift.length() < 0.1 )
 				cerr << "-translate: Three values must be specified!" << endl;
 		}
+		if ( curropt->tag == "trim" )
+			trim = curropt->size();
 		if ( curropt->tag == "linklength" )
 			if ( ( linklength = curropt->value.real() ) < 0.1 )
 				cerr << "-linklength: A link length must be specified!" << endl;
@@ -260,6 +263,9 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "points" )
 			if ( ( points = curropt->value.integer() ) < 1 )
 				cerr << "-points: The number of points must be specified!" << endl;
+		if ( curropt->tag == "density" )
+			if ( ( density = curropt->value.real() ) < 1 )
+				cerr << "-density: The number per unit volume be specified!" << endl;
 		if ( curropt->tag == "separation" )
 			if ( ( separation = curropt->value.real() ) < 0.1 )
 				cerr << "-separation: The separation distance must be specified!" << endl;
@@ -277,19 +283,17 @@ int 		main(int argc, char **argv)
 	double			ti = timer_start();
 
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	Bmodel*			model = NULL;		
+	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bmodel*			newmod = NULL;
 	Bsymmetry		sym;
 	
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( file_list ) {
-		model = read_model(file_list, paramfile);		
-		string_kill(file_list);
-	}
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() )
+		model = read_model(file_list, paramfile.str());
 	
-	if ( create.length() ) newmod = new Bmodel(create);
+	if ( create.length() ) newmod = new Bmodel(create.str());
 
 	if ( peakmap.length() ) {
 		Bimage*			map = read_img(peakmap, 1, 0);
@@ -299,7 +303,7 @@ int 		main(int argc, char **argv)
 	}
 
 	if ( symmetry_string.length() ) {
-		if ( symmetry_string.contains("H") ) {
+		if ( symmetry_string[0] == 'H' ) {
 			newmod = model_helix(model_radius, helix_rise, helix_angle, helix_comp);
 		} else {
 			sym = Bsymmetry(symmetry_string);
@@ -308,17 +312,19 @@ int 		main(int argc, char **argv)
 //	} else if ( model_type ) {
 //		if ( model_type < 6 ) newmod = model_platonic(model_type, model_radius);
 //		else newmod = model_helix(model_radius, helix_rise, helix_angle, helix_comp);
-	} else if ( ncomp > 0 ) {
-		if ( model_std > 0 ) {
-			newmod = model_random_gaussian(ncomp, model_std);
-		} else if ( model_shell ) {
-			if ( separation ) newmod = model_random_shell(ncomp, model_radius, separation);
-			else newmod = model_random_shell(ncomp, model_radius);
-		} else {
-			newmod = model_random(ncomp, compradius, model_radius);
-		}
-	} else if ( fibonacci > 0 ) {
-		newmod = model_create_fibonacci_sphere(fibonacci, points);
+	} else if ( box.volume() > 0 ) {
+		if ( density > 0 ) points = density*box.volume();
+		Vector3<double>	start;
+		newmod = model_random(points, compradius, start, box);
+	} else if ( random_sphere_radius > 0 ) {
+		newmod = model_random(points, compradius, random_sphere_radius);
+	} else if ( random_shell_radius > 0 ) {
+		if ( separation ) newmod = model_random_shell(points, random_shell_radius, separation);
+		else newmod = model_random_shell(points, random_shell_radius);
+	} else if ( gauss_stdev > 0 ) {
+		newmod = model_random_gaussian(points, gauss_stdev);
+	} else if ( fibo_radius > 0 ) {
+		newmod = model_create_fibonacci_sphere(points, fibo_radius);
 	} else if ( shell_radius >= 0 ) {
 		if ( ico_divisions > 0 )
 			newmod = model_create_icosahedron(shell_radius, ico_divisions, sphere_flag);
@@ -339,22 +345,22 @@ int 		main(int argc, char **argv)
 		else newmod = model_create_cubic_lattice(lattice, separation);
 	}
 	
-	if ( model_id.length() ) newmod->identifier(model_id);
+	if ( model_id.length() ) newmod->identifier(model_id.str());
 	else model_id = "create";
 	
-	if ( set_type.length() ) model_set_type(newmod, set_type);
+	if ( set_type.length() ) model_set_type(newmod, set_type.str());
 	
 	if ( associate_file.length() )
-		model_associate(newmod, associate_type, associate_file);
+		model_associate(newmod, associate_type.str(), associate_file.str());
 	
 	if ( linklength > 0 ) model_link_list_generate(newmod, linklength);
 
 	if ( mapfile.length() ) newmod->mapfile(mapfile.str());
 
-	if ( replace && model ) {
-		for ( mp = model; mp; mp = mp->next )
-//			model_copy_components(mp, newmod);
-			model_replace_components(mp, newmod);
+	if ( replace && model && newmod ) {
+		model_kill(model);
+		model = newmod;
+		newmod = NULL;
 	} else {
 		if ( model )
 			for ( mp = model; mp->next; mp = mp->next ) ;	// Pointer to last model
@@ -365,11 +371,11 @@ int 		main(int argc, char **argv)
 	
 	if ( all ) models_process(model, model_reset_selection);
 	
-	if ( newcomp ) model_add_component(model, model_id, set_type, newloc);
+	if ( newloc.size() ) model_add_components(model, model_id.str(), set_type.str(), newloc);
 
-	if ( change_type.length() ) model_change_type(model, change_type);
+	if ( change_type.length() ) model_change_type(model, change_type.str());
 	
-	if ( reduce.length() ) model_reduce_linked(model, reduce, 1);
+	if ( reduce.length() ) model_reduce_linked(model, reduce.str(), 1);
 
 	if ( consolidate ) model_consolidate(model, consolidate);
 
@@ -383,20 +389,22 @@ int 		main(int argc, char **argv)
 
 	if ( set_color ) model_color_uniformly(model, color);
 
-	if ( catname.length() ) model_catenate_maps(model, catname);
+	if ( catname.length() ) model_catenate_maps(model, catname.str());
 	
 	if ( shift.length() ) models_shift(model, shift);
+
+	if ( trim.volume() ) models_trim(model, trim);
 
 	model_selection_stats(model);
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

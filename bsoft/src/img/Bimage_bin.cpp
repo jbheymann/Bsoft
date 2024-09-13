@@ -201,14 +201,14 @@ int			Bimage::bin(long i, Vector3<long> bk, Bimage* pb)
 	Vector3<long>	coor = pb->coordinates(i);
 	Vector3<long>	bs(bk * coor);
 	Vector3<long>	bf(bs + bk);
-	long			binsize(0);
+//	long			binsize(0);
 	vector<double>	binsum(c);
 	for ( cc=0; cc<c; cc++ ) binsum[cc] = 0;
 
 	for ( zz=bs[2]; zz<bf[2] && zz<z; zz++ ) {
 		for ( yy=bs[1]; yy<bf[1] && yy<y; yy++ ) {
 			for ( xx=bs[0]; xx<bf[0] && xx<x; xx++ ) {
-				binsize++;
+//				binsize++;
 				j = index(0, xx, yy, zz, nn);
 				for ( cc=0; cc<c; cc++ ) binsum[cc] += (*this)[j++];
 			}
@@ -402,7 +402,8 @@ int 		Bimage::median_bin(int binning)
 	
 	// Calculate the new size and set up
 	long				i, j, k;
-	long				nn, ix, iy, iz, xx, yy, zz, dimensions(0);
+	long				nn, ix, iy, iz, xx, yy, zz;
+//	long				dimensions(0);
 	Vector3<long>		nusize(1,1,1);
 	Vector3<long>		shift;
 	Vector3<long>		blocksize(1,1,1);
@@ -414,7 +415,7 @@ int 		Bimage::median_bin(int binning)
 		if ( 2*(nusize[0]/2) == nusize[0] ) nusize[0]--; // Size must be odd
 		shift[0] = nusize[0] - x/binning;
 		nusam[0] *= binning;
-		dimensions++;
+//		dimensions++;
 	}
 	if ( y > 1 ) {
 		blocksize[1] = 2*binning - 1;
@@ -422,7 +423,7 @@ int 		Bimage::median_bin(int binning)
 		if ( 2*(nusize[1]/2) == nusize[1] ) nusize[1]--; // Size must be odd
 		shift[1] = nusize[1] - y/binning;
 		nusam[1] *= binning;
-		dimensions++;
+//		dimensions++;
 	}
 	if ( z > 1 ) {
 		blocksize[2] = 2*binning - 1;
@@ -430,14 +431,14 @@ int 		Bimage::median_bin(int binning)
 		if ( 2*(nusize[2]/2) == nusize[2] ) nusize[2]--; // Size must be odd
 		shift[2] = nusize[2] - z/binning;
 		nusam[2] *= binning;
-		dimensions++;
+//		dimensions++;
 	}
 	
 	long				blocktotalsize = blocksize[0]*blocksize[1]*blocksize[2];
 	vector<double>		block(blocktotalsize);
 
 	long				datasize = n*nusize[0]*nusize[1]*nusize[2]*c;
-	double*				nudata = new double[datasize];
+	vector<double>		nudata(datasize);
 	
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Binning using a median filter:" << endl;
@@ -504,8 +505,6 @@ int 		Bimage::median_bin(int binning)
 	// Transfer the data to a new block and free the old
 	data_alloc();
 	for ( i=0; i<datasize; i++ ) set(i, nudata[i]);
-	
-	delete[] nudata;
 	
 	statistics();
 	

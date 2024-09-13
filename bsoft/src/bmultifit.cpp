@@ -3,12 +3,13 @@
 @brief	Searching for a template in a map and returning multiple hits in a model.
 @author Bernard Heymann
 @date	Created: 20021027
-@date	Modified: 20160604
+@date	Modified: 20230524
 **/
 
+#include "rwmodel.h"
 #include "model_multifit.h"
+#include "rwimg.h"
 #include "ps_views.h"
-#include "linked_list.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -66,17 +67,17 @@ int 		main(int argc, char **argv)
 	int				view_subset(0);					// Subset size
 	double			cutoff(0);						// Cutoff set to 0 to calculate automatically
 	int				img_num(0);						// Image number in file
-	Vector3<double>	sam;    				// Units for the three axes (A/pixel)
+	Vector3<double>	sam;    						// Units for the three axes (A/pixel)
 	Vector3<double>	origin;							// Template origin
 	int				set_origin(0);					// Flag to set origin
 	double			alpha(-1);						// Rotation around view vector
 	double			alpha_step = M_PI_4;			// Angular step size for alpha
 	double			theta_step = M_PI_4;			// Angular step size for theta
 	double			phi_step = M_PI_4;				// Angular step size for phi
-	Bstring			symmetry_string("C1");			// Default: asymmetric or C1 point group
+	string			symmetry_string("C1");			// Default: asymmetric or C1 point group
 	double			hires(0), lores(0);				// Limiting resolution for cross-correlation
-	View			currview(0,0,-10,0);			// View to initiate search from and use as current view
-	View			ref_view;						// Reference view
+	View2<double>	currview(0,0,-10,0);			// View to initiate search from and use as current view
+	View2<double>	ref_view;						// Reference view
 	Vector3<long>	bin = {1,1,1};					// No binning
 	Bstring			template_file;
 	Bstring			mask_file;
@@ -149,10 +150,10 @@ int 		main(int argc, char **argv)
     }
 	option_kill(option);
 	
-	double		ti = timer_start();
+	double			ti = timer_start();
 
 	// Do the symmetry-related stuff first
-	View*			view = NULL;
+	vector<View2<double>>	views;
 	
 	Matrix3			mat = ref_view.matrix();
 	Bsymmetry 		sym(symmetry_string);
@@ -161,22 +162,25 @@ int 		main(int argc, char **argv)
 //		sym.op[i].axis = mat * sym.op[i].axis;
 	
 	if ( mode.contains("glo") ) {
-		view = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+		views = sym.asymmetric_unit_views(theta_step, phi_step, 1);
 	} else if ( mode.contains("sym") ) {
 		if ( currview[2] < -1 ) currview[2] = 1;
-		view = symmetry_get_all_views(sym, currview);
+		views = sym.get_all_views(currview);
 		alpha_step = TWOPI;
 	}
 
-	if ( view_subset > 0 ) if ( view_list_subset(&view, view_start, view_subset) < 1 ) {
-		cerr << "Error: At least one view must be selected!" << endl;
-		bexit(-1);
+	if ( view_subset > 0 ) {
+		views = view_list_subset(views, view_start, view_subset);
+		if ( views.size() < 1 ) {
+			cerr << "Error: At least one view must be selected!" << endl;
+			bexit(-1);
+		}
 	}
 
-	if ( ps_file.length() && view ) ps_views(ps_file, view);
+	if ( ps_file.length() && views.size() ) ps_views(ps_file.str(), views);
 
 	if ( verbose )
-		cout << "Number of views:                " << count_list((char *) view) << endl;
+		cout << "Number of views:                " << views.size() << endl;
 	
 	// Read image file
 	Bimage*			p = NULL;
@@ -216,12 +220,12 @@ int 		main(int argc, char **argv)
 	
 	if ( ptemp ) {
 		if ( model_file.length() ) {
-			model = model_from_densities(p, ptemp, view, alpha, alpha_step, hires, lores, pmask, cutoff);
-				write_model(model_file, model);
+			model = model_from_densities(p, ptemp, views, alpha, alpha_step, hires, lores, pmask, cutoff);
+			write_model(model_file.str(), model);
 			model_kill(model);
 		} else {
 //			pfit = img_multifit(p, ptemp, view, alpha, alpha_step, hires, lores, pmask, cutoff);
-			pfit = p->search_volume(ptemp, view, alpha, alpha_step, hires, lores, pmask, cutoff);
+			pfit = p->search_volume(ptemp, views, alpha, alpha_step, hires, lores, pmask, cutoff);
 			if ( optind < argc )
 				write_img(argv[optind], pfit, 0);
 			if ( fom_file.length() )
@@ -232,7 +236,6 @@ int 		main(int argc, char **argv)
 		delete ptemp;
 	}
 
-	kill_list((char *) view, sizeof(View));
 	delete p;
 	delete pmask;
 
@@ -242,7 +245,7 @@ int 		main(int argc, char **argv)
 	}
 
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

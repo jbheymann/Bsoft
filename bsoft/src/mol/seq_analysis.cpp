@@ -502,7 +502,7 @@ at every position is generated and written into a postscript file.
 int 	 	seq_aligned_information(Bmolgroup* molgroup, int window, Bstring& psfile)
 {
 	long			i, j, k, ii, n, nres;
-    double       	fgap;
+ 	double       	fgap;
 	
 	Bstring			temp;
 	Bresidue_type*	rt = get_residue_properties(temp);
@@ -585,6 +585,8 @@ int 	 	seq_aligned_information(Bmolgroup* molgroup, int window, Bstring& psfile)
 			}
 			seq[k] = mol->seq[j];
 			k++;
+			if ( verbose & VERB_FULL )
+				cout << j << tab << fgap << endl;
 		}
     }
 	
@@ -891,10 +893,12 @@ Matrix		seq_correlated_mutation(Bmolgroup* molgroup,
 	for ( number=0, mol1 = molgroup->mol; mol1; mol1 = mol1->next ) number++;
 	for ( refseqnum=0, molref = molgroup->mol; molref; molref = molref->next, ++refseqnum )
 		if ( molref->id.contains(refseqid) ) break;
-	
+
+	Matrix				mat;
+
 	if ( !molref ) {
 		cerr << "Sequence " << refseqid << " not found!" << endl;
-		return Matrix();
+		return mat;
 	}
 	
 	Bstring				refseq(molref->seq);
@@ -905,7 +909,7 @@ Matrix		seq_correlated_mutation(Bmolgroup* molgroup,
 		
 	int 				m1, m2, ir, ntot;
 	int 				total = number*(number-1)/2;		// Only lower triangle
-	double				sum, ssum, sigma2, maxCC(-1e30);
+	double				sum, ssum, maxCC(-1e30);
 	vector<double>		avg(length, 0);
 	vector<double>		std(length, 0);
 	vector<double>		num(length, 0);
@@ -965,10 +969,10 @@ Matrix		seq_correlated_mutation(Bmolgroup* molgroup,
 		cout << endl << "Res1\tNum1\tRes2\tNum2\tTotal\tCorr" << endl;
 	}
 
-	Matrix				mat(length, length);
+	mat = Matrix(length, length);
 	
 	ir = 0;
-	sigma2 = 0;
+//	sigma2 = 0;
 	for ( i=0; i<length; i++ ) {
 		for ( j=0; j<=i; j++ ) {
 			ntot = 0;
@@ -991,7 +995,7 @@ Matrix		seq_correlated_mutation(Bmolgroup* molgroup,
 			}
 			if ( i == j ) mat[i][j] = 1;
 			else if ( maxCC < mat[i][j] ) maxCC = mat[i][j];
-			sigma2 += mat[i][j] * mat[i][j]; 		// Sum of squared correlations
+//			sigma2 += mat[i][j] * mat[i][j]; 		// Sum of squared correlations
 			if ( mat[i][j] > cutoff && i != j ) {
 				cout << refseq[j] << tab << j+1 << tab << 
 					refseq[i] << tab << i+1 << tab << ntot << tab << mat[i][j] << endl;

@@ -1,18 +1,21 @@
 /**
 @file	model_map.cpp
-@brief	Function to generate a map from a model.
-@author Bernard Heymann
+@brief	Functions to generate a map from a model.
+@author 	Bernard Heymann
 @date	Created: 20081112
-@date	Modified: 20210205
+@date	Modified: 20240319
 **/
 
 #include "rwmodel.h"
+#include "rwmodel_param.h"
 #include "model_links.h"
 #include "model_transform.h"
 #include "model_extract_build.h"
+#include "model_mol.h"
+#include "model_util.h"
 #include "rwimg.h"
-#include "mg_orient.h"
 #include "img_combine.h"
+#include "scatter.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -30,19 +33,18 @@ Bmodel*		model_from_images(Bimage* plist)
 {
 	long			n;
 	Bimage*			p = plist;
-	Bstring			base, id, filename(p->file_name());
+	string			b, id, filename(p->file_name());
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	
-	base = filename.base().alnum();
+//	base = filename.base().alnum();
+	b = base(filename);
 	
 	for ( n=0; n<p->images(); n++ ) {
-		id = base;
-		if ( p->images() > 1 ) id += Bstring(n+1, "_%04d");
-//		mp = model_add(&mp, id);
-//		if ( !model ) model = mp;
-		if ( mp ) mp = mp->add(id.str());
-		else model = mp = new Bmodel(id.str());
+		id = b;
+		if ( p->images() > 1 ) id += "_" + to_string(n+1);
+		if ( mp ) mp = mp->add(id);
+		else model = mp = new Bmodel(id);
 		mp->mapfile() = p->file_name();
 		mp->image_number(n);
 	}
@@ -63,7 +65,7 @@ Bmodel*		model_from_graph_segments(Bimage* p, GSgraph& gs)
 {
 	long			i, j, k(0), nr(gs.voxel_count());
 	double			maxlen(1.1*p->image->sampling()[0]), f(100.0/p->image_size());
-	Bstring			id;
+	string			id;
 	vector<Bmodel*>	marr(nr);
 	vector<Bcomponent*>	carr(nr);
 	
@@ -86,7 +88,7 @@ Bmodel*		model_from_graph_segments(Bimage* p, GSgraph& gs)
 		if ( gs.voxel(k).voxels() < 10000 ) {
 			if ( carr[j] ) {
 				id = carr[j]->identifier();
-				k = id.integer() + 1;
+				k = to_integer(id) + 1;
 				carr[j] = carr[j]->add(k);
 			} else {
 				carr[j] = marr[j]->add_component(1);
@@ -215,23 +217,23 @@ Bimage*		img_from_model(Bmodel* model, Vector3<double> ori,
 /**
 @brief 	Concatenates all model maps into one multi-image file.  
 @param 	*model			model.
-@param 	&filename		new map file name.
+@param 	filename		new map file name.
 @return int				0.
 
 	The model map file name must be set and point to a valid file.
 
 **/
-int			model_catenate_maps(Bmodel* model, Bstring& filename)
+int			model_catenate_maps(Bmodel* model, string filename)
 {
 	long			i;
 	Bmodel*			mp;
-	Bstring*		file_list = NULL;
 	Vector3<long>	nusize;
-	Bstring			rawstring;
+	vector<string>	file_list;
+	string			rawstring;
 	
 	for ( i=0, mp = model; mp; mp = mp->next, i++ ) {
-		string_add(&file_list, mp->mapfile().c_str());
-		mp->mapfile() = filename.str();
+		file_list.push_back(mp->mapfile());
+		mp->mapfile() = filename;
 		mp->image_number(i);
 	}
 
@@ -329,10 +331,9 @@ int			model_shell_radial_profile(Bmodel* model)
 	
 	if ( ntype < 1 ) ntype = 1;
 	
-	float*			r = new float[ntype*maxrad];
-	float*			r2 = new float[ntype*maxrad];
-	float*			w = new float[ntype*maxrad];
-	for ( i=0; i<ntype*maxrad; i++ ) r[i] = r2[i] = w[i] = 0;
+	vector<float>	r(ntype*maxrad, 0);
+	vector<float>	r2(ntype*maxrad, 0);
+	vector<float>	w(ntype*maxrad, 0);
 	
 	for ( ncomp=0, davg=0, comp = model->comp; comp; comp = comp->next, ncomp++ )
 		davg += comp->location().length()/radstep;
@@ -382,9 +383,6 @@ int			model_shell_radial_profile(Bmodel* model)
 		}
 	}
 	
-	delete[] r;
-	delete[] r2;
-	delete[] w;
 	delete p;
 	
 	return 0;
@@ -445,7 +443,7 @@ Bimage*		model_shell_power_spectrum(Bmodel* model, Vector3<long> size,
 	Vector3<double>	shift;
 	Vector3<double>	axis(0,0,1);
 	Matrix3			mat;
-	View			view;
+	View2<double>	view;
 	Bcomponent*		comp;
 	Bimage*			pone;
 	Bimage*			pol;
@@ -453,7 +451,7 @@ Bimage*		model_shell_power_spectrum(Bmodel* model, Vector3<long> size,
 	Bimage*			pt;
 	
 	Bcomptype*		ct[6];
-	Bstring			ctstr[6];
+	vector<string>	ctstr(6);
 	ctstr[0] = "MON";
 	ctstr[1] = "DI";
 	ctstr[2] = "TRI";
@@ -691,7 +689,7 @@ int			model_component_symmetry(Bmodel* model, long nangles,
 	Vector3<long>	size;
 	Vector3<double>	origin;
 	Matrix3			mat(1);
-	Bstring			id;
+	string			id;
 	Bmodel*			mp;
 	Bcomponent*		comp;
 	Bimage*			p = NULL;
@@ -774,3 +772,1118 @@ int			model_component_symmetry(Bmodel* model, long nangles,
 
 	return 0;
 }
+
+int			img_add(Bimage* ps, vector<Complex<float>>& v)
+{
+	for ( long i=0; i<ps->data_size(); ++i )
+		ps->add(i, v[i]);
+
+	return 0;
+}
+
+int			img_add_fast_old(Bimage* ps, Bimage* p)
+{
+	for ( long i=0; i<ps->data_size(); ++i )
+		ps->add(i, (*p)[i]);
+
+	return 0;
+}
+
+int			img_add_fast(Bimage* ps, Bimage* p)
+{
+	float*		fds = (float *) ps->data_pointer();
+	float*		fd = (float *) p->data_pointer();
+	
+	for ( long i=0; i<ps->data_size(); ++i, ++fd, ++fds )
+		*fds += *fd;
+
+	return 0;
+}
+
+void		show_scattering_curve_counts(map<string, vector<double>>& scat)
+{
+	cout << "Scattering curves: " << scat.size() << endl;
+	cout << "Element\tValues" << endl;
+	for ( auto it = scat.begin(); it != scat.end(); ++it )
+		cout << it->first << tab << it->second.size() << endl;
+	cout << endl;
+}
+
+// New code - much faster than old code below
+Complex<double>	structure_factor_from_model(Bmodel* model, long compsel, Vector3<double> uvw,
+					const map<string, vector<double>>& scat, double ds)
+{
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	
+	double				s(uvw.length()/ds);
+	long				i(s);
+	double				w(s-i), phi;
+	Complex<double>		sf;
+	string				cel;
+
+	map<string, double>	f;
+	
+	for ( auto sc: scat )
+		f[sc.first] = ((1.0-w)*sc.second[i] + w*sc.second[i+1]);
+
+//	for ( auto sc: scat )
+//		cout << f[sc.first] << endl;
+		
+   for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for( comp = mp->comp; comp; comp = comp->next ) if ( compsel < 0 || comp->select() == compsel ){
+			cel = comp->element();
+			if ( f.find(cel) == f.end() ) {
+				cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+			} else {
+				phi = MIN2PI*uvw.scalar(comp->location());	// Phase shift
+				sf += complex_polar(comp->density()*f[cel], phi);
+			}
+		}
+	}
+	
+	return sf;
+}
+
+double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, Bimage* p,
+				map<string, vector<double>>& scat, double ds, double smax)
+{
+	long			nat(0);
+    for ( Bmodel* mp = model; mp; mp = mp->next ) if ( mp->select() ) nat += mp->component_count_selected();
+	if ( nat < 1 ) return 0;
+	
+	long			nsf((2.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
+//	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+//	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	
+	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
+	
+	double			t = timer_start();
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(p->image_size()/2, dispatch_get_global_queue(0, 0), ^(size_t i){
+//	dispatch_apply(p->image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		if ( uvw.length() <= smax && p->complex(i).real() == 0 ) {
+			long			j = p->fspace_conjugate_index(i);
+			Complex<double>	cv = structure_factor_from_model(model, compsel, uvw, scat, ds);
+			p->set(i, cv);
+			cv = cv.conj();
+			p->set(j, cv);
+			dispatch_sync(myq, ^{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			});
+		}
+	});
+	if ( verbose )
+		cout << "Number of structure factors:    " << nd << endl;
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<p->image_size()/2; ++i ) {
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		if ( uvw.length() <= smax && p->complex(i).real() == 0 ) {
+			long			j = p->fspace_conjugate_index(i);
+			Complex<double>	cv = structure_factor_from_model(model, compsel, uvw, scat, ds);
+			p->set(i, cv);
+			cv = cv.conj();
+			p->set(j, cv);
+#pragma omp critical
+			{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			}
+		}
+	}
+	if ( verbose )
+		cout << "Number of structure factors:    " << nd << endl;
+#endif
+
+	t = timer_report(t);
+	if ( verbose ) {
+		cout << "Excution time:                  " << t << " s" << endl;
+		cout << "Number of processors:           " << system_processors() << endl;
+		cout << "Time prefactor:                 " << 1e6*t*system_processors()/(nd*nat) << " us" << endl << endl;
+	}
+
+	if ( p->sizeZ() > 1 ) scale /= p->real_size().volume();
+	else scale /= p->real_size()[0]*p->real_size()[1];
+//	scale /= p->size().volume();
+	p->multiply(scale);
+	
+	long		i(0);
+	return (*p)[i];
+}
+
+/**
+@brief 	Calculates the 3D potential from a set of atomic coordinates.
+@param	*model			atomic model (only the first one is used).
+@param	compsel			selection number.
+@param	*p				3D image to recieve the result.
+@param	atompropfile	file name for component properties.
+@param	hires			high resolution limit for calculation.
+@return	double			zeroth term.
+**/
+double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, Bimage* p,
+				string atompropfile, double hires)
+{
+	long			nat(0);
+    for ( Bmodel* mp = model; mp; mp = mp->next ) if ( mp->select() ) nat += mp->component_count_selected();
+	if ( nat < 1 ) {
+		cerr << "Warning: No atoms selected!" << endl << endl;
+		return 0;
+	}
+	
+	if ( hires < p->sampling(0)[0] ) hires = p->sampling(0)[0];
+	double			smax(1.0/hires);
+//	long			nsf((2.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+//	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
+	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	
+	double			ds(1/p->real_size()[0]);
+	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
+	
+	Bmaterial		material = material_from_model(model, atompropfile);
+	
+	if ( verbose ) {
+		cout << "Calculating structure factors:" << endl;
+		cout << "Component selection:            " << compsel << endl;
+		cout << "Atomic properties file:         " << atompropfile << endl;
+		cout << "Size:                           " << p->size() << tab << p->images() << endl;
+		cout << "Physical size:                  " << p->real_size() << " A" << endl;
+		cout << "High resolution limit:          " << hires << " A (" << smax << " 1/A)" << endl;
+		cout << "Scatter curve sampling & size:  " << ds << tab << long(1.2*smax/ds+1) << endl;
+		cout << "Scale:                          " << scale << " VA2" << endl;
+		cout << "Number of atoms:                " << nat << endl;
+		cout << "Number of structure factors:    " << nsf << endl;
+		cout << endl;
+	}
+
+	map<string, vector<double>>	scat = calculate_elastic_scattering_curves(material.composition(), ds, 1.2*smax);
+	
+//	if ( verbose & VERB_DEBUG )
+		show_scattering_curve_counts(scat);
+
+	return img_potential_from_model_structure_factors(model, compsel, p, scat, ds, smax);
+}
+
+/**
+@brief 	Calculates the 2D potential from slices of atomic coordinates.
+@param	*model			atomic model (only the first one is used).
+@param	*p				2D multi-image to recieve the result.
+@param	atompropfile	file name for component properties.
+@param	hires			high resolution limit for calculation.
+@return	double			zeroth term.
+
+	The slice thickness is taken from the third sampling value.
+**/
+int			img_potential_from_model_slices(Bmodel* model, Bimage* p, string atompropfile, double hires)
+{
+	long			nat(0), compsel(1);
+    for ( Bmodel* mp = model; mp; mp = mp->next ) if ( mp->select() ) nat += mp->component_count_selected();
+	if ( nat < 1 ) return 0;
+	
+	if ( hires < p->sampling(0)[0] ) hires = p->sampling(0)[0];
+	double			smax(1.0/hires);
+//	long			nsf((2.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+//	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
+	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	
+	double			ds(1/p->real_size()[0]);
+	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
+	
+	Bmaterial		material = material_from_model(model, atompropfile);
+
+	vector<Vector3<double>>	bounds = models_calculate_bounds(model);
+	double				thickness(p->image->sampling()[2]);
+	double				bottom(bounds[0][2]);
+	double				top(p->images()*thickness + bottom);
+	vector<Bmodel*>		slice = model_split_into_slice_models(model, bottom, top, thickness);
+
+	if ( verbose ) {
+		cout << "Calculating slice potentials: " << endl;
+		cout << "Component selection:            " << compsel << endl;
+		cout << "Number of slices specified:     " << p->images() << endl;
+		cout << "Number of model slices:         " << slice.size() << endl;
+		cout << "Slice thickness:                " << thickness << " A" << endl;
+		cout << "Bottom and top:                 " << bottom << tab << top << endl << endl;
+		cout << "Atomic properties file:         " << atompropfile << endl;
+		cout << "Size:                           " << p->size() << tab << p->images() << endl;
+		cout << "Physical size:                  " << p->real_size() << " A" << endl;
+		cout << "High resolution limit:          " << hires << " A (" << smax << " 1/A)" << endl;
+		cout << "Scatter curve sampling & size:  " << ds << tab << long(1.2*smax/ds+1) << endl;
+		cout << "Scale:                          " << scale << " VA2" << endl;
+		cout << "Number of atoms:                " << nat << endl;
+		cout << "Number of structure factors:    " << nsf << endl;
+		cout << endl;
+	}
+
+	map<string, vector<double>>	scat = calculate_elastic_scattering_curves(material.composition(), ds, 1.2*smax);
+
+	if ( verbose & VERB_DEBUG )
+		show_scattering_curve_counts(scat);
+
+	Bimage*				p1 = NULL;
+	
+	for ( long i=0; i<p->images() && i<slice.size(); ++i ) {
+		if ( verbose )
+			cout << "Calculating image " << i+1 << endl;
+		p1 = p->extract(i);
+		img_potential_from_model_structure_factors(slice[i], compsel, p1, scat, ds, smax);
+		p->replace(i, p1);
+		delete p1;
+	}
+
+	return 0;
+}
+
+double		model_effective_thickness(Bmodel* model, double volt)
+{
+	if ( !model ) return 0;
+	if ( !model->select() ) return 0;
+
+	double			wl = electron_wavelength(volt);
+
+	long			i;
+	double			ds(0.01), s2, pil(M_PI*wl);
+	vector<double>	ew(1000, 0);
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			for ( i=0; i<ew.size(); ++i ) {
+				s2 = i*ds;
+				s2 *= s2;
+				ew[i] += cos(pil*comp->location()[2]*s2);
+			}
+		}
+	}
+
+	for ( i=0; i<ew.size(); ++i )
+		if ( ew[i] < 0 ) break;
+
+	s2 = i*ds;
+	s2 *= s2;
+	
+	return 2.0/(wl*s2);
+}
+
+/*
+	This results in one if the frequency space coordinates are on the Ewald sphere
+*/
+Complex<double>	structure_factor_ewald_sphere_envelope(Bmodel* model, long compsel, Vector3<double> uvw, double volt, double t, int dir)
+{
+	double			wl = electron_wavelength(volt);
+	long			n(0);
+	double			phi;
+	Complex<double>	sf;
+	Bmodel*			mp;
+	Bcomponent*		comp;
+
+	double			we = uvw[2] - 0.5*dir*wl*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
+	
+    for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for( comp = mp->comp; comp; comp = comp->next ) if ( compsel < 0 || comp->select() == compsel ){
+			phi = MIN2PI*we*comp->location()[2];			// Phase shift
+			sf += complex_polar(1.0, phi);
+			n++;
+		}
+	}
+	
+	if ( we ) sf /= n*M_PI*we*t;
+	
+	return sf;
+}
+
+Complex<double>	structure_factor_ewald_sphere(Bmodel* model, long compsel, Vector3<double> uvw,
+					const map<string, vector<double>>& scat, double ds, CTFparam& cp, double t, int ewald_flag, bool ab_flag)
+{
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	
+	double				s(uvw.length()), a(atan2(uvw[1], uvw[0]));
+	long				i(s/ds), n(0);
+	double				w(s/ds-i), we, phi, ew_phi(0), ab_phi(0);
+	Complex<double>		sf;
+	string				cel;
+
+	if ( ewald_flag > 0 ) we = uvw[2] - 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
+	if ( ewald_flag < 0 ) we = uvw[2] + 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
+	
+	if ( ab_flag ) ab_phi = M_PI_2 + cp.calculate_aberration(s, a);	// Aberrations (CTF)
+
+	map<string, double>	f;
+	
+	for ( auto sc: scat )
+		f[sc.first] = ((1.0-w)*sc.second[i] + w*sc.second[i+1]);
+
+    for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for( comp = mp->comp; comp; comp = comp->next ) if ( compsel < 0 || comp->select() == compsel ){
+			cel = comp->element();
+			if ( f.find(cel) == f.end() ) {
+				cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+			} else {
+				if ( ewald_flag ) {
+					ew_phi = MIN2PI*we*comp->location()[2];			// Ewald sphere phase shift
+					phi = MIN2PI*(uvw[0]*comp->location()[0]+uvw[1]*comp->location()[1]) + ew_phi;
+				} else {
+					phi = MIN2PI*uvw.scalar(comp->location());		// Phase shift
+				}
+				if ( ab_flag ) phi += ab_phi;						// Aberrations (CTF)
+				n++;
+				sf += complex_polar(comp->density()*f[cel], phi);
+			}
+		}
+	}
+
+	if ( n )
+		if ( fabs(we) > 1e-3 ) sf /= M_PI*we*t;
+
+	return sf;
+}
+
+
+int			img_ewald_sphere_envelope(Bmodel* model, long compsel, Bimage* p, double smax, double t, double volt, int ewald_flag)
+{
+	double			wl = electron_wavelength(volt);
+	double			width(50/t);
+	if ( width > smax ) width = smax;
+	
+	long			nsf;
+//	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+//	nsf *= 0.3*t/p->real_size()[2];
+	if ( p->sizeZ() > 1 ) nsf = width*M_PI*smax*smax*p->real_size().volume();
+	else nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( nsf > p->image_size() ) nsf = p->image_size();
+
+	if ( verbose )
+		cout << "Number of structure factors:    " << nsf << endl << endl;
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(p->image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		double				we = width + 0.5*wl*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);
+		if ( fabs(uvw[2]) <= we && uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_ewald_sphere_envelope(model, compsel, uvw, volt, t, ewald_flag);
+			p->set(i, cv);
+			dispatch_sync(myq, ^{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			});
+		}
+	});
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<p->image_size(); ++i ) {
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		double				we = width + 0.5*wl*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);
+		if ( fabs(uvw[2]) <= we && uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_ewald_sphere_envelope(model, compsel, uvw, volt, t, ewald_flag);
+			p->set(i, cv);
+#pragma omp critical
+			{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			}
+		}
+	}
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#endif
+
+	return 0;
+}
+
+int			img_ewald_sphere(Bmodel* model, long compsel, Bimage* p,
+				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, double t, int ewald_flag, bool ab_flag)
+{
+	double			width(50/t);
+	if ( width > smax ) width = smax;
+
+	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( p->sizeZ() > 1 ) nsf = width*M_PI*smax*smax*p->real_size().volume();
+	else nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( nsf > p->image_size() ) nsf = p->image_size();
+
+	if ( verbose )
+		cout << "Number of structure factors:    " << nsf << endl << endl;
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(p->image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		double				we = 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);
+		if ( ewald_flag < 0 ) we = -we;
+		if ( fabs(uvw[2]-we) <= width && uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_ewald_sphere(model, compsel, uvw, scat, ds, cp, t, ewald_flag, ab_flag);
+			p->set(i, cv);
+			dispatch_sync(myq, ^{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			});
+		}
+	});
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<p->image_size(); ++i ) {
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		double				we = 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);
+		if ( ewald_flag < 0 ) we = -we;
+		if ( fabs(uvw[2]-we) <= width && uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_ewald_sphere(model, compsel, uvw, scat, ds, cp, t, ewald_flag, ab_flag);
+			p->set(i, cv);
+#pragma omp critical
+			{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			}
+		}
+	}
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#endif
+
+	return 0;
+}
+
+
+Complex<double>	structure_factor_from_model(Bmodel* model, long compsel, Vector3<double> uvw,
+					const map<string, vector<double>>& scat, double ds, CTFparam& cp, int ewald_flag, bool ab_flag)
+{
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	
+	double				s(uvw.length()), a(atan2(uvw[1], uvw[0]));
+	long				i(s/ds);
+	double				w(s/ds-i), phi, ab_phi(0);
+	Complex<double>		sf;
+	string				cel;
+
+	if ( ewald_flag ) uvw[2] = 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
+	if ( ewald_flag < 0 ) uvw[2] = -uvw[2];
+	
+	if ( ab_flag ) ab_phi = M_PI_2 + cp.calculate_aberration(s, a);	// Aberrations (CTF)
+
+	map<string, double>	f;
+	
+	for ( auto sc: scat )
+		f[sc.first] = ((1.0-w)*sc.second[i] + w*sc.second[i+1]);
+
+    for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for( comp = mp->comp; comp; comp = comp->next ) if ( compsel < 0 || comp->select() == compsel ){
+			cel = comp->element();
+			if ( f.find(cel) == f.end() ) {
+				cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+			} else {
+				phi = MIN2PI*uvw.scalar(comp->location());			// Phase shift
+				if ( ab_flag ) phi += ab_phi;						// Aberrations (CTF)
+				sf += complex_polar(comp->density()*f[cel], phi);
+			}
+		}
+	}
+	
+	return sf;
+}
+
+int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
+				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, int ewald_flag, bool ab_flag)
+{
+	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
+	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+
+	if ( verbose )
+		cout << "Number of structure factors:    " << nsf << endl << endl;
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(p->image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		if ( uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_from_model(model, compsel, uvw, scat, ds, cp, ewald_flag, ab_flag);
+			p->set(i, cv);
+			dispatch_sync(myq, ^{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			});
+		}
+	});
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<p->image_size(); ++i ) {
+		Vector3<double>		uvw = p->fspace_coordinates(i);
+		if ( uvw.length() <= smax ) {
+			Complex<double>	cv = structure_factor_from_model(model, compsel, uvw, scat, ds, cp, ewald_flag, ab_flag);
+			p->set(i, cv);
+#pragma omp critical
+			{
+				nd++;
+				cout << " " << nd << "/" << nsf << " (" << nd*100.0/nsf << " %)" << "\r" << flush;
+			}
+		}
+	}
+	if ( verbose )
+		cout << endl << "Number of structure factors:    " << nd << endl << endl;
+#endif
+
+	return 0;
+}
+
+
+// Old code with serious performance issues
+/*
+	The new structure factors are added to the input image.
+*/
+int			structure_factors_for_one_component(Bcomponent* comp, Bimage* p,
+				vector<double>& scurve, double ds, double smax)
+{
+	long			i, t, xx, yy, zz;
+	double			ids(1/ds), s, s2, smax2(smax*smax), sx, sy, sz, sx2, sy2, sz2;
+	double			f1, f, phi;
+	Vector3<long>	h((p->size()+1)/2);
+	
+//	cout << comp->identifier() << " start" << endl;
+	
+	for ( i=zz=0; zz<p->sizeZ(); ++zz ) {
+		sz = ( zz < h[2] )? zz: zz - p->sizeZ();
+		sz /= p->real_size()[2];
+		sz2 = sz*sz;
+		for ( yy=0; yy<p->sizeY(); ++yy ) {
+			sy = ( yy < h[1] )? yy: yy - p->sizeY();
+			sy /= p->real_size()[1];
+			sy2 = sy*sy;
+			for ( xx=0; xx<p->sizeX(); ++xx, ++i ) {
+				sx = ( xx < h[0] )? xx: xx - p->sizeX();
+				sx /= p->real_size()[0];
+				sx2 = sx*sx;
+				s2 = sx2 + sy2 + sz2;
+				if ( s2 <= smax2 ) {
+					s = ids*sqrt(s2);		// Sampling relative to the scattering curve
+					t = long(s);
+					if ( t >= scurve.size() )
+						cerr << "Error: index " << t << " larger than vector size " << scurve.size() << endl;
+					f1 = s - t;				// Fraction for interpolation
+					f = comp->density()*((1-f1)*scurve[t] + f1*scurve[t+1]);		// Amplitude
+					phi = MIN2PI*(sx*comp->location()[0] + sy*comp->location()[1] + sz*comp->location()[2]);	// Phase shift
+					p->add(i, complex_polar(f, phi));
+				}
+			}
+		}
+	}
+
+//	cout << comp->identifier() << " done" << endl;
+
+	return 1;
+}
+
+/*
+	The input image is not modified
+*/
+Bimage*		img_structure_factors_for_one_component(Bcomponent* comp, Bimage* p,
+				vector<double>& scurve, double ds, double smax)
+{
+	Bimage*			pone = new Bimage(Float, TComplex, p->size(), 1);
+	pone->sampling(p->image->sampling());
+	
+	if ( scurve.size() < smax/ds )
+		cerr << "Error: The scattering curve is too small! size = " << scurve.size() << endl;
+
+	structure_factors_for_one_component(comp, pone, scurve, ds, smax);
+
+	return pone;
+}
+
+/**
+@brief 	Calculates the 3D potential from a set of atomic coordinates.
+@param	*model			atomic model (only the first one is used).
+@param	*p				3D image to recieve the result.
+@param	atompropfile	file name for component properties.
+@param	hires			high resolution limit for calculation.
+@param	density			material density.
+@param	density_units	density units.
+@return	double			mean inner potential.
+
+**/
+double		img_potential_from_model(Bmodel* model, Bimage* p,
+				string atompropfile, double hires, double density, DensityUnit density_units)
+{
+	if ( hires < p->sampling(0)[0] ) hires = p->sampling(0)[0];
+	double			smax(1.0/hires);
+	
+	double			ds(1.0/p->real_size()[0]);
+	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
+	
+	Bmaterial		material = material_from_model(model, atompropfile, density, density_units);
+	
+	if ( verbose ) {
+		cout << "Calculating structure factors:" << endl;
+		cout << "Atomic properties file:         " << atompropfile << endl;
+		cout << "Size:                           " << p->size() << tab << p->images() << endl;
+		cout << "Physical size:                  " << p->real_size() << " A" << endl;
+		cout << "High resolution limit:          " << hires << " A (" << smax << " 1/A)" << endl;
+		cout << "Scatter curve sampling & size:  " << ds << tab << long(1.1*smax/ds) << endl;
+		cout << "Scale:                          " << scale << " A2" << endl;
+		cout << endl;
+	}
+	
+	map<string, vector<double>>	scat = calculate_elastic_scattering_curves(material.composition(), ds, 1.2*smax);
+	
+	if ( verbose & VERB_DEBUG )
+		show_scattering_curve_counts(scat);
+	
+	vector<Bcomponent*>	carr = models_get_component_array(model);
+	long				ncomp(carr.size());
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(ncomp, dispatch_get_global_queue(0, 0), ^(size_t i){
+		string				cel = carr[i]->element();
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>	scurve = scat.at(cel);
+			Bimage*			pone = img_structure_factors_for_one_component(carr[i], p, scurve, ds, smax);
+			dispatch_sync(myq, ^{
+				img_add_fast(p, pone);
+				delete pone;
+				nd++;
+				cout << " " << nd << "/" << ncomp << "\r" << flush;
+			});
+		}
+	});
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<ncomp; ++i ) {
+		string				cel = carr[i]->element();
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>	scurve = scat.at(cel);
+//			vector<Complex<float>>	v = scatter_one_uv(carr[i], p, scurve, cp, ds, scut, flag);
+			Bimage*			pone = img_structure_factors_for_one_component(carr[i], p, scurve, ds, smax);
+#pragma omp critical
+			{
+				img_add_fast(p, pone);
+				delete pone;
+				nd++;
+				cout << " " << nd << "/" << ncomp << "\r" << flush;
+			}
+		}
+	}
+#endif
+
+	scale *= density/model_mass(model);
+	p->multiply(scale);
+
+	long		i(0);
+	double		mip = (*p)[i];
+	
+	if ( verbose ) {
+		cout << "Model mass:                     " << model_mass(model) << " Da" << endl;
+		cout << "Density:                        " << density << " Da/A3" << endl;
+		cout << "Mean inner potential:           " << mip << " V" << endl << endl;
+	}
+	
+	return mip;
+}
+
+/*
+	The new structure factors are added to the input image.
+*/
+/*int			scatter_one_uv(Bcomponent* comp, Bimage* p,
+				vector<double>& scurve, CTFparam cp, double ds, double scut, int flag)
+{
+	bool			ab(flag&1), ew(flag&2);
+	long			i, t, xx, yy;
+	double			ids(1/ds), s, s2, sc2(scut*scut), sx, sy, sx2, sy2;
+	double			f1, f, phi, pilz(0);
+	Vector3<long>	h((p->size()+1)/2);
+	
+//	if ( ab ) cp.defocus_average(cp.defocus_average() + comp->location()[2]);
+
+	if ( ew ) pilz = M_PI*cp.lambda()*comp->location()[2];	// Ewald sphere phase shift prefactor
+
+	for ( i=yy=0; yy<p->sizeY(); ++yy ) {
+		sy = ( yy < h[1] )? yy: yy - p->sizeY();
+		sy /= p->real_size()[1];
+		sy2 = sy*sy;
+		for ( xx=0; xx<p->sizeX(); ++xx, ++i ) {
+			sx = ( xx < h[0] )? xx: xx - p->sizeX();
+			sx /= p->real_size()[0];
+			sx2 = sx*sx;
+			s2 = sx2 + sy2;
+			if ( s2 <= sc2 ) {
+				s = ids*sqrt(s2);		// Sampling relative to the scattering curve
+				t = long(s);
+				f1 = s - t;				// Fraction for interpolation
+				f = comp->density()*((1-f1)*scurve[t] + f1*scurve[t+1]);		// Amplitude
+				phi = MIN2PI*(sx*comp->location()[0] + sy*comp->location()[1]);	// Phase shift
+				if ( pilz ) phi -= pilz*s2;					// Ewald sphere phase shift
+//				if ( ab ) f *= cp.calculate(s2, atan2(sy,sx));		// Aberrations (CTF)
+				if ( ab ) phi += M_PI_2 + cp.delta_phi(s2, atan2(sy,sx));		// Aberrations (CTF)
+//				p->add(i, Complex<float>(f*cosl(phi), f*sinl(phi)));
+				p->add(i, complex_polar(f, phi));
+			}
+		}
+	}
+
+	return 1;
+}
+*/
+
+/*
+	The input image is not modified
+*/
+/*Bimage*		scatter_one_img(Bcomponent* comp, Bimage* p,
+				vector<double>& scurve, CTFparam cp, double ds, double scut, int flag)
+{
+	Bimage*			pone = new Bimage(Float, TComplex, p->size(), 1);
+	pone->sampling(p->image->sampling());
+
+	scatter_one_uv(comp, pone, scurve, cp, ds, scut, flag);
+
+	return pone;
+}
+
+
+Bimage*		scatter_to_img(const vector<Bcomponent*>& carr, long ib, long ie, Bimage* p,
+				map<string, vector<double>>& scat, CTFparam& cp, double ds, double scut, int flag)
+{
+	long			ic;
+	Bcomponent*		comp;
+	string			cel;
+
+	Bimage*			pone = new Bimage(Float, TComplex, p->size(), 1);
+
+	for ( ic=ib; ic<ie; ++ic ) {
+		comp = carr[ic];
+		
+		cel = comp->element();
+		
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>&	scurve = scat.at(cel);
+			
+			scatter_one_uv(comp, pone, scurve, cp, ds, scut, flag);
+		}
+	}
+
+	return pone;
+}
+*/
+
+/*
+Bimage*		scatter_slice_to_img(const vector<Bcomponent*>& carr, Bimage* p,
+				map<string, vector<double>>& scat, CTFparam& cp, double ds, double scut, int flag)
+{
+	Bimage*			pone = new Bimage(Float, TComplex, p->size(), 1);
+
+	if ( verbose & VERB_DEBUG ) {
+		cout << "Scattering curves: " << scat.size() << endl;
+		for ( auto it = scat.begin(); it != scat.end(); ++it )
+			cout << it->first << endl;
+	}
+
+	for ( auto comp: carr ) {
+		string		cel = comp->element();
+		
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>&	scurve = scat.at(cel);
+			
+			scatter_one_uv(comp, pone, scurve, cp, ds, scut, flag);
+		}
+	}
+
+	return pone;
+}
+*/
+
+/*
+int			img_electron_scattering(Bmodel* model, Bimage* p,
+				CTFparam& cp, double dose, double stdev, map<string, vector<double>>& scat, double ds, double scut, int flag)
+{
+	if ( dose && stdev ) model_random_displace_number(model, dose, stdev);
+
+	vector<Bcomponent*>	carr = models_get_component_array(model);
+	long				ncomp(carr.size());
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(ncomp, dispatch_get_global_queue(0, 0), ^(size_t i){
+		string				cel = carr[i]->element();
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>	scurve = scat.at(cel);
+//			__block vector<Complex<float>>	v = scatter_one_uv(carr[i], p, scurve, cp, ds, scut, flag);
+			Bimage*			pone = scatter_one_img(carr[i], p, scurve, cp, ds, scut, flag);
+			dispatch_sync(myq, ^{
+//				img_add(p, v);
+				img_add_fast(p, pone);
+				nd++;
+				cout << " " << nd << "/" << ncomp << "\r" << flush;
+			});
+		}
+	});
+#else
+	long			nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<ncomp; ++i ) {
+		string				cel = carr[i]->element();
+		if ( scat.find(cel) == scat.end() ) {
+			cerr << "Warning: Scattering curve for element " << cel << " not found!" << endl;
+		} else {
+			vector<double>	scurve = scat.at(cel);
+//			vector<Complex<float>>	v = scatter_one_uv(carr[i], p, scurve, cp, ds, scut, flag);
+			Bimage*			pone = scatter_one_img(carr[i], p, scurve, cp, ds, scut, flag);
+#pragma omp critical
+			{
+//				img_add(p, v);
+				img_add_fast(p, pone);
+				nd++;
+				cout << " " << nd << "/" << ncomp << "\r" << flush;
+			}
+			delete pone;
+		}
+	}
+#endif
+
+	return 0;
+}
+*/
+
+/*
+int			img_electron_scattering_chunks(Bmodel* model, Bimage* p,
+				CTFparam& cp, double dose, double stdev, map<string, vector<double>>& scat, double ds, double scut, int flag)
+{
+	if ( dose && stdev ) model_random_displace_number(model, dose, stdev);
+
+	vector<Bcomponent*>	carr = models_get_component_array(model);
+	long				ncomp(carr.size());
+	long				nc(100), n(ncomp/nc+1);
+	
+	cout << ncomp << tab << nc << tab << n << endl;
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(nc, dispatch_get_global_queue(0, 0), ^(size_t i){
+		long			j = ((i+1)*n<ncomp)? (i+1)*n: ncomp;
+		Bimage*			pone = scatter_to_img(carr, i*n, j, p, scat, cp, ds, scut, flag);
+		dispatch_sync(myq, ^{
+			img_add_fast(p, pone);
+			nd += j-i*n;
+			cout << " " << nd << "/" << ncomp << "\r" << flush;
+		});
+	});
+#else
+	long				nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<ncomp; i+=n ) {
+		long			j = (i+n<ncomp)? i+n: ncomp;
+		Bimage*			pone = scatter_to_img(carr, i, j, p, scat, cp, ds, scut, flag);
+#pragma omp critical
+		{
+			img_add_fast(p, pone);
+			nd += j-i;
+			cout << " " << nd << "/" << ncomp << "\r" << flush;
+		}
+		delete pone;
+	}
+#endif
+
+	return 0;
+}
+*/
+
+/*
+	Takes the input number of sub-images as the number of slices
+*/
+/*int			img_electron_scattering_slices(Bmodel* model, Bimage* p, CTFparam& cp,
+				map<string, vector<double>>& scat, double ds, double scut, int flag)
+{
+	vector<Vector3<double>>	bounds = models_calculate_bounds(model);
+	double				thickness(p->image->sampling()[2]);
+	double				bottom(bounds[0][2]);
+	double				top(p->images()*thickness + bottom);
+	vector<vector<Bcomponent*>>	comp_slice = model_split_into_slices(model, bottom, top, thickness);
+
+#ifdef HAVE_GCD
+	__block long		nd(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(p->images(), dispatch_get_global_queue(0, 0), ^(size_t i){
+		Bimage*			pone = scatter_slice_to_img(comp_slice[i], p, scat, cp, ds, scut, flag);
+		dispatch_sync(myq, ^{
+			p->replace(i, pone);
+			nd++;
+			cout << " " << nd << "/" << p->images() << "\r" << flush;
+		});
+		delete pone;
+	});
+#else
+	long				nd(0);
+#pragma omp parallel for
+	for ( long i=0; i<p->images(); ++i ) {
+		Bimage*			pone = scatter_slice_to_img(comp_slice[i], p, scat, cp, ds, scut, flag);
+#pragma omp critical
+		{
+			p->replace(i, pone);
+			nd++;
+			cout << " " << nd << "/" << p->images() << "\r" << flush;
+		}
+		delete pone;
+	}
+#endif
+
+	return 0;
+}*/
+
+
+/**
+@brief 	Calculates a 3D set of structure factors from a set of atomic coordinates.
+@param	*model			atomic model (only the first one is used).
+@param	compsel			component selection (starts at 1).
+@param	*p				2D image to recieve the result.
+@param	&cp				CTF parameters.
+@param	dose			dose/fluence in e/Å2.
+@param	stdev			standard deviation for atomic position variation.
+@param	atompropfile	file name for component properties.
+@param	ewald_flag		ewald sphere: 1=up, 2=down, 3=combine.
+@param	ab_flag			apply aberrations.
+**/
+int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
+				CTFparam& cp, double dose, double stdev, string atompropfile, int ewald_flag, bool ab_flag)
+{
+	if ( dose ) (*p)["dose"] = dose;	// Dose per frame
+
+	double			scut = cp.frequency_cutoff();
+	double			ds(1/p->real_size()[0]);
+	double			smax(1.2*scut);
+/*	double			area = model->projected_area();
+	
+	if ( area < 1 ) {
+		cerr << "Error: The projected area is too small! (" << area << ")" << endl;
+		bexit(-1);
+	}
+*/
+	vector<Vector3<double>>	bounds = models_calculate_bounds(model);
+
+	Bmaterial		material = material_from_model(model, atompropfile, RHO, DA_A3);
+
+	double			csin = material.inelastic_cross_section(cp.volt());
+
+	double			teff = model_effective_thickness(model, cp.volt());
+
+	if ( verbose ) {
+		cout << "Calculating structure factors:" << endl;
+		cout << "Component selection:            " << compsel << endl;
+		cout << "Atomic properties file:         " << atompropfile << endl;
+		cout << "Size:                           " << p->size() << tab << p->images() << endl;
+		cout << "Physical size:                  " << p->real_size() << " A" << endl;
+//		cout << "Projected area:                 " << area << " A2" << endl;
+		cout << "Dose:                           " << dose << " e/A2/frame (" << stdev << " A2)" << endl;
+		cout << "Inelastic cross section:        " << csin << " A2" << endl;
+		cout << "Frequency cutoff:               " << scut << " /A (" << 1/scut << " A)" << endl;
+		cout << "Thickness:                      " << bounds[1][2] - bounds[0][2] << " A" << endl;
+		cout << "Effective thickness:            " << teff << " A" << endl;
+		cout << "Ewald sphere flag:              " << ewald_flag << endl;
+		cout << "Aberration flag:                " << ab_flag << endl;
+		cp.show();
+		cout << endl;
+	}
+	
+	map<string, vector<double>>	scat = calculate_elastic_scattering_curves(material.composition(), ds, smax);
+	
+	if ( verbose & VERB_DEBUG )
+		show_scattering_curve_counts(scat);
+		
+	Bimage*			p1;
+	long			nam(0);
+	double			msd(0);
+	double			scale = cp.lambda()*lorentz(cp.volt());
+//	double			potscale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
+//	scale = potscale;
+//	scale /= p->real_size().volume();
+	scale /= sqrt(p->sizeX()*p->sizeY());
+//	scale /= model_component_count(model);
+	
+	if ( dose && stdev ) {
+		for ( long nn=0; nn<p->images(); ++nn ) {
+			if ( verbose )
+				cout << "Calculating image " << nn+1 << endl;
+			p1 = p->extract(nn);
+			img_electron_scattering(model, compsel, p1, cp, scat, ds, scut, ewald_flag, ab_flag);
+//			nam = dose*area;
+			nam = dose*csin;
+			p->replace(nn, p1);
+			if ( verbose )
+				cout << "Atoms displaced:                " << nam << " atoms" << endl;
+			msd = model_random_displace_number(model, nam, stdev, 1);
+			if ( verbose )
+				cout << "Mean square displacement:       " << msd << " A2" << endl;
+		}
+/*	} else if ( p->images() > 1 ) {
+//		img_electron_scattering_slices(model, p, cp, scat, ds, scut, ewald_flag, ab_flag);
+		vector<Vector3<double>>	bounds = models_calculate_bounds(model);
+		double				thickness(p->image->sampling()[2]);
+		double				bottom(bounds[0][2]);
+		double				top(p->images()*thickness + bottom);
+		vector<Bmodel*>		model_slice = model_split_into_slice_models(model, bottom, top, thickness);
+		model_select_slices
+		for ( long nn=0; nn<p->images(); ++nn ) {
+			if ( verbose )
+				cout << "Calculating image " << nn+1 << endl;
+			p1 = p->extract(nn);
+			img_electron_scattering(model, nn+1, p1, cp, scat, ds, scut, ewald_flag, ab_flag);
+			p->replace(nn, p1);
+		}*/
+	} else if ( p->sizeZ() > 1 ) {
+//		img_ewald_sphere_envelope(model, compsel, p, scut, teff, cp.volt(), ewald_flag);
+		img_ewald_sphere(model, compsel, p, cp, scat, ds, smax, teff, ewald_flag, ab_flag);
+	} else {
+		img_electron_scattering(model, compsel, p, cp, scat, ds, scut, ewald_flag, ab_flag);
+	}
+
+	long		i(0);
+	double		mip = POTPREFAC*RHO*(*p)[i]/model_mass(model);
+	
+	if ( verbose ) {
+		cout << scientific << "Potential scale:                " << POTPREFAC << endl;
+		cout << scientific << "Scale:                          " << scale << endl << endl;
+	}
+	p->multiply(scale);
+	
+	if ( verbose ) {
+		cout << "Model mass:                     " << model_mass(model) << " Da" << endl;
+		cout << "Mean inner potential:           " << mip << " V" << endl << endl;
+	}
+
+	return 0;
+}
+

@@ -514,7 +514,7 @@ Bmolgroup*	molgroup_consolidate_alpha(Bmolgroup* molgroup)
 	// Generate a new set of helices
 	molgroup = molgroup_init();
 	Bmolecule*		molalpha = NULL;
-	View			view;
+	View2<double>	view;
 	Vector3<double>	origin;
 	char			molname = 'A';
 	
@@ -522,8 +522,8 @@ Bmolgroup*	molgroup_consolidate_alpha(Bmolgroup* molgroup)
 		d = max[j].distance(min[j]);
 		molalpha = mol_generate_alpha_helix(14 + (int)(d/1.5));
 		mol_shift_to_center_of_mass(molalpha);
-//		view = View(ma[j][0], ma[j][1], ma[j][2], 0);
-		view = View(-ma[j][0], -ma[j][1], ma[j][2], 0);
+//		view = View2<double>(ma[j][0], ma[j][1], ma[j][2], 0);
+		view = View2<double>(-ma[j][0], -ma[j][1], ma[j][2], 0);
 		newmol = mol_rotate_to_view(molalpha, view, origin, mc[j]);
 		newmol->id[0] = molname;
 		if ( !molgroup->mol ) molgroup->mol = newmol;

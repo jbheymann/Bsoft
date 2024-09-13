@@ -12,7 +12,6 @@
 #include "mg_select.h"
 #include "mg_ctf.h"
 #include "Complex.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "timer.h"
 
@@ -69,7 +68,7 @@ Bimage*		mg_tomo_rec_prepare(Bmicrograph* mg, int ft_size, Vector3<long> rec_siz
 			bexit(-1);
 		}
 		img_ttf_apply(p, *(mg->ctf), action, wiener,
-				tile_size, mg->tilt_angle, mg->tilt_axis, 0, 0);
+				tile_size, mg->tilt_angle, mg->tilt_axis, 0, 0, 0);
 	}
 	
 	if ( edge_width )
@@ -174,7 +173,7 @@ Bimage*		project_tomo_reconstruct(Bproject* project, double hi_res,
 	double			rec_scale = 2*mg->pixel_size[0]/(scale*hi_res);
 	if ( rec_scale > 1 ) rec_scale = 1;
 	double			voxel_size(mg->pixel_size[0]/(scale*rec_scale));
-	Vector3<double>	vscale(rec_scale*scale, rec_scale*scale, rec_scale*scale);
+	Vector3<double>	vscale(rec_scale*scale, rec_scale*scale, 0);
 	Vector3<long>	rec_size = size*rec_scale;
 	long   			ds = rec_size.volume();
 
@@ -232,8 +231,8 @@ Bimage*		project_tomo_reconstruct(Bproject* project, double hi_res,
 			if ( p ) {
 				if ( verbose )
 					cout << "Packing " << p->file_name() << " (" << mg->img_num << ")" << endl;
-				prec->fspace_pack_2D(p, mg->matrix, hi_res, 0, vscale, 1/pad_ratio, interp_type);
-//				prec->fspace_pack_2D(p, mg->matrix, hi_res, 0, vscale, 1, interp_type);
+				prec->fspace_pack_2D(p, mg->matrix, hi_res, 0, vscale, 0, 1/pad_ratio, interp_type);
+//				prec->fspace_pack_2D(p, mg->matrix, hi_res, 0, vscale, 0, 1, interp_type);
 				delete p;
 			}
 		}
@@ -341,7 +340,7 @@ Bimage*		project_fourier_reconstruction_slab(Bproject* project, double hi_res,
 	Bimage* 		p = NULL;
 
 	long			nmg = project_count_mg_selected(project);
-	long			nfld = count_list((char *) project->field);
+	long			nfld = project->field->count();
 	long 			nrec(0);
 	
 	if ( nmg < 1 ) {
@@ -588,7 +587,7 @@ long		particle_tomo_reconstruct(Bproject* project, Bparticle* recpart,
 	}
 
 	Bimage*				prec = particle_reconstruct(partlist, sym, 0,
-							resolution, scale, recsize, ft_size, planp, 
+							resolution, scale, partlist->pixel_size, recsize, ft_size, planp, 
 							interp_type, ctf_action, wiener, 0, 0);
 	
 	long				nr = prec->image->FOM();
@@ -603,7 +602,7 @@ long		particle_tomo_reconstruct(Bproject* project, Bparticle* recpart,
 //	prec->change_type(newdatatype);
 	write_img(filename, prec, 0);
 	recpart->fpart = filename;
-	recpart->view = View(0,0,1,0);
+	recpart->view = View2<double>(0,0,1,0);
 	recpart->ori = prec->image->origin();
 		
 	delete prec;
@@ -781,7 +780,7 @@ int			img_backtransform_slices(Bimage* p)
 			cout << "Shifting and backtransforming slice " << z << endl;
 		extorigin[2] = z;
 		ps = p->extract(0, extorigin, extsize);
-		ps->fft(FFTW_BACKWARD, 1);
+		ps->fft(FFTW_BACKWARD, 1, Real);
 		for ( i=z*slice_size, j=0; j<slice_size; i++, j++ ) p->set(i, (*ps)[j]);
 		delete ps;
 	}

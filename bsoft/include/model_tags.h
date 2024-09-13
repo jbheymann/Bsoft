@@ -1,9 +1,9 @@
 /**
 @file	model_tags.h
 @brief	All STAR and XML file format tags for models
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000419
-@date	Modified: 20210219
+@date	Modified: 20230706
 **/
 
 // Do not change the constant names because they are referenced in code
@@ -41,8 +41,10 @@
 #define COMPONENT_BLUE			"component.blue"
 #define COMPONENT_ALPHA			"component.alpha"
 #define COMPONENT_DENSITY		"component.density"
+#define COMPONENT_CHARGE		"component.charge"
 #define COMPONENT_FOM			"component.fom"
 #define COMPONENT_SELECT		"component.select"
+#define COMPONENT_DESCRIPTION	"component.description"
 
 // Multi-molecular model component types
 #define COMPTYPE				"component_type"
@@ -51,6 +53,7 @@
 #define COMPTYPE_MAP_NUMBER		"component_type.map_number"	// Deprecated
 #define COMPTYPE_NUMBER			"component_type.number"
 #define COMPTYPE_MASS			"component_type.mass"
+#define COMPTYPE_CHARGE			"component_type.charge"
 #define COMPTYPE_FOM			"component_type.fom"
 #define COMPTYPE_SELECT			"component_type.select"
 

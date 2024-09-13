@@ -3,7 +3,7 @@
 @brief	View object
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20210205
+@date	Modified: 20230524
 **/
 
 #ifndef _View2_
@@ -13,6 +13,7 @@
 #include "Matrix3.h"
 #include "Quaternion.h"
 #include "random_numbers.h"
+#include "json.h"
 #include "utilities.h"
 
 /************************************************************************
@@ -178,6 +179,18 @@ public:
 		double		d = 1 - cos(a - view.a);
 		return sqrt((v - view.v).length2() + d*d)/2;
 	}
+	long		find_closest(vector<View2<double>>& views) {
+		long		i, closest(0);
+		double		a, amin(M_PI);
+		for ( i=0; i<views.size(); ++i ) {
+			a = angle(views[i]);
+			if ( amin > a ) {
+				amin = a;
+				closest = i;
+			}
+		}
+		return closest;
+	}
 } ;
 
 //template <typename Type>
@@ -189,20 +202,19 @@ ostream& operator<<(ostream& output, View2<double> v);
 #endif
 
 // Function prototypes
-/*int			show_views(View* v);
-View*		view_array(View* views, long& n);
-View* 		tilt_views(double ang_min, double ang_max, double ang_step, double axis);*/
-/*View		view_random_reslice();
-View*		random_views(int nviews);
-double		random_view_error(View& v, double std);
-View*		views_within_limits(View theview, double theta_step, double phi_step,
-					double alpha_step, double view_angle_limit, double alpha_angle_limit);*/
-list<View2<float>>	views_within_limits2(View2<float> theview, double theta_step, double phi_step,
+int			show_views(vector<View2<float>>& views);
+int			show_views(vector<View2<double>>& views);
+View2<double>			random_view();
+View2<double>			view_random_reslice();
+vector<View2<double>>	random_views(long nviews);
+double		random_view_error(View2<double>& v, double std);
+vector<View2<double>>	tilt_views(double ang_min, double ang_max, double ang_step, double axis);
+vector<View2<double>>	views_within_limits(View2<double> theview, double theta_step, double phi_step,
 					double alpha_step, double view_angle_limit, double alpha_angle_limit);
-/*View*		views_for_refinement(View theview, double alpha_step);
-View*		views_for_refinement(View theview, double alpha_step1, double alpha_step2,
-				double alpha_step3, double max_alpha3);
-View*		view_list_expand_angles(View* views, double amin, double amax, double astep);
-int			view_list_subset(View** view_list, int start, int size);
-*/
+vector<View2<double>>	view_list_expand_angles(vector<View2<double>> views, double amin, double amax, double astep);
+vector<View2<double>>	view_list_subset(vector<View2<double>>& view_list, int start, int size);
+vector<View2<double>>	views_for_refinement(View2<double> theview, double alpha_step);
+JSvalue		js_views(vector<View2<double>>& views);
+//View*		view_array(View* views, long& n);
+
 

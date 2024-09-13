@@ -3,10 +3,10 @@
 @brief	Header file for general utilities 
 @author Bernard Heymann
 @date	Created: 19990722
-@date	Modified: 20210721
+@date	Modified: 20220713
 **/
 
-#define BVERSION "2.1.3-20211110"
+#define BVERSION "2.3.0-20240911"
 
 #include <stdio.h>
 #include <string.h>
@@ -20,6 +20,7 @@
 #include <cfloat>
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <iomanip>
 #include <vector>
 #include <map>
@@ -51,11 +52,14 @@ using namespace std;
 #define TRIGPRECISION		1e-30
 
 // Physical constants
-#define PLANCK				6.626070E-34	// Js
-#define	ECHARGE				1.602177E-19	// C
-#define EMASS				9.109384E-31	// kg
-#define LIGHTSPEED			299792458		// m/s
-#define	AVOGADRO			6.02214076e23	// Entities per mole
+#define PLANCK			6.626070E-34	// Js
+#define	ECHARGE			1.602177E-19	// C
+#define EMASS			9.109384E-31	// kg
+#define LIGHTSPEED		299792458		// m/s
+#define COULOMB			1e-7*LIGHTSPEED*LIGHTSPEED		// Coulomb's constant in Nm2/C2
+#define	AVOGADRO		6.02214076e23	// Entities per mole
+//#define	POTPREFAC	47.87801	// Atomic potential prefactor K = h^2 / (2*PI*e*mo)
+#define	POTPREFAC		1e20*PLANCK*PLANCK/(2*M_PI*ECHARGE*EMASS)	// Atomic potential prefactor h^2 / (2*PI*e*mo)
 
 /************************************************************************
 @Constant: M_PI
@@ -93,9 +97,11 @@ using namespace std;
 @Constant: RHO
 @Description:
 	Protein density.
+	@ref	Perkins, S. J. (1986). "Protein volumes and hydration effects. The calculations of partial specific volumes, neutron scattering matchpoints and 280-nm absorption coefficients for proteins and glycoproteins from amino acid sequences." Eur J Biochem 157(1): 169-180. https://doi.org/10.1111/j.1432-1033.1986.tb09653.x
+
 *************************************************************************/
 #ifndef RHO 
-#define RHO 		0.81    	// Protein density in Da/A3
+#define RHO 		0.83    	// Protein density in Da/A3
 #endif 
 //end
 
@@ -231,6 +237,7 @@ void		swapbytes(unsigned char* v, size_t n);
 void		swapbytes(size_t size, unsigned char* v, size_t n);
 void		vax2ieee(unsigned char* v, int sb);
 double		angle_set_negPI_to_PI(double angle);
+double		angle_set_0_to_TWOPI(double angle);
 float		remove_negative_zeros(float value0, float threshold);
 size_t		get_chunk_size(size_t datasize);
 size_t		get_chunk_size(size_t datasize, size_t c);

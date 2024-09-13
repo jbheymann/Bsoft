@@ -1,9 +1,9 @@
 /**
 @file	Bimage_fft.cpp
 @brief	General FFT for n-dimensional data
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19980805
-@date	Modified: 20150719
+@date	Modified: 20240528
 
 		Implementing the FFTW3 library
 **/
@@ -28,45 +28,23 @@ extern int 	verbose;		// Level of output to the screen
 **/
 fft_plan	Bimage::fft_setup(fft_direction dir, int opt)
 {
+	if ( dir == FFTW_FORWARD ) {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	} else {
+		fourier_type(NoTransform);
+		metadata["type"] = "Complex";
+	}
+
 	return fft_setup_plan(size(), dir, opt);
 }
 
 /**
 @brief 	Fast Fourier transforms an image.
 @param 	dir			direction of transformation (FFTW_FORWARD or FFTW_BACKWARD)
-@return int 		error code.
-
-	FFTW library (www.fftw.org).
-	A multi-image 1D, 2D and 3D data set is transformed forward or backward 
-	and rescaled by 1/sqrt(N).  The forward transformation has a negative 
-	signed exponent in the kernel and the backward transform a positive
-	sign. The transformation is done in place and the resultant data are 
-	returned within the original image structure.  For forward transforms, 
-	the resultant data type is complex float, while for backward transforms, 
-	it is Float.
-
-**/
-int 		Bimage::fft(fft_direction dir)
-{
-	if ( fft(dir, 1) )
-		return error_show("Bimage::fft", __FILE__, __LINE__);
-		
-	if ( dir == FFTW_BACKWARD ) {
-		fourier_type(NoTransform);
-		complex_to_real();
-	}
-	
-	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG Bimage::fft: datatype=" << datatype << " compoundtype=" << compoundtype << endl;
-	
-	return 0;
-}
-
-/**
-@brief 	Fast Fourier transforms an image.
-@param 	dir			direction of transformation (FFTW_FORWARD or FFTW_BACKWARD)
 @param 	norm_flag	normalization: 0=none, 1=sqrtN, 2=N.
-@return int 		error code.
+@param 	conv		a flag for converting after transform.
+@return int 			error code.
 
 	FFTW library (www.fftw.org).
 	A multi-image 1D, 2D and 3D data set is transformed forward or backward 
@@ -77,14 +55,14 @@ int 		Bimage::fft(fft_direction dir)
 	For both directions the resultant image is complex.
 
 **/
-int 		Bimage::fft(fft_direction dir, bool norm_flag)
+int 		Bimage::fft(fft_direction dir, int norm_flag, ComplexConversion conv)
 {
 	if ( !d.uc )
 		return error_show("Error in Bimage::fft: Cannot Fourier transform - the data block is empty!", __FILE__, __LINE__);
 	
 	if ( c < 3 ) {
-		simple_to_complex();
 		change_type(Float);
+		simple_to_complex();
 	} else if ( c > 2 ) {
 		multi_channel_to_complex();
 	}
@@ -106,6 +84,7 @@ int 		Bimage::fft(fft_direction dir, bool norm_flag)
     	cout << "Complex size:                   " << sizeof(fft_complex) << endl;
     	cout << "Image size:                     " << size() << endl;
     	cout << "Number of images:               " << n << endl;
+   		cout << "Normalization:                  " << norm_flag << endl;
 		cout << endl;
 	}
 
@@ -151,12 +130,16 @@ int 		Bimage::fft(fft_direction dir, bool norm_flag)
 	data_type(Float);
 	compound_type(TComplex);
 	channels(2);
-	fourier_type(Standard);
-	
-//	std = 0;
-//	check();
-	statistics();
-	
+/*	if ( dir == FFTW_FORWARD ) {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	} else {
+		fourier_type(NoTransform);
+		metadata["type"] = "Complex";
+	}
+*/
+	complex_convert(conv);
+
 	return 0;
 }
 
@@ -164,7 +147,8 @@ int 		Bimage::fft(fft_direction dir, bool norm_flag)
 @brief 	Fast Fourier transforms an image.
 @param 	plan		Fourier transform plan.
 @param 	norm_flag	normalization: 0=none, 1=sqrtN, 2=N.
-@return int 		error code.
+@param 	conv		a flag for converting after transform.
+@return int 			error code.
 
 	FFTW library (www.fftw.org).
 	A multi-image 1D, 2D and 3D data set is transformed forward or backward 
@@ -176,7 +160,7 @@ int 		Bimage::fft(fft_direction dir, bool norm_flag)
 	Requirement: The plan must be derived from the same size image.
 
 **/
-int 		Bimage::fft(fft_plan plan, bool norm_flag)
+int 		Bimage::fft(fft_plan plan, int norm_flag, ComplexConversion conv)
 {
 	if ( !d.uc )
 		return error_show("Error in Bimage::fft: Cannot Fourier transform - the data block is empty!", __FILE__, __LINE__);
@@ -197,11 +181,15 @@ int 		Bimage::fft(fft_plan plan, bool norm_flag)
 	}
 
 	if ( verbose & VERB_FULL ) {
+//		if ( dir == FFTW_FORWARD ) cout << "Doing a forward FFT:" << endl;
+//		else cout << "Doing a backward FFT:" << endl;
 #ifdef FFTW_VERSION
 		cout << "Using FFTW:                     Version " << FFTW_VERSION << endl;
 #endif
     	cout << "Complex size:                   " << sizeof(fft_complex) << endl;
     	cout << "Image size:                     " << size() << endl;
+    	cout << "Number of images:               " << n << endl;
+   		cout << "Normalization:                  " << norm_flag << endl;
 		cout << endl;
 	}
 
@@ -227,12 +215,298 @@ int 		Bimage::fft(fft_plan plan, bool norm_flag)
 	data_type(Float);
 	compound_type(TComplex);
 	channels(2);
-	fourier_type(Standard);
+//	fourier_type(Standard);
+//	metadata["type"] = "Fourier transform";
+
+	complex_convert(conv);
+
+	return 0;
+}
+
+/**
+@brief 	Fast Fourier transforms an image (parallel).
+@param 	plan		Fourier transform plan.
+@param 	norm_flag	normalization: 0=none, 1=sqrtN, 2=N.
+@param 	conv		a flag for converting after transform.
+@return int 			error code.
+
+	FFTW library (www.fftw.org).
+	A multi-image 1D, 2D and 3D data set is transformed forward or backward 
+	and optionally rescaled by 1/sqrt(N) or N.  The forward transformation 
+	has a negative signed exponent in the kernel and the backward transform 
+	a positive sign. The transformation is done in place and the resultant 
+	data are returned within the original image structure.
+	For both directions the resultant image is complex.
+	Requirement: The plan must be derived from the same size image.
+
+**/
+int 		Bimage::fftp(fft_plan plan, int norm_flag, ComplexConversion conv)
+{
+	if ( !d.uc )
+		return error_show("Error in Bimage::fft: Cannot Fourier transform - the data block is empty!", __FILE__, __LINE__);
+
+	if ( c < 3 ) {
+		simple_to_complex();
+		change_type(Float);
+	} else if ( c > 2 ) {
+		multi_channel_to_complex();
+	}
+
+    long		   	i, imgsize(x*y*z);
+
+	if ( sizeof(fft_complex) != c*data_type_size() ) {
+		error_show("Error in Bimage::fft_complex", __FILE__, __LINE__);
+		cerr << "The FFTW complex number size = " << sizeof(fft_complex) << " (should be " << c*data_type_size() << ")!" << endl;
+		return -1;
+	}
+
+	if ( verbose & VERB_FULL ) {
+//		if ( dir == FFTW_FORWARD ) cout << "Doing a forward FFT:" << endl;
+//		else cout << "Doing a backward FFT:" << endl;
+#ifdef FFTW_VERSION
+		cout << "Using FFTW:                     Version " << FFTW_VERSION << endl;
+#endif
+    	cout << "Complex size:                   " << sizeof(fft_complex) << endl;
+    	cout << "Image size:                     " << size() << endl;
+    	cout << "Number of images:               " << n << endl;
+   		cout << "Normalization:                  " << norm_flag << endl;
+		cout << endl;
+	}
+
+#ifdef HAVE_GCD
+		if ( verbose & VERB_DEBUG )
+			cout << "DEBUG Bimage::fftp: GCD FFTW3" << endl;
+		dispatch_apply(n, dispatch_get_global_queue(0, 0), ^(size_t nn){
+			Complex<float>* 	data = (Complex<float> *) (data_pointer(2*nn*imgsize));
+			fftw(plan, data);
+		});
+#else
+#ifdef HAVE_OMP
+		if ( verbose & VERB_DEBUG )
+			cout << "DEBUG Bimage::fftp: OpenMP FFTW3" << endl;
+#pragma omp parallel for
+#endif
+		for ( long nn=0; nn<n; nn++ ) {
+			Complex<float>* 	data = (Complex<float> *) (data_pointer(2*nn*imgsize));
+			fftw(plan, data);
+		}
+#endif
+
+	// Scale data
+	double		scale = 1.0L/imgsize;
+	if ( norm_flag == 1 ) scale = sqrt(scale);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::fftp: scale = " << scale << endl;
+	if ( norm_flag )
+		for ( i=0, imgsize *= n; i<imgsize; i++ ) set(i, complex(i) * scale);
 	
-//	std = 0;
-//	check();
-	statistics();
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::fftp: FFT done!" << endl << endl;
 	
+	data_type(Float);
+	compound_type(TComplex);
+	channels(2);
+//	fourier_type(Standard);
+//	metadata["type"] = "Fourier transform";
+
+	complex_convert(conv);
+
+	return 0;
+}
+
+/**
+@brief 	Tiled Fourier transform.
+@param 	dir			direction of transformation (FFTW_FORWARD or FFTW_BACKWARD)
+@param	tile_size	tile size.
+@param 	norm_flag	normalization: 0=none, 1=sqrtN, 2=N.
+@return int 			error code.
+
+	The 2d/3d image is tiled, each tile transformed and phase shifted.
+	The tiles are then averaged and returned as a new image.
+
+**/
+int			Bimage::fft(fft_direction dir, Vector3<long> tile_size, int norm_flag)
+{
+	Vector3<long> 	start, ext_size(size()), step_size;
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Tile size:                      " << tile_size << endl << endl;
+	
+	Bimage* 		pex = extract_tiles(0, start, ext_size, tile_size, step_size, 0);
+	
+	if ( verbose & VERB_FULL )
+		cout << "FFT" << endl;
+	
+	if ( pex->fft(dir, norm_flag) )
+		return -1;
+	
+	if ( verbose & VERB_FULL ) {
+		cout << "Compound type: " << pex->compound_type() << endl;
+		cout << "Shift phases" << endl;
+	}
+	
+	for ( long nn=0; nn<pex->images(); nn++ )
+		pex->phase_shift(nn, -pex->image[nn].origin());
+	
+	if ( verbose & VERB_FULL ) {
+		cout << "#\tOrigin" << endl;
+		for ( long nn=0; nn<pex->images(); nn++ )
+			cout << nn << tab << pex->image[nn].origin() << endl;
+	}
+	
+	pex->statistics();
+	pex->information();
+
+	if ( verbose & VERB_FULL )
+		cout << "Summing images" << endl;
+	pex->sum_images();
+	pex->information();
+
+	size(pex->size());
+	page_size(size());
+	compound_type(TComplex);
+	origin(size()/2);
+/*	if ( dir == FFTW_FORWARD ) {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	} else {
+		fourier_type(NoTransform);
+		metadata["type"] = "Complex";
+	}*/
+
+    data_assign(pex->data_pointer());
+//	pex->data_pointer(NULL);
+	pex->d.uc = NULL;
+//	cout << pex->data_pointer() << endl;
+	delete pex;
+
+	return 0;
+}
+
+/**
+@brief 	Fourier transform only of the xy slices.
+@param 	dir			direction of transformation (FFTW_FORWARD or FFTW_BACKWARD)
+@param 	norm_flag	normalization: 0=none, 1=sqrtXY, 2=XY.
+@return int 			error code.
+
+	Only the xy slices are transformed.
+
+**/
+int			Bimage::fftxy(fft_direction dir, int norm_flag)
+{
+	simple_to_complex();
+	
+//	information();
+	
+	if ( verbose )
+		cout << "Fourier transforming xy slices" << endl << endl;
+	
+	Complex<float>*	data = (Complex<float> *) data_pointer();
+
+	int 			rank(2); 					// 2d transforms
+//	int 			xy[] = {int(x),int(y)}; 	// 2d transforms of size x,y
+	int 			xy[] = {int(y),int(x)}; 	// 2d transforms of size x,y
+	int 			ntr(z);						// number of transforms
+	int 			idist(x*y), odist(x*y);		// distance between first elements of slices
+	int 			istride(1), ostride(1);		// distance between two elements in the same slice
+	int 			*inembed = xy, *onembed = xy;
+	
+	fft_complex*	in = (fft_complex *) data;
+	fft_complex*	out = in;
+	fft_plan		plan = fftwf_plan_many_dft(rank, xy, ntr,
+						in, inembed, istride, idist,
+						out, onembed, ostride, odist, dir, FFTW_ESTIMATE);
+
+	long			i, nn, imgsize(x*y*z);
+	
+	for ( nn=0; nn<n; nn++, data += imgsize ) {
+//		cout << nn << tab << data << endl;
+		fftw(plan, data);
+	}
+
+	fft_destroy_plan(plan);
+
+	// Scale data
+	double		scale = 1.0L/(x*y);
+	if ( norm_flag == 1 ) scale = sqrt(scale);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::fftxy: scale = " << scale << endl;
+	if ( norm_flag )
+		for ( i=0, imgsize *= n; i<imgsize; i++ ) set(i, complex(i) * scale);
+
+	compound_type(TComplex);
+	origin(size()/2);
+	if ( dir == FFTW_FORWARD ) {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	} else {
+		fourier_type(NoTransform);
+		metadata["type"] = "Complex";
+	}
+
+	return 0;
+}
+
+/**
+@brief 	Fourier transform only of the z columns.
+@param 	dir			direction of transformation (FFTW_FORWARD or FFTW_BACKWARD)
+@param 	norm_flag	normalization: 0=none, 1=sqrtZ, 2=Z.
+@return int 			error code.
+
+	Only the z columns are transformed.
+
+**/
+int			Bimage::fftz(fft_direction dir, int norm_flag)
+{
+	simple_to_complex();
+	
+//	information();
+	
+	if ( verbose )
+		cout << "Fourier transforming z columns" << endl << endl;
+	
+	Complex<float>*	data = (Complex<float> *) data_pointer();
+
+	int 			rank(1); 					// 1d transforms
+	int 			zcol[] = {int(z)}; 			// 1d transforms of length z
+	int 			ntr(x*y);					// number of transforms
+	int 			idist(1), odist(1);			// distance between first elements of z columns
+	int 			istride(x*y), ostride(x*y); // distance between two elements in the same column
+	int 			*inembed = zcol, *onembed = zcol;
+	
+	fft_complex*	in = (fft_complex *) data;
+	fft_complex*	out = in;
+	fft_plan		plan = fftwf_plan_many_dft(rank, zcol, ntr,
+						in, inembed, istride, idist,
+						out, onembed, ostride, odist, dir, FFTW_ESTIMATE);
+
+	long			i, nn, imgsize(x*y*z);
+	
+	for ( nn=0; nn<n; nn++, data += imgsize ) {
+//		cout << nn << tab << data << endl;
+		fftw(plan, data);
+	}
+
+	fft_destroy_plan(plan);
+
+	// Scale data
+	double		scale = 1.0L/z;
+	if ( norm_flag == 1 ) scale = sqrt(scale);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::fftz: scale = " << scale << endl;
+	if ( norm_flag )
+		for ( i=0, imgsize *= n; i<imgsize; i++ ) set(i, complex(i) * scale);
+
+	compound_type(TComplex);
+	origin(size()/2);
+	if ( dir == FFTW_FORWARD ) {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	} else {
+		fourier_type(NoTransform);
+		metadata["type"] = "Complex";
+	}
+
 	return 0;
 }
 

@@ -15,7 +15,6 @@
 #include "model_util.h"
 #include "math_util.h"
 #include "utilities.h"
-#include "linked_list.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen

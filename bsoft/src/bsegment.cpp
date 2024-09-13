@@ -110,7 +110,7 @@ int 	main(int argc, char* argv[])
 				if ( i < 4 ) setvalue = blob_threshold;
 		}
 		if ( curropt->tag == "mass" )
-			mol_weight = curropt->mass();
+			mol_weight = curropt->real_units();
 		if ( curropt->tag == "threshold" )
 			if ( ( threshold = curropt->value.real() ) < -1e30 )
 				cerr << "-threshold: A threshold must be specified!" << endl;
@@ -240,7 +240,7 @@ int 	main(int argc, char* argv[])
 	delete p;
 	if ( pmask && pmask != p ) delete pmask;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

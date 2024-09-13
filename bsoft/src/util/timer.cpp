@@ -3,7 +3,7 @@
 @brief	Utilities for timing functions
 @author Bernard Heymann 
 @date	Created: 20010316
-@date	Modified: 20100726
+@date	Modified: 20230321
 **/
 
 #include <ctime>
@@ -15,6 +15,31 @@
  
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
+
+/**
+@brief 	Returns the current local time.
+@return tm* 			the current local time struct.
+
+ The time format is in the tm struct.
+
+*/
+tm*			get_localtime()
+{
+	time_t 			time_sec = time(NULL);
+	return localtime(&time_sec);
+}
+
+/**
+@brief 	Prints the local time from the time in seconds.
+
+*/
+void		show_localtime(time_t time_sec)
+{
+	tm*		t = localtime(&time_sec);
+	
+	cout << "Time:                           " << t->tm_year+1900 << "-" << t->tm_mon+1
+		<< "-" << t->tm_mday << " " << t->tm_hour << ":" << t->tm_min << ":" << t->tm_sec << endl;
+}
 
 /**
 @brief 	Returns the current time.
@@ -40,11 +65,11 @@ double		getwalltime()
 
 /**
 @brief 	Returns the clock time.
+@return double 			the clock time in seconds.
+
 
 	The time format is in clock seconds since the start of the process.
 
-@param 	.
-@return double 			the clock time in seconds.
 **/
 double		getcputime()
 {
@@ -55,7 +80,6 @@ double		getcputime()
 
 /**
 @brief 	Starts timer and prints the time.
-@param 	.
 @return double 			the current time.
 **/
 double		timer_start()
@@ -71,14 +95,14 @@ double		timer_start()
 /**
 @brief 	Reports the time elapsed since a given time.
 @param	lasttime		the given initial time.
-@return double 			the current time.
+@return double 			the elapsed time.
 **/
 double		timer_report(double lasttime)
 {
 	double 		difftime = getwalltime() - lasttime;
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG timer_report: lasttime = " << difftime << endl;
+		cout << "DEBUG timer_report: difftime = " << difftime << endl;
 	
 	if ( verbose & VERB_TIME )
 		cout << "Time elapsed: " << difftime << " s" << endl;

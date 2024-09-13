@@ -1,15 +1,15 @@
 /**
 @file	mg_processing.h
 @brief	Header file for micrograph processing
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210728
+@date	Modified: 20230622
 **/
 
 #include "ctf.h"
 #include "symmetry.h"
 #include "marker.h"
-#include "View.h"
+#include "View2.h"
 #include "Euler.h"
 #include "Bstring.h"
 
@@ -19,6 +19,7 @@
 #define	MODE_SCC		1
 #define	MODE_CCC		2
 #define	MODE			3
+#define	INVERT			4
 #define	FULL_ASU		8
 #define	MULTI_FILE		16
 #define	APPLY_CTF		32
@@ -108,7 +109,7 @@ private:
 		def = 0;
 		dev = 0;
 		ast = 0;
-		view = View(0,0,1,0);
+		view = View2<double>(0,0,1,0);
 		for ( int i=0; i<NFOM; ++i ) fom[i] = 0;
 		fom[0] = 1;
 		sel = 1;
@@ -127,12 +128,20 @@ public:
 	Vector3<double>	pixel_size;		// Particle pixel size - usually same as micrograph
 	Vector3<double>	loc;			// Coordinates in the micrograph or tomogram
 	Vector3<double>	ori;			// Origin of particle in voxel units
-	View			view; 			// View: 3-value vector and angle (radians)
+	View2<double>	view; 			// View: 3-value vector and angle (radians)
 	double			fom[NFOM];		// Figure-of-merit, types defined in project structure
 	long			sel;			// Selection flag
 	Bmicrograph*	mg;
 	Breconstruction*	rec;
 	Bparticle() { initialize(); }
+	View2<double>	view2() { return view; }
+	void			view2(View2<double> v) { view = v; }
+	long			count() {
+		long		n(0);
+		Bparticle* 	p;
+		for ( p = this; p; p = p->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -153,6 +162,12 @@ public:
 	int				id;				// Filament node number (starts at 1)
 	Vector3<double>	loc;			// Coordinates in the micrograph or tomogram
 	Bfilnode() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bfilnode* 	f;
+		for ( f = this; f; f = f->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -176,6 +191,12 @@ public:
 	int				id;				// Filament number (starts at 1)
 	Bfilnode*		node;			// Linked list of nodes
 	Bfilament() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bfilament* 	f;
+		for ( f = this; f; f = f->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -196,6 +217,12 @@ public:
 	int				id;				// Bad area number
 	Vector3<double>	loc;			// Coordinates in the micrograph or tomogram
 	Bbadarea() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bbadarea* 	b;
+		for ( b = this; b; b = b->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -227,6 +254,12 @@ public:
 	double			fom;			// Figure-of-merit
 	long			sel;			// Selection flag
 	Bstrucfac() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bstrucfac* 	s;
+		for ( s = this; s; s = s->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -258,6 +291,12 @@ public:
 	double			fom;			// Figure-of-merit
 	long			sel;			// Selection flag
 	Blayerline() { initialize(); }
+	long			count() {
+		long		n(0);
+		Blayerline* l;
+		for ( l = this; l; l = l->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -370,6 +409,12 @@ public:
 	Bstrucfac*		sf;				// First structure factor in linked list
 	Blayerline*		layer;			// First layer line in linked list
 	Bmicrograph() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bmicrograph* m;
+		for ( m = this; m; m = m->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -401,6 +446,12 @@ public:
 	double			fom;			// Figure-of-merit for the field
 	Bmicrograph*	mg;				// First micrograph in list
 	Bfield() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bfield* 	f;
+		for ( f = this; f; f = f->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -432,7 +483,7 @@ private:
 		fps = 0;
 		voxel_size = Vector3<double>(1,1,1);
 		scale = Vector3<double>(1,1,1);
-		view = View(0,0,1,0);
+		view = View2<double>(0,0,1,0);
 		filament_width = 0;
 		fil_node_radius = 0;
 		bad_radius = 0;
@@ -462,7 +513,7 @@ public:
 	Vector3<double>		voxel_size; 	// Nominal reconstruction voxel size
 	Vector3<double>		origin;			// Image origin (voxels)
 	Vector3<double>		scale;			// Scale
-	View				view; 			// View: 3-value vector and angle (radians)
+	View2<double>		view; 			// View: 3-value vector and angle (radians)
 	Vector3<long>		box_size;		// Particle box size
 	double				filament_width;	// Filament width
 	double				fil_node_radius; // Filament node radius
@@ -478,6 +529,14 @@ public:
 	Bstrucfac*			sf;				// First structure factor in linked list
 	Bstring*			model;			// First atomic model name in linked list
 	Breconstruction() { initialize(); }
+	View2<double>		view2() { return view; }
+	void				view2(View2<double> v) { view = v; }
+	long			count() {
+		long		n(0);
+		Breconstruction* r;
+		for ( r = this; r; r = r->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************
@@ -532,6 +591,12 @@ public:
 	Breconstruction*	rec;			// First reconstruction in list
 	Bparticle*			class_avg;		// 2D or 3D particle classes
 	Bproject() { initialize(); }
+	long		count() {
+		long		n(0);
+		Bproject* 	p;
+		for ( p = this; p; p = p->next ) n++;
+		return n;
+	}
 } ;
 
 #define _ProjectParamStructs_
@@ -546,6 +611,7 @@ Bframe* 	frame_add(Bframe** frame, int pid);
 Bparticle* 	particle_add(Bparticle** part, int pid);
 int			mg_part_links(Bmicrograph* mg);
 int			rec_part_links(Breconstruction* rec);
+Bmicrograph*	mg_find_first(Bproject* project);
 Bparticle*	part_find_first(Bproject* project);
 Bfilament* 	filament_add(Bfilament** fil, int pid);
 Bfilnode* 	filament_node_add(Bfilnode** fnode, int pid);
@@ -602,12 +668,12 @@ long		project_renumber_particles(Bproject* project);
 int			project_set_particle_box_size(Bproject* project, Vector3<long> box_size);
 int			project_set_particle_box_size(Bproject* project, long box_size);
 int			project_set_particle_origins(Bproject* project, Vector3<double> origin);
-int			project_set_particle_asu_views(Bproject* project, Bstring& symmetry_asu);
+int			project_set_particle_asu_views(Bproject* project, string& symmetry_asu);
 int			project_set_particle_asu_views(Bproject* project, Bsymmetry& sym);
-int			project_rotate_particle_views(Bproject* project, View view);
+int			project_rotate_particle_views(Bproject* project, View2<double> view);
 int			project_apply_map_magnifications(Bproject* project, int mag_num, float* mag);
 long		project_reset(Bproject* project, Bstring& reset);
-View*		views_from_project(Bproject* project, int selection);
+vector<View2<double>>	views_from_project(Bproject* project, int selection);
 Bstring		get_fom_tag(FOMType fom_type);
 
 

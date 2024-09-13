@@ -1,16 +1,16 @@
 /**
 @file	model_transform.cpp
 @brief	Library routines used for model transformation
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20150209
+@date	Modified: 20230807
 **/
 
 #include "model_transform.h"
+#include "model_select.h"
 #include "model_compare.h"
 #include "model_util.h"
 #include "Transform.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -69,8 +69,27 @@ long		models_shift(Bmodel* model, Vector3<double> shift)
 	Bmodel*			mp;
 	
 	for ( mp = model; mp; mp = mp->next )
-//		ncomp += model_shift(mp, shift);
 		ncomp += mp->shift(shift);
+	
+	return ncomp;
+}
+
+/**
+@brief 	Trims models to a new enclosing box size.
+@param 	*model			model parameters.
+@param 	trim			new enclosing box size
+@return long				number of components retained.
+
+	All models in the list are processed.
+
+**/
+long		models_trim(Bmodel* model, Vector3<double> trim)
+{
+	long			ncomp(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		ncomp += mp->trim(trim);
 	
 	return ncomp;
 }
@@ -196,21 +215,23 @@ double		model_reflect_and_compare(Bmodel* model, Vector3<double> normal, Vector3
 	Bcomponent*		complist = NULL;
 	Bcomponent*		comp2 = NULL;
 	
-	long	n = 0;
-	double			d, dmin, R = 0;
+	long			n(0);
+	double			d, dmin, R(0);
 
 	normal.normalize();
 
 	for ( comp = model->comp; comp; comp = comp->next ) {
-		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
-		if ( !complist ) complist = comp2;
+//		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
+//		if ( !complist ) complist = comp2;
+		if ( complist ) comp2 = comp2->add(++n);
+		else comp2 = complist = new Bcomponent(++n);
 		comp2->location(comp->location() - origin);
 		d = -2 * comp2->location().scalar(normal);
 		comp2->shift(normal * d);
 		comp2->shift(origin);
 	}
 
-	for ( comp = model->comp; comp; comp = comp->next ) {
+	for ( n=0, comp = model->comp; comp; comp = comp->next ) {
 		dmin = 1e30;
 		for ( comp2 = complist; comp2; comp2 = comp2->next ) {
 			d = comp->location().distance(comp2->location());
@@ -222,7 +243,8 @@ double		model_reflect_and_compare(Bmodel* model, Vector3<double> normal, Vector3
 
 	R = sqrt(R/n);
 	
-	kill_list((char *) complist, sizeof(Bcomponent));
+//	kill_list((char *) complist, sizeof(Bcomponent));
+	complist->clear();
 	
 	return R;
 }
@@ -231,40 +253,9 @@ double		model_reflect_and_compare(Bmodel* model, Vector3<double> normal, Vector3
 @brief	Rotates the model.
 @param 	*model			model structure.
 @param 	mat				rotation matrix.
+@param 	origin			rotation origin.
+@param 	shift			translation after rotation.
 @return long				number of components processed.
-
-	Only the first model in the list is processed.
-
-**/
-long		model_rotate(Bmodel* model, Matrix3 mat)
-{
-	Vector3<double>		origin, shift;
-	return model_rotate(model, mat, origin, shift);
-}
-
-/**
-@brief	Rotates the model.
-@param 	*model			model structure.
-@param 	mat				rotation matrix.
-@param 	origin	rotation origin.
-@return long				number of components processed.
-
-	Only the first model in the list is processed.
-
-**/
-long		model_rotate(Bmodel* model, Matrix3 mat, Vector3<double> origin)
-{
-	Vector3<double>		shift;
-	return model_rotate(model, mat, origin, shift);
-}
-
-/**
-@brief	Rotates the model.
-@param 	*model			model structure.
-@param 	mat				rotation matrix.
-@param 	origin	rotation origin.
-@param 	shift	translation after rotation.
-@return long					number of components processed.
 
 	Only the first model in the list is processed.
 
@@ -299,28 +290,138 @@ long		model_rotate(Bmodel* model, Matrix3 mat, Vector3<double> origin, Vector3<d
 }
 
 /**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	mat				rotation matrix.
+@param 	origin			rotation origin.
+@param 	shift			translation after rotation.
+@return long				number of components processed.
+**/
+long		models_rotate(Bmodel* model, Matrix3 mat, Vector3<double> origin, Vector3<double> shift)
+{
+	long			ncomp(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		ncomp += model_rotate(mp, mat, origin, shift);
+
+	return ncomp;
+}
+
+/**
 @brief	Rotates the model.
-@param 	*model		model structure.
-@param 	view		view to rotate to.
-@return long		number of components processed.
+@param 	*model			model structure.
+@param 	mat				rotation matrix.
+@return long				number of components processed.
 
 	Only the first model in the list is processed.
 
 **/
-long		model_rotate(Bmodel* model, View2<float> view)
+long		model_rotate(Bmodel* model, Matrix3 mat)
+{
+	Vector3<double>		origin, shift;
+	return model_rotate(model, mat, origin, shift);
+}
+
+/**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	mat				rotation matrix.
+@return long				number of components processed.
+**/
+long		models_rotate(Bmodel* model, Matrix3 mat)
+{
+	long			ncomp(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		ncomp += model_rotate(mp, mat);
+
+	return ncomp;
+}
+
+/**
+@brief	Rotates the model.
+@param 	*model			model structure.
+@param 	mat				rotation matrix.
+@param 	origin			rotation origin.
+@return long				number of components processed.
+
+	Only the first model in the list is processed.
+
+**/
+long		model_rotate(Bmodel* model, Matrix3 mat, Vector3<double> origin)
+{
+	Vector3<double>		shift;
+	return model_rotate(model, mat, origin, shift);
+}
+
+/**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	mat				rotation matrix.
+@param 	origin			rotation origin.
+@return long				number of components processed.
+**/
+long		models_rotate(Bmodel* model, Matrix3 mat, Vector3<double> origin)
+{
+	long			ncomp(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		ncomp += model_rotate(mp, mat, origin);
+
+	return ncomp;
+}
+
+/**
+@brief	Rotates the model.
+@param 	*model			model structure.
+@param 	view			view to rotate to.
+@return long				number of components processed.
+
+	Only the first model in the list is processed.
+
+**/
+template <typename T>
+long		model_rotate(Bmodel* model, View2<T> view)
 {
 	Vector3<double>		origin, shift;
 	Matrix3				mat = view.matrix();
 	return model_rotate(model, mat, origin, shift);
 }
 
+template long model_rotate(Bmodel* model, View2<float> view);
+template long model_rotate(Bmodel* model, View2<double> view);
+
+/**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	view			view to rotate to.
+@return long				number of components processed.
+**/
+template <typename T>
+long		models_rotate(Bmodel* model, View2<T> view)
+{
+	long			ncomp(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		ncomp += model_rotate(mp, view);
+
+	return ncomp;
+}
+
+template long models_rotate(Bmodel* model, View2<float> view);
+template long models_rotate(Bmodel* model, View2<double> view);
+
 /**
 @brief	Rotates the model.
 @param 	*model			model structure.
-@param 	view				view to rotate to.
-@param 	origin	rotation origin.
-@param 	shift	translation after rotation.
-@return long					number of components processed.
+@param 	view			view to rotate to.
+@param 	origin			rotation origin.
+@param 	shift			translation after rotation.
+@return long				number of components processed.
 
 	Only the first model in the list is processed.
 
@@ -332,9 +433,23 @@ long		model_rotate(Bmodel* model, View2<float> view, Vector3<double> origin, Vec
 }
 
 /**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	view			view to rotate to.
+@param 	origin			rotation origin.
+@param 	shift			translation after rotation.
+@return long				number of components processed.
+**/
+long		models_rotate(Bmodel* model, View2<float> view, Vector3<double> origin, Vector3<double> shift)
+{
+	Matrix3				mat = view.matrix();
+	return models_rotate(model, mat, origin, shift);
+}
+
+/**
 @brief	Rotates the model.
-@param 	*model		model structure.
-@param 	t			rotation operation.
+@param 	*model			model structure.
+@param 	t				rotation operation.
 @return long				number of components processed.
 
 	Only the first model in the list is processed.
@@ -342,7 +457,7 @@ long		model_rotate(Bmodel* model, View2<float> view, Vector3<double> origin, Vec
 **/
 long		model_rotate(Bmodel* model, Transform t)
 {
-	if ( verbose ) {
+	if ( verbose & VERB_FULL ) {
 		cout << "Rotating:" << endl;
 		cout << "Axis:                           " << t.axis << endl;
 		cout << "Angle:                          " << t.angle*180.0/M_PI << endl;
@@ -356,6 +471,33 @@ long		model_rotate(Bmodel* model, Transform t)
 //	cout << mat << endl;
 
 	return model_rotate(model, mat, t.origin, shift);
+}
+
+/**
+@brief	Rotates the models.
+@param 	*model			model structure.
+@param 	t				rotation operation.
+@return long				number of components processed.
+
+	Only the first model in the list is processed.
+
+**/
+long		models_rotate(Bmodel* model, Transform t)
+{
+	if ( verbose & VERB_FULL ) {
+		cout << "Rotating:" << endl;
+		cout << "Axis:                           " << t.axis << endl;
+		cout << "Angle:                          " << t.angle*180.0/M_PI << endl;
+		cout << "Origin:                         " << t.origin << endl;
+		cout << "Translation:                    " << t.trans << endl << endl;
+	}
+	
+	Matrix3			mat = Matrix3(t.axis, t.angle);
+	Vector3<double>	shift = t.origin + t.trans;
+	
+//	cout << mat << endl;
+
+	return models_rotate(model, mat, t.origin, shift);
 }
 
 /**
@@ -373,21 +515,23 @@ double		model_rotate_and_compare(Bmodel* model, Transform t)
 	Bcomponent*		complist = NULL;
 	Bcomponent*		comp2 = NULL;
 	
-	long	n = 0;
-	double			d, dmin, R = 0;
+	long			n(0);
+	double			d, dmin, R(0);
 
 	Matrix3			mat = Matrix3(t.axis, t.angle);
 	Vector3<double>	shift = t.origin + t.trans;
 
 	for ( comp = model->comp; comp; comp = comp->next ) {
-		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
-		if ( !complist ) complist = comp2;
+//		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
+//		if ( !complist ) complist = comp2;
+		if ( complist ) comp = comp2->add(++n);
+		else comp2 = complist = new Bcomponent(++n);
 		comp2->location(comp->location() - t.origin);
 		comp2->location(mat * comp2->location());
 		comp2->location(comp2->location() + shift);
 	}
 	
-	for ( comp = model->comp; comp; comp = comp->next ) {
+	for ( n=1, comp = model->comp; comp; comp = comp->next ) {
 		dmin = 1e30;
 		for ( comp2 = complist; comp2; comp2 = comp2->next ) {
 			d = comp->location().distance(comp2->location());
@@ -399,7 +543,8 @@ double		model_rotate_and_compare(Bmodel* model, Transform t)
 
 	R = sqrt(R/n);
 	
-	kill_list((char *) complist, sizeof(Bcomponent));
+//	kill_list((char *) complist, sizeof(Bcomponent));
+	complist->clear();
 	
 	return R;
 }
@@ -453,15 +598,16 @@ long		model_align_to_guide(Bmodel* model, Bmodel* guide)
 	
 	mat = mat.transpose();
 
-	cout << mat << endl;
+	if ( verbose )
+		cout << mat << endl;
 	
 	return model_rotate(model, mat);
 }
 
 /**
 @brief 	A model is fitted to a reference model.
-@param 	*model		model.
-@param 	*refmod		template model.
+@param 	*model			model.
+@param 	*refmod			template model.
 @return Transform			transform.
 
 	The components in the model and the reference must match exactly.
@@ -479,7 +625,6 @@ Transform	model_find_transform(Bmodel* model, Bmodel* refmod)
 	
 	long			i, j;
 	Bcomponent*		comp, *compr;
-//	double			bx[4], by[4], bz[4], v[4] = {0,0,0,1};
 	vector<double>	bx(4), by(4), bz(4), v(4,0);
 	Matrix			a(4,4);
 	
@@ -492,10 +637,11 @@ Transform	model_find_transform(Bmodel* model, Bmodel* refmod)
 	Vector3<double>	loc, locr;
 	
 	for ( comp = model->comp, compr = refmod->comp; comp && compr; comp = comp->next, compr = compr->next ) {
-		if ( verbose )
+		if ( verbose & VERB_FULL )
 			cout << "Mapping component " << comp->identifier() << " to reference " << compr->identifier() << endl;
 		loc = comp->location() - com;
 		locr = compr->location() - comr;
+		if ( verbose & VERB_FULL )
 			cout << loc[2] << tab << locr[2] << tab << loc[2] - locr[2] << endl;
 		v[0] = loc[0];
 		v[1] = loc[1];
@@ -513,4 +659,47 @@ Transform	model_find_transform(Bmodel* model, Bmodel* refmod)
 	t.origin = com;
 		
 	return t;
+}
+
+/**
+@brief	Applies random displacements to a selected number of coordinates.
+@param 	*model 		model to be modified.
+@param 	number		number of coordinates to displace.
+@param 	stdev		standard deviation of displacement.
+@param	flag		flag for periodic bounds.
+@return double		mean square displacement.
+**/
+double		model_random_displace_number(Bmodel* model, long number, double stdev, int flag)
+{
+	if ( stdev < 1e-30 ) return 0;
+	
+	model_select_random(model, number);
+
+	long				n(0);
+	double				msd(0);
+	Vector3<double>		vec;
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Randomizing " << number << " coordinates to standard deviation " << stdev << " A" << endl << endl;
+	
+    for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			vec = vector3_random_gaussian(0, stdev);
+			comp->location() += vec;
+			if ( flag ) comp->set_within_boundary(model->minimum(), model->maximum());
+			msd += vec.length2();
+			n++;
+		}
+	}
+	
+	if ( n ) msd /= n;
+ 
+ 	if ( verbose & VERB_PROCESS )
+		cout << "Mean square displacement:       " << msd << " A2" << endl << endl;
+		
+    model->select_all();
+	
+	return msd;
 }

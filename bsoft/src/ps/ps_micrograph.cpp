@@ -1,9 +1,9 @@
 /**
 @file	ps_micrograph.cpp
 @brief	Postscript output for micrographs
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20011127
-@date	Modified: 20210706
+@date	Modified: 20230524
 **/
 
 #include "ps_micrograph.h"
@@ -11,7 +11,6 @@
 #include "ps_views.h"
 #include "rwimg.h"
 #include "symmetry.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -29,7 +28,7 @@ int			ps_origins(ofstream* fps, Bstring& title, Bproject* project, int flags);
 **/
 int			ps_mg_origins(Bstring& filename, Bstring& title, Bproject* project)
 {
-	int 			i, width(0), height(0), left=(50), bottom=(50), nmg(0);
+	int 			i, width(0), height(0), left(50), bottom(50);
 	
 	Bfield*			field = project->field;
 	if ( !field ) return -1;
@@ -51,7 +50,6 @@ int			ps_mg_origins(Bstring& filename, Bstring& title, Bproject* project)
 			if ( width  < p->sizeX() ) width  = p->sizeX();
 			if ( height < p->sizeY() ) height = p->sizeY();
 			delete p;
-			nmg++;
 		}
 	}
 	if ( verbose & VERB_DEBUG )
@@ -203,31 +201,27 @@ int			ps_mg_particle_positions(Bstring& filename, Bstring& title, Bproject* proj
 @brief 	Generates asymmetric unit particle view and origin postscript plots.
 @param 	&filename			output postscript file name.
 @param 	&title				title.
-@param 	&symmetry_string 	symmetry string to print at the top of the page.
+@param 	&sym			 	symmetry structure.
 @param 	*project			parameter structure.
 @param 	selection			selection number (-1 selects positives, 0 selects all).
 @return int					number of view panels.
 **/
 int 		ps_particle_views_origins(Bstring& filename, Bstring& title, 
-					Bstring& symmetry_string, Bproject* project, int selection)
+					Bsymmetry& sym, Bproject* project, int selection)
 {
-	Bsymmetry	sym(symmetry_string);
+	vector<View2<double>>	view = views_from_project(project, selection);
 	
-	View*		view = views_from_project(project, selection);
-	
-	change_views_to_asymmetric_unit(sym, view);
+	sym.change_views_to_asymmetric_unit(view);
 	
 	if ( verbose & VERB_LABEL )
 		cout << "Writing postscript file: " << filename << endl << endl;
 	
-	ofstream*	fps = ps_open_and_init(filename, symmetry_string, 1, 600, 800);
+	ofstream*	fps = ps_open_and_init(filename, sym.label(), 1, 600, 800);
 	
 	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
 	*fps << "40 740 moveto (" << filename << ") show" << endl;
 	
-	ps_views(fps, symmetry_string, view, 2);
-	
-	kill_list((char *) view, sizeof(View));	
+	ps_views(fps, sym.label(), view, 2);
 	
 	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
 	*fps << "40 740 moveto (" << filename << ") show" << endl;
@@ -250,7 +244,7 @@ int 		ps_particle_views_origins(Bstring& filename, Bstring& title,
 int 		ps_particle_phi_theta(Bstring& filename, Bstring& title, 
 					Bproject* project, int selection)
 {
-	View*		views = views_from_project(project, selection);
+	vector<View2<double>>	view = views_from_project(project, selection);
 	
 	if ( verbose & VERB_LABEL )
 		cout << "Writing postscript file: " << filename << endl << endl;
@@ -260,9 +254,7 @@ int 		ps_particle_phi_theta(Bstring& filename, Bstring& title,
 	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
 	*fps << "40 740 moveto (" << filename << ") show" << endl;
 	
-	ps_views(fps, views);
-	
-	kill_list((char *) views, sizeof(View));	
+	ps_views(fps, view);
 	
 	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
 	*fps << "40 740 moveto (" << filename << ") show" << endl;

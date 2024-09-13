@@ -23,7 +23,6 @@
 	can be visualized in Chimera)
 **/
 
-#include "rwstar.h"
 #include "rwmg.h"
 #include "utilities.h"
 #include "options.h"
@@ -93,7 +92,7 @@ int			cmm_views(Bstring& filename, Bparticle* part, Vector3<double> sampling,
 
 	int				n(0);
 	double			fom;
-	View			view;
+	View2<double>	view;
 	Vector3<double>	loc;
 
 //		cout << part_sel << tab << fom_cutoff << endl;
@@ -101,7 +100,7 @@ int			cmm_views(Bstring& filename, Bparticle* part, Vector3<double> sampling,
 	for ( ; part; part = part->next ) {
 
 		fom = part->fom[0];
-		view = part->view;
+		view = part->view2();
 		view = view.backward();
 		view.normalize();
 		loc = part->loc * sampling;
@@ -219,7 +218,7 @@ int 		main(int argc, char **argv)
 	double			filament_ang(0);
 	double			filament_rise(0);
 	Vector3<double> sampling(1,1,1);
-	Bstring			symmetry_string = "C1";
+	Bsymmetry		sym("C1");
 	double			angle(M_PI_4);
 	Bstring			outcmm;
 	Bstring			outstar;
@@ -246,11 +245,11 @@ int 		main(int argc, char **argv)
 	Vector3<double>	loc;
 	Vector3<double>	loc1;
 	Vector3<double>	loc2;
-	View			view;
-	View			view_inv;
-	View			std_view;
-	View			ref_view;
-	View*			v;
+	View2<double>	view;
+	View2<double>	view_inv;
+	View2<double>	std_view;
+	View2<double>	ref_view;
+	vector<View2<double>>	views;
 	Quaternion		q1, q2;
 
 	int	           	i, optind;
@@ -264,7 +263,7 @@ int 		main(int argc, char **argv)
 
 		if ( curropt->tag == "Related") { mode = 2; }
 		if ( curropt->tag == "symmetry") {
-			symmetry_string = curropt->symmetry_string(); 
+			sym = curropt->symmetry();
 		}
 		if ( curropt->tag == "Random") {
 			if ( ( nviews = curropt->value.integer() ) < 1 ) {
@@ -424,7 +423,7 @@ int 		main(int argc, char **argv)
 		project = project_create(0,1);
 		rec=project->rec;
 		part = particle_add(&rec->part, 1);
-		part->view = std_view;
+		part->view2(std_view);
 		part->ori = origin;
 		part->loc = origin;
 	}
@@ -432,36 +431,33 @@ int 		main(int argc, char **argv)
 
 	ref_view.normalize();
 
-	Bsymmetry		sym(symmetry_string);
 	Matrix3			mat;
 	Matrix3			mat2;
 	Quaternion		quat;
 	Quaternion		quat_inv;
 	Quaternion		quat_ref;
+	vector<View2<double>>	allviews;
 
 	// Views withing an asymmetric unit
 	if ( mode == 1 ) {
 
-		View*	allviews;
 
 		if ( verbose & VERB_PROCESS ) {
 			cout << endl << "Creating all views within asymmetric unit:" << endl;
 		}
 
-		allviews = asymmetric_unit_views(sym, angle, angle, 1);
+		allviews = sym.asymmetric_unit_views(angle, angle, 1);
 
 		rec=project->rec;
 		i=1;
 		part_original = rec->part;
 		rec->part = NULL;
 
-		for ( v=allviews; v; v=v->next ) {
-			view = *v;
-
+		for ( auto& view: allviews ) {
 			part = particle_add(&rec->part, i);
 			part->loc = part_original->loc;
 			part->ori = part_original->ori;
-			part->view = view.backward();
+			part->view2(view.backward());
 			part->sel = part_original->sel;
 			part->fom[0] = part_original->fom[0];
 			part->fpart = part_original->fpart;
@@ -472,8 +468,6 @@ int 		main(int argc, char **argv)
 
 	// All symmetry related views
 	if ( mode == 2 ) {
-
-		View* allviews;
 
 		if ( verbose & VERB_PROCESS ) {
 			cout << endl << "Creating all symmetry related views:" << endl;
@@ -488,25 +482,25 @@ int 		main(int argc, char **argv)
 
 				mat2 = (ref_view.matrix()).transpose();
 
-				view = part->view;
+				view = part->view2();
 				view.normalize();
 
 				if ( verbose & VERB_PROCESS ) {
 					cout << "Using the reference view: " << view << endl;
 				}
 
-				allviews = symmetry_get_all_views(sym, view);
+				allviews = sym.get_all_views(view);
 
-				for ( v=allviews; v; v=v->next ) {	
-					mat = (v->matrix()).transpose();
+				for ( auto& v: allviews ) {
+					mat = (v.matrix()).transpose();
 					mat = mat * mat2;
 					mat = mat.transpose();
-					view = View(mat);
+					view = View2<double>(mat);
 
 					part2 = particle_add(&rec->part, i);
 					part2->loc = part->loc;
 					part2->ori = part->ori;
-					part2->view = view;
+					part2->view2(view);
 					part2->sel = part->sel;
 					part2->fom[0] = part->fom[0];
 					part2->fpart = part->fpart;
@@ -524,8 +518,6 @@ int 		main(int argc, char **argv)
 	// Random views
 	if ( mode == 3 ) {
 
-		View*	allviews;
-
 		rec=project->rec;
 		i=1;
 		part_original = rec->part;
@@ -537,9 +529,7 @@ int 		main(int argc, char **argv)
 
 		allviews = random_views(nviews);
 
-		for ( v=allviews; v; v=v->next ) {
-			view = *v;
-
+		for ( auto& view: allviews ) {
 			if ( verbose & VERB_PROCESS ) {
 				cout << view << endl;
 			}
@@ -547,7 +537,7 @@ int 		main(int argc, char **argv)
 			part = particle_add(&rec->part, i);
 			part->loc = part_original->loc;
 			part->ori = part_original->ori;
-			part->view = view;
+			part->view2(view);
 			part->sel = part_original->sel;
 			part->fom[0] = part_original->fom[0];
 			part->fpart = part_original->fpart;
@@ -568,7 +558,7 @@ int 		main(int argc, char **argv)
 
 			for ( part=rec->part; part; part=part->next ) {
 
-				view = View(part->loc[0] - vieworigin[0], part->loc[1] - vieworigin[1], 
+				view = View2<double>(part->loc[0] - vieworigin[0], part->loc[1] - vieworigin[1],
 					part->loc[2] - vieworigin[2], 0);
 
 				view.normalize();
@@ -578,7 +568,7 @@ int 		main(int argc, char **argv)
 					cout << view << endl;
 				}
 
-				part->view = view;
+				part->view2(view);
 
 				i++;
 			}
@@ -587,8 +577,6 @@ int 		main(int argc, char **argv)
 
 	// Views within specified angular distance
 	if ( mode == 5 ) {
-
-                View*      allviews;
 
 		if ( verbose & VERB_PROCESS ) {
 			cout << endl << "Creating all views within specified angular distance:" << endl << endl;
@@ -600,7 +588,7 @@ int 		main(int argc, char **argv)
 			rec->part = NULL;
         
                         for ( part=part_original; part; part=part->next ) {
-				view = part->view;
+				view = part->view2();
 				view.normalize();
 
 				if ( verbose & VERB_PROCESS ) {
@@ -609,13 +597,11 @@ int 		main(int argc, char **argv)
 
 				allviews = views_within_limits(view, angle, angle, 1, angle_limit, 0);
 
-				for ( v=allviews; v; v=v->next ) {
-					view = *v;
-
+				for ( auto& view: allviews ) {
 					part2 = particle_add(&rec->part, i);
 					part2->loc = part->loc;
 					part2->ori = part->ori;
-					part2->view = view;
+					part2->view2(view);
 					part2->sel = part->sel;
 					part2->fom[0] = part->fom[0];
 					part2->fpart = part->fpart;
@@ -633,7 +619,6 @@ int 		main(int argc, char **argv)
 	// Views for a filamentous object
         if ( mode == 6 ) {
 
-                View*      allviews;
                 Bfilament  fil;
                 Bfilnode   node;
 
@@ -641,7 +626,7 @@ int 		main(int argc, char **argv)
                         cout << endl << "Creating all views for a filamentous object:" << endl;
                 }
 
-                mat2 = View(0,1,0,0).matrix();
+                mat2 = View2<double>(0,1,0,0).matrix();
 
                 for ( rec=project->rec; rec; rec=rec->next ) {
 	                i=1;
@@ -652,19 +637,19 @@ int 		main(int argc, char **argv)
 					rec->part = NULL;
 
 					for ( part=part_original; part; part=part->next ) {
-                                allviews = symmetry_get_all_views(sym, part->view);
+                                allviews = sym.get_all_views(part->view2());
 
-                                for ( v=allviews; v; v=v->next ) {      
+                                for ( auto& v: allviews ) {
 
-                                        mat = v->matrix();
+                                        mat = v.matrix();
                                         mat = mat.transpose() * mat2.transpose();
 										mat = mat.transpose();
-                                        view = View(mat);
+                                        view = View2<double>(mat);
 
                                         part2 = particle_add(&rec->part, i);
                                         part2->loc = part->loc;
                                         part2->ori = part->ori;
-                                        part2->view = view;
+                                        part2->view2(view);
                 
                                         if ( verbose & VERB_PROCESS ) {	cout << view << endl; }
                                         i++;
@@ -698,7 +683,7 @@ int 		main(int argc, char **argv)
 
 				cout << endl << "Closest point:\t" << vieworigin << endl;
 
-				view = View(part->loc[0] - vieworigin[0], part->loc[1] - vieworigin[1], part->loc[2] - vieworigin[2], 0);
+				view = View2<double>(part->loc[0] - vieworigin[0], part->loc[1] - vieworigin[1], part->loc[2] - vieworigin[2], 0);
 
 				view.normalize();
 				view = view.backward();
@@ -707,7 +692,7 @@ int 		main(int argc, char **argv)
 					cout << view << endl;
 				}
 
-				part->view = view;
+				part->view2(view);
 
 				i++;
 			}
@@ -719,8 +704,8 @@ int 		main(int argc, char **argv)
         if ( mode == 8 ) {
 		for ( rec=project->rec; rec; rec=rec->next ) {
 			for ( part=rec->part; part; part=part->next ) {	
-				if ( part->loc[2] < locz ) { part->view = View(0,0,-1,0); }
-				else { part->view = View(0,0,1,0); }
+				if ( part->loc[2] < locz ) { part->view = View2<double>(0,0,-1,0); }
+				else { part->view2(View2<double>(0,0,1,0)); }
 			}
 		}
 	}
@@ -734,7 +719,7 @@ int 		main(int argc, char **argv)
 					cout << endl << "Original view" << endl;
 					cout << part->view << endl;
 				}
-				part->view = View(part->view[0],part->view[1],part->view[2],M_PI*(random()*irm - 1));
+				part->view2(View2<double>(part->view[0],part->view[1],part->view[2],M_PI*(random()*irm - 1)));
 				if ( verbose & VERB_PROCESS ) {
 					cout << endl << "View with random alpha" << endl;
 					cout << part->view << endl;
@@ -764,7 +749,7 @@ int 		main(int argc, char **argv)
 	if ( rad > 0 ) {
 		for ( rec=project->rec; rec; rec=rec->next ) {
 			for ( part=rec->part; part; part=part->next ) {
-				view = part->view.backward();
+				view = part->view2().backward();
 				view.normalize();
 				origin = part->ori;
 				part->loc = Vector3<double>((origin[0] + rad * view[0]),
@@ -778,7 +763,7 @@ int 		main(int argc, char **argv)
 	if ( shift > 0 ) {
 		for ( rec=project->rec; rec; rec=rec->next ) {
 			for ( part=rec->part; part; part=part->next ) {
-				view=part->view;
+				view=part->view2();
 				view.normalize();
 				view = view.backward();
 				loc = part->loc;
@@ -802,7 +787,7 @@ int 		main(int argc, char **argv)
 	if ( discardz > 0 ) {
 		for ( rec=project->rec; rec; rec=rec->next ) {
 			for ( part=rec->part; part; part=part->next ) {
-				view=part->view;
+				view=part->view2();
 				origin = part->ori;
 				loc = part->loc;
                                 if (loc[2] < (origin[2] - discardz)) {part->sel = 0;}
@@ -833,7 +818,7 @@ int 		main(int argc, char **argv)
 
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

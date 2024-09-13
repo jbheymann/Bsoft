@@ -105,9 +105,9 @@ int 	main(int argc, char **argv)
 	Vector3<double>	scale(linklength, linklength, linklength), origin;
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		if ( radius > 0 && height > 0 && ( type & 3 ) ) {
 			model = model_delta_create_cylinder(type, radius, height);
 		} else if ( h ) {
@@ -122,8 +122,7 @@ int 	main(int argc, char **argv)
 			bexit(-1);
 		}
 	} else {
-		model = read_model(file_list, paramfile);		
-		string_kill(file_list);
+		model = read_model(file_list, paramfile.str());		
 	}
 
 	if ( !model ) {
@@ -146,12 +145,12 @@ int 	main(int argc, char **argv)
 	}
 	
 	if ( outfile.length() ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

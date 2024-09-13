@@ -219,7 +219,7 @@ int 	main(int argc, char* argv[])
 	
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	return 0;

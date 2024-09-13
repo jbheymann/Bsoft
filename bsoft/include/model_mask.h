@@ -1,17 +1,19 @@
 /**
 @file	model_mask.h
 @brief	Functions to generate masks from models
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010828
-@date	Modified: 20200329
+@date	Modified: 20230922
 **/
 
 #include "rwimg.h"
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes
 Bimage*		model_create_mask(Bmodel* model, Vector3<long> size,
 				Vector3<double> origin, Vector3<double> sam, double edge);
+Bimage*		model_create_point_mask(Bmodel* model, Vector3<long> size,
+				Vector3<double> ori, Vector3<double> sam);
 Bimage*		model_create_hull_mask(Bmodel* model, Vector3<long> size,
 				Vector3<double> origin, Vector3<double> sam, int curv_flag, int fast);
 Bimage*		model_create_shell_mask(Bmodel* model, Vector3<long> size,

@@ -193,13 +193,13 @@ int			Bimage::calculate_background(Bimage* pmask, int flag)
 @brief 	Corrects the background for one sub-image.
 @param 	nn			sub-image.
 @param	flag		flag to specify where to calculate the background: [0,3]
-@return int 		0, <0 on error.
+@return long 			number of voxels set, <0 on error.
 
 	The background is taken as the average of the values outside the
 	circle or sphere enclosed by the image.
 
 **/
-int			Bimage::correct_background(long nn, int flag)
+long		Bimage::correct_background(long nn, int flag)
 {
 	if ( !data_pointer() ) return -1;
 	
@@ -244,49 +244,51 @@ int			Bimage::correct_background(long nn, int flag)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG Bimage::correct_background: img=" << nn << " bkg=" << bkg << endl;
 
-	return 0;
+	return nm;
 }
 
 
 /**
 @brief 	Corrects the background for each sub-image.
 @param	flag		flag to specify where to calculate the background: [0,1]
-@return int 		0, <0 on error.
+@return long 			number of voxels set, <0 on error.
 
 	The background is taken as the average of the values outside the
 	circle or sphere enclosed by the image.
 
 **/
-int			Bimage::correct_background(int flag)
+long		Bimage::correct_background(int flag)
 {
 	if ( !data_pointer() ) return -1;
 
 	if ( data_type() == Bit ) return 0;
-		
+			
 	if ( verbose & VERB_FULL )
 		cout << "Correcting the background values of all images" << endl << endl;
 	
 #ifdef HAVE_GCD
+	__block long		nm(0);
 	dispatch_apply(n, dispatch_get_global_queue(0, 0), ^(size_t nn){
-		correct_background(nn, flag);
+		nm += correct_background(nn, flag);
 	});
 #else
+	long		nm(0);
 #pragma omp parallel for
 	for ( long nn=0; nn<n; nn++ )
-		correct_background(nn, flag);
+		nm += correct_background(nn, flag);
 #endif
 
 	if ( statistics() )
 		cerr << tab << "in Bimage::correct_background" << endl;
 	
-	return 0;
+	return nm;
 }
 
 /**
 @brief 	Corrects the background for each sub-image.
 @param 	*pmask		foreground mask.
 @param	flag		flag to specify where to calculate the background: [0,3]
-@return int 		0.
+@return long 			number of voxels set, <0 on error.
 
 	The background is taken as the average of the values outside the
 	circle or sphere enclosed by the image.
@@ -295,7 +297,7 @@ int			Bimage::correct_background(int flag)
 	sphere as well as the area where the mask is zero.
 
 **/
-int			Bimage::correct_background(Bimage* pmask, int flag)
+long		Bimage::correct_background(Bimage* pmask, int flag)
 {
 	if ( !data_pointer() ) return -1;
 
@@ -306,7 +308,7 @@ int			Bimage::correct_background(Bimage* pmask, int flag)
 	if ( flag > 1 ) calculate_background(flag);
 	else calculate_background(pmask, flag);
 
-	long			i, j, k, m(0), nn, cc, nm;
+	long			i, j, k, m(0), nn, cc, nm, ns(0);
 	double			bkg;
 		
 	if ( verbose & VERB_FULL )
@@ -321,12 +323,13 @@ int			Bimage::correct_background(Bimage* pmask, int flag)
 			for ( cc=0, j=i*c; cc<c; cc++, j++ ) set(j, bkg);
 			nm++;
 		}
+		ns += nm;
 	}
 
 	if ( statistics() )
 		cerr << tab << "in Bimage::correct_background" << endl;
 	
-	return 0;
+	return ns;
 }
 
 /**

@@ -6,9 +6,9 @@
 @date	Modified: 20150208
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 #include "Matrix.h"
-#include "Bstring.h"
+//#include "Bstring.h"
 
 // Function prototypes
 Matrix		model_shortest_path(Bmodel* model);

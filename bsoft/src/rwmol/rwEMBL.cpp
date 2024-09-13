@@ -42,7 +42,7 @@ int 	readEMBL(Bstring& filename, Bmolgroup *molgroup)
 	Bstring			bs;
     long			i;
 	long			nid(0), nseq(0), nres(0);
-	int				n(0), m(0), seq_flag(0);
+	int				m(0), seq_flag(0);
 	Bmolecule*		mol = NULL;
 
 	// Pass to read the data
@@ -63,7 +63,7 @@ int 	readEMBL(Bstring& filename, Bmolgroup *molgroup)
             seq_flag = 0;
 			seq.clear();
  			m = 0;
-            n++;
+ //           n++;
 		} else if ( tag == "SQ" ) {
 			seq_flag = 1;
  			nseq++;

@@ -149,7 +149,7 @@ int 	main(int argc, char **argv)
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
@@ -157,7 +157,7 @@ int 	main(int argc, char **argv)
 	delete p;
 	delete pref;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	return 0;
@@ -212,9 +212,9 @@ Bmodel*		img_match_one(Bimage* p, long img_num, Bimage* pref, double res_hi, dou
 	double			angle, amin(0), amax(TWOPI), ccmax(0), ccmax1;
 	Vector3<long>	coor, rect(2*mask_rad, 2*mask_rad, 1);
 	Vector3<double>	start, nucoor;
-	View			view;
+	View2<double>	view;
 
-	Bstring			id(img_num, "%d");
+	string			id = to_string(img_num);
 	Bmodel*			model = new Bmodel(id);
 	Bcomponent*		comp = NULL;
 	Bcomptype*		ct = NULL;
@@ -236,8 +236,7 @@ Bmodel*		img_match_one(Bimage* p, long img_num, Bimage* pref, double res_hi, dou
 		cout << "Proj\tvx\tvy\tvz\tva\tccmax" << setprecision(4) << endl;
 	}
 	for ( nn=0; nn<pref->images(); ++nn ) {
-		id = Bstring(nn+1, "%d");
-//		model_add_type_by_id(model, id);
+		id = to_string(nn+1);
 		model->add_type(id);
 		Bimage*		pref1 = img_reference_prepare(pref, nn, p1->size());
 		ccmax1 = 0;

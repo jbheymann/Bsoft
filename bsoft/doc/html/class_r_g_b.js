@@ -15,11 +15,12 @@ var class_r_g_b =
     [ "operator-", "class_r_g_b.html#a3d8173183356bac79b5621a02bac513f", null ],
     [ "operator=", "class_r_g_b.html#a3e4c8ed8cf9b6138d33fb2ee688ef23a", null ],
     [ "operator=", "class_r_g_b.html#ac4c7f73c4e88094fc33c7da7d32c117f", null ],
-    [ "operator[]", "class_r_g_b.html#a6a4d0931ef2ae45da9820fe6461c4197", null ],
+    [ "operator[]", "class_r_g_b.html#a3efd2c9ca1f30cce26827e5daec4aec0", null ],
     [ "phase", "class_r_g_b.html#a4ab9dacb9b0db968b4cbc191433b0888", null ],
     [ "r", "class_r_g_b.html#abb43bd1c84a0025d07c65dbfe64a6218", null ],
     [ "random_color", "class_r_g_b.html#a2484ec68d17a31fbd752e0de1993850e", null ],
     [ "red", "class_r_g_b.html#ac0354bcdc742c545d6a7f6a41d915782", null ],
+    [ "red_white_blue", "class_r_g_b.html#aea1c1297390552f2ea6a1a3aa812b81b", null ],
     [ "rms", "class_r_g_b.html#a54e931abb6bb7c1ad93848cf573ed3f7", null ],
     [ "spectrum", "class_r_g_b.html#a646f779055b10fc5e4db98694f2e4eca", null ]
 ];

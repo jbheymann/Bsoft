@@ -82,8 +82,8 @@ int 		main(int argc, char **argv)
 {
 	// Initialize variables
 	Bstring   		filebase;					// Output file base name
-	Bstring*  		file_list  = NULL;			// List of file names for first and second sets
-	Bstring*  		file_list2 = NULL;			// List of file names for second set
+	vector<string>	file_list;					// List of file names for first and second sets
+	vector<string>	file_list2;					// List of file names for second set
 	Bstring   		outfile;					// Name of output file
 	Bstring   		weight_string;				// input weights
 
@@ -172,9 +172,9 @@ int 		main(int argc, char **argv)
 	nfiles = 0;
 	while ( optind < argc ) {
 		if ( !set1 || ( set1 && nfiles < set1 ) )
-			string_add(&file_list, argv[optind++]);
+			file_list.push_back(argv[optind++]);
 		else
-			string_add(&file_list2, argv[optind++]);
+			file_list2.push_back(argv[optind++]);
 		nfiles++;
 	}
 
@@ -240,8 +240,6 @@ int 		main(int argc, char **argv)
 		}
 	}
 
-	string_kill(file_list);
-
 	// F-test image
 	if ( fflag )  {
 
@@ -303,7 +301,7 @@ int 		main(int argc, char **argv)
 	delete p1;
 	delete p2;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

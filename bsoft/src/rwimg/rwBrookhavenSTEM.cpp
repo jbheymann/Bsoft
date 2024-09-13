@@ -192,7 +192,7 @@ int 	writeBrookhavenSTEM(Bimage* p)
 	char*	header = new char[BrookhavenSTEMSIZE];
 	memset(header, ' ', BrookhavenSTEMSIZE);
 	
-	strncpy(header, p->label().c_str(), BrookhavenSTEMSIZE);
+	p->label().copy(header, BrookhavenSTEMSIZE);
 	
 	snprintf(header + 70, BrookhavenSTEMSIZE-70, "SCAN:%6.3f", p->sampling(0)[0]*0.0512);
 	

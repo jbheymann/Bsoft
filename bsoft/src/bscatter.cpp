@@ -3,19 +3,16 @@
 @brief	Program to calculate scattering cross sections
 @author	Bernard Heymann
 @date	Created: 20190521
-@date	Modified: 20210311
+@date	Modified: 20230804
 **/
 
-#include "molecule_to_map.h"
-#include "mol_util.h"
-#include "seq_util.h"
-#include "rwmodel_param.h"
+#include "rwmodel.h"
 #include "rwresprop.h"
 #include "ctf.h"
 #include "scatter.h"
 #include "json.h"
-//#include "linked_list.h"
 #include "file_util.h"
+#include "ps_plot.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -27,13 +24,9 @@ extern int 	verbose;		// Level of output to the screen
 // Constants
 #define MAXSCAT 	1000			// Maximum number of atomic scattering data points
 
-Bmaterial	protein_material_default();
-Bmaterial	material_from_molgroup(Bmolgroup* molgroup);
-//double		material_update_parameters(Bmaterial& material, map<string,Bcomptype>& atompar);
-int			cross_sections(vector<string>& elements, map<string,Bcomptype>& atompar, CTFparam& ctf);
-int			cross_sections(Bmaterial& material, CTFparam& ctf);
-int			cross_section_half_maximal_frequencies(vector<string>& elements, map<string,Bcomptype>& atompar);
-int			cross_section_half_maximal_frequencies(Bmaterial& material);
+double		particle_signal(map<string,Bmaterial>& material, CTFparam& cp, Vector3<double> vol);
+double		micrograph_recorded_intensity(Bmaterial& material, Bmaterial ice, CTFparam& cp, double area, double thickness);
+int			micrograph_recorded_intensity(Bmaterial& material, Bmaterial& ice, CTFparam& cp, double area);
 int			aperture_series(double thickness, Bmaterial& material, CTFparam& ctf, vector<double> apser);
 int			collection_angle_series(double thickness, Bmaterial& material, CTFparam& ctf, vector<double> angser);
 double		particle_snr(Bmaterial& material, double mass, double radius, double thickness, CTFparam& ctf);
@@ -45,40 +38,52 @@ const char* use[] = {
 " ",
 "Usage: bscatter [options] input.pdb",
 "-----------------------------------",
-"Calculating scattering cross sections.",
-"Elements can be specified with the -select option,",
-"from a composition file with the -composition option,",
-"or from an input sequence or coordinate file.",
-"Otherwise a general elemental composition for proteins is used.",
+"Calculating properties from electron scattering cross sections.",
+"Materials are specified either by input, from a materials ",
+"property file, or by providing elements and their counts.",
 " ",
 "Actions:",
-"-halfmaximum             Calculate the half-maximal frequency for each element",
+"-list                    List available materials from reference file.",
+"-crosssections           List cross sections for a material.",
+"-halfmaximum             Calculate the half-maximal frequency for each element.",
+"-mfp                     Calculate the true mean free path.",
+"-emfp                    Calculate the effective mean free path.",
 "-series 30,50,70         Calculate EMFP using series of aperture sizes (um).",
 "-angles 2.6,4.6,11.8     Calculate EMFP using series of collection angles (mrad).",
 " ",
 "Material parameters:",
-"-material \"Vitreous ice\" Material name from properties file,",
-"                         or coordinate file.",
-"-elements H,C,O          Material elements.",
+"-material \"Vitreous ice\" Material name to read from properties file.",
+"-elements H,C,O          Create material from elements.",
 "-counts 10,3,2           Element counts.",
-"-density 1.27            Material density (g/cm3).",
+"-density 1.27g           Set density for all materials (g=g/cm3, d=Da/A3, n=#/A3).",
+"-mass 234m               Set molecular weight for all materials (k=kDa, m=MDa).",
+"-protein 65k             Add a protein with this mass (k=kDa, m=MDa).",
+"-addhydrogens            Add hydrogens to a protein.",
+"-ice                     Fill volume with ice.",
+" ",
+"Spatial parameters:",
+"-area 120.5,45.7         Area of imaging (angstrom).",
+"-thickness 1500          Specimen thickness (angstrom).",
+"-radius 284              Particle radius (angstrom).",
 " ",
 "Parameters:",
 "-verbose 1               Verbosity of output.",
-"-Volt 100                Acceleration voltage (default 300 kV).",
-"-aperture 100            Aperture size (default 100 µm).",
-"-focallength 2.5         Focal length (default 3.5 mm).",
-"-slitwidth 25            Energy filter slit width (default 0 eV - no filter).",
-"-thickness 1500          Specimen thickness (angstrom).",
-"-mass 234m               Molecular weight (k=kDa, m=MDa).",
-"-radius 284              Particle radius (angstrom).",
+"-resolution 1.5          High resolution for calculating curves (A).",
 "-dose 25                 Electron dose (electrons/pixel).",
 "-defocus 1.2,3.5,0.1     Defocus range an steps (µm).",
 " ",
+#include "use_ctf.inc"
+" ",
 "Input:",
+"-coordinates prot.pdb    Input atomic coordinate model.",
 "-atoms atomprop.star     Input atom properties file.",
 "-residues resprop.star   Input residue properties file.",
 "-properties matter.star  Input material density and composition file.",
+" ",
+"Output:",
+"-output material.star    File with a list of materials.",
+"-curves outfile.txt      File for scattering curve output (use with -elements option).",
+"-rps powerspec.ps        Posrtscript file for radial power spectrum.",
 " ",
 NULL
 };
@@ -87,74 +92,97 @@ NULL
 int		main(int argc, char** argv)
 {
 	// Initialize variables
+	bool			list_materials(0);	// Flag to display available materials
+	bool			cross(0);			// Flag to list cross sections
 	bool			halfmax(0);			// Flag to calculate half-maximal frequency
-	double			volts(300000);	 	// In volts
-	double			aperture(1e6);		// Aperture size in angstrom
+	bool			calc_mfp(0);		// Flag to calculate the mean free path
+	bool			calc_emfp(0);		// Flag to calculate the effective mean free path
+	double			add_protein(0);		// Mass for added protein
+	bool			make_ice(0);		// Flag to fill volume with ice
 	vector<double>	apser;				// Series of apertures
 	vector<double>	angser;				// Series of collection angels
-	Bstring			material_str;		// Material string (name or coordinate file)
-	Bstring			elements;			// Elements
-	Bstring			count_str;			// String with element counts
-	double			density(0);			// Material density (g/cm3)
-	double			focal(3.5e7);		// Focal length in angstrom
-	double			slit(0);			// Energy filter slit width
-	Bstring			atom_select("all");	// Selection
-	double			thickness(0);		// Specimen thickness
+	string			material_str;		// Material string (name or coordinate file)
+	string			elements;			// Elements
+	string			count_str;			// String with element counts
+	double			density(0);			// Material density
+	DensityUnit		density_units(G_CM3);	// Density units (default g/cm3)
+	Vector3<double>	volume;				// Imaging area and specimen thickness
 	double			mass(0);			// Molecular weight
+	bool			add_hydrogens(0);	// Flag to add hydrogens
 	double			radius(0);			// Particle radius
 	double			dose(0);			// Fluence
 	double			def_min(0), def_max(0), def_step(0.1); // Defocus range
-	Bstring 		atompropfile;		// Atom properties file
-	Bstring 		respropfile;		// Residue properties file
-	Bstring 		propfile("material.star");	// Material density and composition file
-	Bstring			paramfile;
+	double			hires(0);			// High resolution limit
+	string			atom_select("all");	// Selection
+	string			coorfile;			// Atomic coordinate file
+	string 			atompropfile;		// Atom properties file
+	string 			respropfile;		// Residue properties file
+	string 			propfile("material.star");	// Material density and composition file
+	string			paramfile;
+	string			outfile;			// Output material file
+	string			curvefile;			// Output file for scattering curves
+	Bstring			rpsfile;			// Output file for scattering curves
+	Bstring			jsin;				// JSON file
+
+	double			v;
+	JSvalue			jsctf(JSobject);
 
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
+
+	// If the JSON file with CTF parameters is specified, read it first
 	for ( curropt = option; curropt; curropt = curropt->next ) {
+		if ( curropt->tag == "jsin" ) {
+			jsin = curropt->filename();
+			if ( jsin.length() ) jsctf = JSparser(jsin.c_str()).parse();
+			if ( !jsctf.exists("Volt") ) {
+				cerr << "CTF parameters not found in file " << jsin << endl;
+				bexit(-1);
+			}
+		}
+	}
+
+	for ( curropt = option; curropt; curropt = curropt->next ) {
+		if ( curropt->tag == "list" ) list_materials = 1;
+		if ( curropt->tag == "crosssections" ) cross = 1;
 		if ( curropt->tag == "halfmaximum" ) halfmax = 1;
+		if ( curropt->tag == "mfp" ) calc_mfp = 1;
+		if ( curropt->tag == "emfp" ) calc_emfp = 1;
 		if ( curropt->tag == "series" )
 			apser = curropt->value.split_into_doubles(",");
 		if ( curropt->tag == "angles" )
 			angser = curropt->value.split_into_doubles(",");
 		if ( curropt->tag == "material" )
-			material_str = curropt->value;
+			material_str = curropt->value.str();
 		if ( curropt->tag == "elements" )
-			elements = curropt->value;
+			elements = curropt->value.str();
 		if ( curropt->tag == "counts" )
-			count_str = curropt->value;
+			count_str = curropt->value.str();
 		if ( curropt->tag == "density" )
-			if ( ( density = curropt->value.real() ) < 0.01 )
+			density = curropt->density(density_units);
+/*		if ( curropt->tag == "density" ) {
+			if ( ( density = curropt->value.real() ) < 0.01 ) {
 				cerr << "-density: A density must be specified!" << endl;
-		if ( curropt->tag == "Volt" ) {
-			if ( ( volts = curropt->value.real() ) < 1 )
-				cerr << "-Volt: A voltage must be specified!" << endl;
-			else
-				if ( volts < 1e3 ) volts *= 1e3;	// Assume kilovolts
-		}
-		if ( curropt->tag == "aperture" ) {
-			if ( ( aperture = curropt->value.real() ) < 1 )
-				cerr << "-aperture: An aperture diameter must be specified!" << endl;
-			else {
-				if ( aperture < 1e4 ) aperture *= 1e4;	// Assume µm
+			} else {
+				if ( curropt->value.contains("g") ) density_units = G_CM3;
+				if ( curropt->value.contains("d") ) density_units = DA_A3;
+				if ( curropt->value.contains("n") ) density_units = NUM_A3;
 			}
-		}
-		if ( curropt->tag == "focallength" ) {
-			if ( ( focal = curropt->value.real() ) < 1 )
-				cerr << "-focallength: A focal length must be specified!" << endl;
-			else {
-				if ( focal < 1e3 ) focal *= 1e7;	// Assume mm
-			}
-		}
-		if ( curropt->tag == "slitwidth" )
-			if ( ( slit = curropt->value.real() ) < 1 )
-				cerr << "-slitwidth: A slit width must be specified!" << endl;
-		if ( curropt->tag == "thickness" )
-			if ( ( thickness = curropt->value.real() ) < 1 )
-				cerr << "-thickness: A specimen thickness must be specified!" << endl;
+		}*/
 		if ( curropt->tag == "mass" )
-			mass = get_option_mass(curropt->value);
+			mass = curropt->real_units();
+		if ( curropt->tag == "protein" )
+			add_protein = curropt->real_units();
+		if ( curropt->tag == "addhydrogens" ) add_hydrogens = 1;
+		if ( curropt->tag == "ice" ) make_ice = 1;
+#include "ctf.inc"
+		if ( curropt->tag == "area" )
+			if ( curropt->values(volume[0], volume[1]) < 2 )
+				cerr << "-area: An imaging area x and y coordinates must be specified!" << endl;
+		if ( curropt->tag == "thickness" )
+			if ( ( volume[2] = curropt->value.real() ) < 1 )
+				cerr << "-thickness: A specimen thickness must be specified!" << endl;
 		if ( curropt->tag == "radius" )
 			if ( ( radius = curropt->value.real() ) < 1 )
 				cerr << "-radius: A particle radius must be specified!" << endl;
@@ -171,113 +199,208 @@ int		main(int argc, char** argv)
 				if ( def_step < 10 ) def_step *= 1e4;
 			}
 		}
+		if ( curropt->tag == "resolution" )
+			if ( ( hires = curropt->value.real() ) < 0.01 )
+				cerr << "-resolution: A high resolution limit must be specified!" << endl;
+		if ( curropt->tag == "coordinates" )
+			coorfile = curropt->filename().str();
 		if ( curropt->tag == "atoms" )
-			atompropfile = curropt->filename();
+			atompropfile = curropt->filename().str();
 		if ( curropt->tag == "residues" )
-			respropfile = curropt->filename();
+			respropfile = curropt->filename().str();
 		if ( curropt->tag == "properties" )
-			propfile = curropt->filename();
+			propfile = curropt->filename().str();
+		if ( curropt->tag == "output" )
+			outfile = curropt->filename().str();
+		if ( curropt->tag == "curves" )
+			curvefile = curropt->filename().str();
+		if ( curropt->tag == "rps" )
+			rpsfile = curropt->filename();
     }
 	option_kill(option);
 	
 	double		ti = timer_start();
-/*
-	vector<string>			el;
-	if ( elements.length() ) {
-		stringstream			ss(elements.c_str());
-		string					es;
-		while ( getline(ss, es, ',') )
-			el.push_back(es);
-		cout << elements << tab << el.size() << endl;
-	}
-*/
+	
+	map<string,Bmaterial>	mprop = read_material_properties(propfile);
 
-	map<string,Bcomptype>	atompar = read_atom_properties(atompropfile);
-	
-	Bmaterial			material;
-	map<string,Bcomptype>&	comp = material.composition();
-	Bmolgroup*			molgroup = NULL;
-	
-	material.identifier("Unknown");
-	
-//	cout << "-" << material_str << "-" << endl;
-	
-	if ( material_str.length() ) {
-		if ( file_type(material_str) == Molecule ) {
-			molgroup = read_molecule(material_str, atom_select, paramfile);
-			material = material_from_molgroup(molgroup);
-		} else {
-			material_str = "\"" + material_str + "\"";
-			cout << "Requested material: " << material_str << endl;
-			map<string,Bmaterial>	mprop = read_material_properties(propfile);
-//			for ( auto m: mprop )
-//				cout << m.second.identifier() << tab << m.second.density(1) << endl;
-			material = mprop[material_str.str()];
-		}
-	} else if ( elements.length() ) {
-		vector<string>		el = split(elements.str(),',');
-		vector<long>		cnt;
-		if ( count_str.length() )
-			cnt = count_str.split_into_integers(",");
-		for ( long i=0; i<el.size(); ++ i ) {
-			comp[el[i]].identifier(el[i]);
-			if ( i < cnt.size() ) comp[el[i]].component_count(cnt[i]);
-			else comp[el[i]].component_count(1);
-		}
-	} else {
-		material = protein_material_default();
-	}
-	
-	if ( density ) material.density(density, 0);
-	
-	if ( material.density(1) < 0.01 ) material.density(RHO, 1);
-	
-	material.unit(1);	// Convert the density
-	
-	if ( comp.size() < 1 ) comp["C"].component_count(1);
-	
-	material.update_parameters(atompar);
-
-	if ( mass ) material.mass(mass);
-	
-	mass = material.mass();
-	
-	// Calculate radius from mass, assuming a globular/spherical protein
-	if ( radius < 1 )
-		radius = pow((3*mass)/(4*M_PI*material.density(1)), 1.0/3.0);
-	
-	if ( thickness < 1 ) thickness = 2*radius;
-	
-	if ( verbose )
-		material.show();
-
-	CTFparam		ctf(volts, 2.7, 0.07);
-	ctf.objective_aperture(aperture);
-	ctf.focal_length(focal);
-	ctf.slit_width(slit);
-	ctf.Cs(2.7);
-	ctf.amp_shift(0.07);
-
-	double			scut = ctf.frequency_cutoff();
-
-	if ( elements.length() ) {
-		if ( halfmax )
-			cross_section_half_maximal_frequencies(material);
-		else
-			cross_sections(material, ctf);
+	if ( list_materials ) {
+		materials_list(mprop);
 		bexit(0);
 	}
 	
+	CTFparam			cp = ctf_from_json(jsctf);
+	cp.defocus_average(def_min);
+//	cp.defocus_deviation(def_dev);
+//	cp.astigmatism_angle(ast_angle);
+
+	if ( verbose & VERB_FULL )
+		cp.show();
+
+	vector<string>			file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+
+	map<string,Bmaterial> 	material = read_material_properties(file_list, paramfile, add_hydrogens);
+
+	if ( density )
+		for ( auto& m: material )
+			m.second.density(density, density_units);
+
+	map<string,Bcomptype>	atompar = read_atom_properties(atompropfile);
+	
+	if ( material_str.length() ) {
+		if ( material_str[0] != '"' )
+			material_str = "\"" + material_str + "\"";
+		if ( verbose )
+			cout << "Requested material: " << material_str << endl;
+		if ( mprop.find(material_str) != mprop.end() ) {
+			Bmaterial	m = mprop[material_str];
+			if ( density ) m.density(density, density_units);
+			if ( mass ) m.mass(mass);
+			m.update_parameters(atompar);
+			material[material_str] = m;
+		}
+	}
+	
+	if ( elements.length() ) {
+		Bmaterial			m("Elements");
+		map<string,Bcomptype>&	comp = m.composition();
+		if ( elements == "all" ) {
+			for ( auto ct: atompar ) {
+				comp[ct.first] = ct.second;
+				comp[ct.first].component_count(1);
+			}
+		} else {
+			vector<string>		el = split(elements,',');
+			vector<long>		cnt(el.size(),1);
+			if ( count_str.length() )
+				cnt = parse_integer_vector(count_str);
+			for ( long i=0; i<el.size(); ++ i ) {
+				comp[el[i]].identifier(el[i]);
+				if ( i < cnt.size() ) comp[el[i]].component_count(cnt[i]);
+				else comp[el[i]].component_count(1);
+//				cout << comp[el[i]].identifier() << tab << comp[el[i]].component_count() << endl;
+			}
+			m.update_parameters(atompar);
+		}
+		if ( density ) m.density(density, density_units);
+		if ( mass ) m.mass(mass);
+		material[elements] = m;
+	}
+
+	if ( add_protein ) {
+		Bmaterial			m = material_protein(1000);
+		m.update_parameters(atompar);
+		m.mass(add_protein);
+		material["Protein"] = m;
+	}
+
+	if ( make_ice && volume.volume() ) {
+		double		v(0);
+		for ( auto& m: material ) v += m.second.volume();
+		if ( v < volume.volume() ) {
+			Bmaterial			m = material_ice(1);
+			m.update_parameters(atompar);
+			m.volume(volume.volume() - v);
+			material["Vitreous ice"] = m;
+		} else {
+			cerr << "Error: The specimen volume is less than the combined material volume!" << endl;
+			cerr << "Specimen volume:              " << volume.volume() << " A3" << endl;
+			cerr << "Combined material volume:     " << v << " A3" << endl << endl;
+		}
+	}
+
+	if ( verbose )
+		for ( auto m: material )
+			m.second.show();
+
+	vector<double>	numbers;
+	Bmaterial		mcomb = material_combine(material, numbers);
+	
+	if ( volume.volume() < 1 ) volume = mcomb.volume();
+	
+	if ( verbose )
+		mcomb.show();
+
+	if ( curvefile.length() )
+		write_scattering_curves(curvefile, mcomb.composition(), hires);
+
+	if ( halfmax )
+		material_cross_section_half_maximal_frequencies(mcomb);
+	
+	if ( cross )
+		material_show_cross_section(mcomb, cp);
+	
+	if ( calc_mfp )
+		material_mean_free_path(material, cp.volt());
+
+	if ( calc_emfp )
+		material_effective_mean_free_path(material, cp.volt(), cp.frequency_cutoff(), cp.slit_width());
+	
+	if ( rpsfile.length() ) {
+		Bplot* 	plot = material_radial_power_spectrum(material, cp.volt(), cp.frequency_cutoff(), cp.slit_width());
+		ps_plot(rpsfile, plot);
+		delete plot;
+	}
+	
+	if ( material.find("Vitreous ice") != material.end() )
+		particle_signal(material, cp, volume);
+
+//		double		cs = material_show_cross_section(material, cp);
+//		cout << "Signal:                         " << cs/area << endl << endl;
+//		double		cs_ice = material_cross_section(ice, cp);
+//		cout << "Signal(ice):                      " << cs_ice/area << endl << endl;
+//	}
+	
+	// Calculate radius from mass, assuming a globular/spherical protein
+//	if ( radius < 1 )
+//		radius = pow((3*mass)/(4*M_PI*mcomb.density(DA_A3)), 1.0/3.0);
+	
+//	if ( thickness < 1 ) thickness = 2*radius;
+	
+//	if ( area < 1 ) area = 4*radius*radius;
+	
+//	if ( thickness < 1 ) thickness = 2*radius;
+/*
+	if ( verbose ) {
+		cout << "Specimen dimensions:" << endl;
+		cout << "Area:                           " << area << " A2" << endl;
+		cout << "Thickness:                      " << thickness << " A" << endl;
+		cout << "Volume:                         " << area*thickness << " A3" << endl;
+		cout << "Mass:                           " << material.mass() << " Da" << endl;
+		cout << "Density:                        " << material.dalton_per_angstrom3() << " Da/A3" << endl;
+		cout << "Mean inner potential:           " << material.mean_inner_potential() << " V" << endl;
+		cout << "Elastic cross section:          " << material.elastic_cross_section(cp.volt()) << " A2" << endl << endl;
+	}
+*/
+//	Bmaterial	ice = material_ice(1);
+//	ice.update_parameters(atompar);
+	
+//	if ( area && thickness ) ice.volume(area*thickness - mcomb.volume());
+/*
+	if ( cross ) {
+		double		cs = material_show_cross_section(material, cp);
+		cout << "Signal:                         " << cs/area << endl << endl;
+//		double		cs_ice = material_cross_section(ice, cp);
+//		cout << "Signal(ice):                      " << cs_ice/area << endl << endl;
+	}
+*/
+//	material = material_combine(material, ice, 1, 1);
+/*
+	if ( thickness ) micrograph_recorded_intensity(material, ice, cp, area, thickness);
+	else micrograph_recorded_intensity(material, ice, cp, area);
+	
+
+	if ( outfile )
+		write_material_properties(outfile, material);
+*/
+/*	bexit(0);
+
 	if ( verbose ) {
 		cout << "General parameters:" << endl;
-		cout << "Acceleration voltage:           " << 1e-3*volts << " kV" << endl;
-		cout << "Beta:                           " << beta(volts) << endl;
-		cout << "Aperture:                       " << 1e-4*aperture << " µm" << endl;
-		cout << "Focal length:                   " << 1e-7*focal << " mm" << endl;
-		cout << "Slit width:                     " << slit << " eV" << endl;
-		cout << "Frequency cutoff:               " << scut << " /A (" <<
-			1/scut << " A)" << endl;
-		cout << "Specimen density:               " << material.density(1) << " Da/A3" << endl;
+		cout << "Beta:                           " << beta(cp.volt()) << endl;
+//		cout << "Frequency cutoff:               " << scut << " /A (" <<
+//			1/scut << " A)" << endl;
+		cout << "Specimen density:               " << material.density(DA_A3) << " Da/A3" << endl;
 		cout << "Specimen thickness:             " << thickness << " A" << endl;
 		cout << "Dose/fluence:                   " << dose << " e/px" << endl;
 		if ( def_min ) {
@@ -287,12 +410,10 @@ int		main(int argc, char** argv)
 		cout << endl;
 	}
 
-	Bmaterial	ice = material_ice(atompar);
-	
-	double		def_fac = defocus_factor(ctf, def_min, def_max, def_step);
-	double		intensity = signal_intensity(ice, thickness, ctf);
-	double		emfp = effective_mean_free_path(ice, ctf);
-	double		snre = particle_snr(material, mass, radius, thickness, ctf);
+	double		def_fac = defocus_factor(cp, def_min, def_max, def_step);
+	double		intensity = signal_intensity(ice, thickness, cp);
+	double		emfp = effective_mean_free_path(ice, cp);
+	double		snre = particle_snr(material, mass, radius, thickness, cp);
 	
 	if ( dose ) {
 		cout << "Total intensity:                " << dose << " e/px" << endl;
@@ -302,252 +423,209 @@ int		main(int argc, char** argv)
 		cout << "Particle SNR:                   " << dose*def_fac*snre*intensity << endl << endl;
 	}
 
-//	ice_intensity(100, thickness, atompar, ctf);
-	
 	if ( apser.size() )
-		aperture_series(thickness, ice, ctf, apser);
+		aperture_series(thickness, ice, cp, apser);
 
 	if ( angser.size() )
-		collection_angle_series(thickness, ice, ctf, angser);
+		collection_angle_series(thickness, ice, cp, angser);
 
 //	Bplot*		plot = particle_spectral_signal(protcomp, mass,
 //		radius, thickness, atompar, ctf);
-
-	if ( verbose & VERB_TIME )
-		timer_report(ti);
-	
-	return 0;
-}
-
-/**
-@brief 	Default protein composition adjusted by mass.
-@return Bmaterial			material.
-**/
-Bmaterial		protein_material_default()
-{
-	Bmaterial			material;
-	map<string,Bcomptype>&	comp = material.composition();
-	
-	material.identifier("Protein");
-	material.density(RHO, 1);
-	
-	// Atoms per thousand
-	comp["H"].component_count(498);
-	comp["C"].component_count(320);
-	comp["N"].component_count(85);
-	comp["O"].component_count(95);
-	comp["S"].component_count(2);
-	
-	return material;
-}
-
-Bmaterial	material_from_molgroup(Bmolgroup* molgroup)
-{
-	Bmaterial			material;
-	map<string,Bcomptype>&	comp = material.composition();
-	material.density(RHO, 1);
-	
-	Bmolecule*			mol;
-	Bresidue*			res;
-	Batom*  			atom;
-
-    for ( mol = molgroup->mol; mol; mol = mol->next )
-		for( res = mol->res; res; res = res->next )
-			for ( atom = res->atom; atom; atom = atom->next )
-				if ( comp.find(atom->el) != comp.end() )
-					comp[atom->el].component_count_increment();
-				else
-					comp[atom->el].component_count(1);
-	
-	return material;
-}
-/*
-double		material_update_parameters(Bmaterial& material, map<string,Bcomptype>& atompar)
-{
-	double			mass(0);
-	
-	if ( verbose )
-		cout << "Updating material parameters" << endl;
-	
-	map<string,Bcomptype>&	comp = material.composition();
-
-	for ( auto &it: comp ) {
-		Bcomptype&		ct = it.second;
-		if ( atompar.find(it.first) != atompar.end() ) {
-			Bcomptype&	at = atompar[it.first];
-			ct.identifier(at.identifier());
-			ct.index(at.index());
-			ct.mass(at.mass());
-			ct.charge(at.charge());
-			ct.coefficients(at.coefficients());
-			mass += ct.mass();
-			cout << ct.identifier() << tab << ct.mass() << endl;
-		}
-	}
-
-	if ( verbose )
-		cout << "Mass:              " << mass << endl << endl;
-
-//	material.show();
-	
-	return mass;
-}
 */
-double		elastic_cross_section_lenz(long Z, double volts)
-{
-	double			f = 1e10*PLANCK/(EMASS*LIGHTSPEED);
-	double			b2 = beta2(volts);
 
-	double			cs = (f*f/(M_PI*b2))*pow(Z, 4.0/3.0);
-	
-	return cs;
-}
+	if ( outfile.length() )
+		write_material_properties(outfile, material);
 
-double		elastic_cross_section_langmore(long Z, double volts)
-{
-	double			b2 = beta2(volts), b = sqrt(b2);
+	timer_report(ti);
 
-	double			cs = 1.4e-4*(pow(Z, 1.5)/b2)*(1-0.26*Z/(137*b));
-	
-	return cs;
-}
-
-
-
-int			cross_sections(vector<string>& el, map<string,Bcomptype>& atompar, CTFparam& ctf)
-{
-	if ( el.size() < 1 || el[0] == "all" ) el = all_elements(atompar);
-	
-//	long			nscat(0), i, j, t;
-//	double			ds(0.01), f, sci, cs, csi, csa, csin;
-	double			sci, cs, csi, csa, csin;
-	
-	double			lambda = electron_wavelength(ctf.volt());
-	double			scut(ctf.frequency_cutoff());
-	double			b2 = beta2(ctf.volt());
-//	double			hf = 1e10*PLANCK/(EMASS*LIGHTSPEED);
-	
-	if ( verbose ) {
-		cout << "Cross sections:" << endl;
-		cout << "Acceleration voltage:           " << ctf.volt()*1e-3 << " kV" << endl;
-		cout << "Aperture diameter:              " << ctf.objective_aperture()*1e-4 << " µm" << endl;
-		cout << "Focal length:                   " << ctf.focal_length()*1e-7 << " mm" << endl;
-		cout << "Wavelength:                     " << lambda << endl;
-		cout << "Beta:                           " << sqrt(b2) << endl;
-		cout << "Cutoff frequency:               " << scut << " /Å" << endl;
-//		cout << "Element\tZ\tcs\tcs(ap)\tcs(ap)\tcsin(lang)" << endl;
-		cout << "Element\tZ\tsci\tcs\tcsb2\tcsin(lang)\tcsinb2" << endl;
-	}
-	
-	for ( auto el1: el ) {
-		if ( atompar.find(el1) != atompar.end() ) {
-			Bcomptype&	at = atompar[el1];
-			sci = scatter_curve_integral(at);
-			cs = elastic_cross_section(at, ctf.volt());
-			csi = elastic_cross_section_integrated(at, ctf);
-			csa = cs*scut*scut/(0.44*0.44 + scut*scut);	// Only for carbon
-			csin = inelastic_cross_section_langmore(at.index(), ctf.volt());
-//			cout << at->el << tab << at->z << tab << cs << tab << csi << tab << csa << tab << csin << endl;
-			cout << at.identifier() << tab << at.index() << tab << sci << tab
-				<< cs << tab << cs*b2 << tab << csin << tab
-				<< csin*b2 << endl;
-		}
-	}
-	
-	
 	return 0;
 }
-
-int			cross_sections(Bmaterial& material, CTFparam& ctf)
-{
-	map<string,Bcomptype>&	comp = material.composition();
-	
-	double			sci, cs, csi, csa, csin;
-	double			lambda = electron_wavelength(ctf.volt());
-	double			scut(ctf.frequency_cutoff());
-	double			b2 = beta2(ctf.volt());
-	
-	if ( verbose ) {
-		cout << "Cross sections:" << endl;
-		cout << "Acceleration voltage:           " << ctf.volt()*1e-3 << " kV" << endl;
-		cout << "Aperture diameter:              " << ctf.objective_aperture()*1e-4 << " µm" << endl;
-		cout << "Focal length:                   " << ctf.focal_length()*1e-7 << " mm" << endl;
-		cout << "Wavelength:                     " << lambda << endl;
-		cout << "Beta:                           " << sqrt(b2) << endl;
-		cout << "Cutoff frequency:               " << scut << " /Å" << endl;
-//		cout << "Element\tZ\tcs\tcs(ap)\tcs(ap)\tcsin(lang)" << endl;
-		cout << "Element\tZ\tsci\tcs\tcsb2\tcsin(lang)\tcsinb2" << endl;
-	}
-	
-	for ( auto el1: comp ) {
-		Bcomptype&	ct = el1.second;
-		sci = scatter_curve_integral(ct);
-		cs = elastic_cross_section(ct, ctf.volt());
-		csi = elastic_cross_section_integrated(ct, ctf);
-		csa = cs*scut*scut/(0.44*0.44 + scut*scut);	// Only for carbon
-		csin = inelastic_cross_section_langmore(ct.index(), ctf.volt());
-//		cout << at->el << tab << at->z << tab << cs << tab << csi << tab << csa << tab << csin << endl;
-		cout << ct.identifier() << tab << ct.index() << tab << sci << tab
-				<< cs << tab << cs*b2 << tab << csin << tab
-				<< csin*b2 << endl;
-	}
-	
-	
-	return 0;
-}
-
-
 
 /*
-	Calculates the half-maximal cross section to estimate the mid-cutoff
-	frequency coefficient for each element to model the aperture effect.
- */
-int			cross_section_half_maximal_frequencies(vector<string>& el, map<string,Bcomptype>& atompar)
+	The material is assumed to fill the volume
+*/
+double		material_scattering_average(map<string,Bmaterial>& material, CTFparam& cp, double area, double thickness)
 {
-	if ( el[0] == "all" ) el = all_elements(atompar);
-
-	double			sm;
-
-//	if ( verbose ) {
-		cout << "Half-maximal frequencies:" << endl;
-		cout << "Element\tZ\tsm" << endl;
-//	}
-
-	for ( auto el1: el ) {
-		if ( atompar.find(el1) != atompar.end() ) {
-			Bcomptype&	at = atompar[el1];
-			sm = cross_section_half_maximal_frequency(at);
-			cout << setprecision(3) << at.identifier() << tab << at.index() << tab << sm << endl;
-		}
+	if ( area <  1) {
+		cerr << "Error: The area must be specified!" << endl;
+		bexit(-1);
 	}
+	
+	double			scat_avg(0);
+	double			scut(cp.frequency_cutoff());
+	
+	for ( auto m: material ) {
+		Bmaterial& 		m1 = m.second;
+		scat_avg += m1.elastic_cross_section(cp.volt(), 0, scut);
+		if ( cp.slit_width() < 0.01 )
+			scat_avg += m1.inelastic_cross_section(cp.volt(), 0, scut);
+	}
+
+	return scat_avg/area;
+}
+
+double		micrograph_emfp(Bmaterial& material, Bmaterial ice, CTFparam& cp, double area, double thickness)
+{
+	if ( area <  1) {
+		cerr << "Error: The area must be specified!" << endl;
+		bexit(-1);
+	}
+
+	ice.volume(area*thickness - material.volume());
+	
+	Bmaterial	mat_ice = material_combine(material, ice, 1, 1);
+
+	double		cs = material_excluded_cross_section(mat_ice, cp);
+	
+	double		emfp = area*thickness/cs;
+	
+	return emfp;
+}
+
+double		micrograph_signal(Bmaterial& material, Bmaterial ice, CTFparam& cp, double area, double thickness)
+{
+	if ( area <  1) {
+		cerr << "Error: The area must be specified!" << endl;
+		bexit(-1);
+	}
+
+	ice.volume(area*thickness - material.volume());
+	
+	Bmaterial	mat_ice = material_combine(material, ice, 1, 1);
+
+	double		cs = material_cross_section(mat_ice, cp);
+
+	double		csel = material_elastic_cross_section(mat_ice, cp);
+
+	double		signal = (csel/area)*exp(-cs/area);
+	
+	return signal;
+}
+
+double		particle_signal(map<string,Bmaterial>& material, CTFparam& cp, Vector3<double> vol)
+{
+	if ( material.find("Vitreous ice") == material.end() ) {
+		cerr << "Error: Vitreous ice parameters must be specified!" << endl;
+		return 0;
+	}
+	
+	double			cs(0), csf(0), cse, cses(0), mu, muf, mus, muss(0), area(vol[0]*vol[1]), I, snr(0);
+
+	for ( auto m: material ) {
+		Bmaterial& 		m1 = m.second;
+		cs += m1.cross_section(cp.volt());
+		csf += m1.elastic_cross_section(cp.volt(), 0, cp.frequency_cutoff());
+		if ( cp.slit_width() < 0.01 )
+			csf += m1.inelastic_cross_section(cp.volt(), 0, cp.frequency_cutoff());
+	}
+	mu = cs/area;
+	muf = csf/area;
+	I = exp(muf-mu);
+	
+	if ( verbose ) {
+		cout << "Calculating the signal for each material:" << endl;
+		cout << "Area:                           " << area << " A2" << endl;
+		cout << "Thickness:                      " << vol[2] << " A" << endl;
+		cout << "Intensity recorded:             " << I << endl;
+		cout << "Scattering average:             " << mu << endl;
+		cout << "Material\tCross(A2))\tSignal\tSNR" << endl;
+	}
+
+	for ( auto m: material ) {
+		Bmaterial& 		m1 = m.second;
+//		cse = m1.cross_section(cp.volt(), 0, cp.frequency_cutoff(), cp.slit_width());
+		cse = m1.elastic_cross_section(cp.volt(), 0, cp.frequency_cutoff());
+//		if ( cp.slit_width() < 0.01 )
+//			cse += m1.inelastic_cross_section(cp.volt(), 0, cp.frequency_cutoff());
+		cses += cse;
+		mus = (cse/area) * exp(-mu);
+		snr += mus/I;
+		muss += mus;
+		if ( verbose )
+			cout << setw(15) << m1.identifier() << tab << cse << tab << mus << tab << mus/I << endl;
+	}
+	
+	if ( verbose )
+		cout << setw(15) << "Total" << tab << cses << tab << muss << tab << snr << endl << endl;
+	
+	return mu;
+}
+
+double		particle_signal(Bmaterial& material, Bmaterial ice, CTFparam& cp, double area, double thickness)
+{
+	if ( area <  1) {
+		cerr << "Error: The area must be specified!" << endl;
+		bexit(-1);
+	}
+
+	ice.volume(area*thickness - material.volume());
+	
+	Bmaterial	mat_ice = material_combine(material, ice, 1, 1);
+
+	double		cs = material_cross_section(mat_ice, cp);
+
+	double		csel = material_elastic_cross_section(material, cp);
+
+	double		signal = (csel/area)*exp(-cs/area);
+	
+	return signal;
+}
+
+double		micrograph_recorded_intensity(Bmaterial& material, Bmaterial ice, CTFparam& cp, double area, double thickness)
+{
+	if ( area <  1) {
+		cerr << "Error: The area must be specified!" << endl;
+		bexit(-1);
+	}
+
+	double		emfp = micrograph_emfp(material, ice, cp, area, thickness);
+
+	double		signal = micrograph_signal(material, ice, cp, area, thickness);
+	double		part_signal = particle_signal(material, ice, cp, area, thickness);
+
+	double		intensity = exp(-thickness/emfp);
+	
+	cout << "Material mass:                  " << material.mass() << " Da" << endl;
+	cout << "Ice mass:                       " << ice.mass() << " Da" << endl;
+	cout << "Area:                           " << area << " A2" << endl;
+	cout << "Thickness:                      " << thickness << " A" << endl;
+	cout << "Volume:                         " << area*thickness << " A3" << endl;
+	cout << "Effective mean free path:       " << emfp << " A" << endl;
+	cout << "Relative intensity:             " << intensity << endl;
+	cout << "Micrograph signal:              " << signal << endl;
+	cout << "Particle signal:                " << part_signal << endl << endl;
+
+	return intensity;
+}
+
+int			micrograph_recorded_intensity(Bmaterial& material, Bmaterial& ice, CTFparam& cp, double area)
+{
+	double		t, emfp, intensity, signal, part_signal;
+	
+	double		radius = pow((3*material.mass())/(4*M_PI*material.density(DA_A3)), 1.0/3.0);
+	if ( area < radius*radius ) area = 4*radius*radius;
+	
+	double		t_min(100*long(radius/50+1)), t_max(10*t_min);
+
+	cout << "Material mass:                  " << material.mass() << " Da" << endl;
+	cout << "Area:                           " << area << " A2" << endl;
+
+	cout << "T(A)\tEMFP\tInt\tS(mg)\tS(part)" << setprecision(5) << endl;
+	for ( t = t_min; t <= t_max; t += t_min ) {
+		emfp = micrograph_emfp(material, ice, cp, area, t);
+		intensity = exp(-t/emfp);
+		signal = micrograph_signal(material, ice, cp, area, t);
+		part_signal = particle_signal(material, ice, cp, area, t);
+		cout << t << tab << emfp << tab << intensity << tab << signal << tab << part_signal << endl;
+	}
+	cout << endl;
 	
 	return 0;
 }
 
-int			cross_section_half_maximal_frequencies(Bmaterial& material)
-{
-	map<string,Bcomptype>&	comp = material.composition();
-	
-	double			sm;
-
-//	if ( verbose ) {
-		cout << "Half-maximal frequencies:" << endl;
-		cout << "Element\tZ\tsm" << endl;
-//	}
-
-	for ( auto el1: comp ) {
-		Bcomptype&		ct = el1.second;
-		sm = cross_section_half_maximal_frequency(ct);
-		cout << setprecision(3) << ct.identifier() << tab << ct.index() << tab << sm << endl;
-	}
-	
-	return 0;
-}
 
 int			aperture_series(double thickness, Bmaterial& material, CTFparam& ctf, vector<double> apser)
 {
-//	map<string,Bcomptype>& 	comp = material.composition();
-	
 	double		oa, ang, Iunf, Ifil, lam_unf, lam_fil;
 	
 	cout << "Aper\ta(mr)\tLunf\tLfil\tIunf\tIfil\tln(Iu)\tln(If)\tIf/Iu\tln(If/Iu)" << endl;
@@ -609,12 +687,12 @@ double		particle_snr(Bmaterial& material, double mass, double radius, double thi
 
 	// Calculate radius from mass, assuming a globular/spherical protein
 	if ( radius < 1 ) radius = 50;
-		radius = pow((3*mass)/(4*M_PI*material.density(1)), 1.0/3.0);
+		radius = pow((3*mass)/(4*M_PI*material.density(DA_A3)), 1.0/3.0);
 
 	if ( thickness < 1 ) thickness = 2*radius;
 
 	double			cs = elastic_cross_section_integrated(comp, ctf);
-	double			ics = inelastic_cross_section_langmore(comp, ctf.volt());
+	double			ics = inelastic_cross_section_langmore(comp, ctf);
 	double			emfp = effective_mean_free_path(material, ctf);
 	double			snre = 0.5*cs/(M_PI*radius*radius);
 
@@ -622,9 +700,9 @@ double		particle_snr(Bmaterial& material, double mass, double radius, double thi
 		cout << "Particle:" << endl;
 		cout << "Molecular weight:               " << mass << " Da" << endl;
 		cout << "Particle radius:                " << radius << " A" << endl;
-		cout << "Density:                        " << material.density(0) << " g/cm3" << endl;
-		cout << "Density:                        " << material.density(1) << " Da/A3" << endl;
-		cout << "Density:                        " << material.density(2) << " #/A3" << endl;
+		cout << "Density:                        " << material.density(G_CM3) << " g/cm3" << endl;
+		cout << "Density:                        " << material.density(DA_A3) << " Da/A3" << endl;
+		cout << "Density:                        " << material.density(NUM_A3) << " #/A3" << endl;
 		cout << "Occupancy:                      " << mass/(M_PI*radius*radius*thickness) << " Da/A3" << endl;
 		cout << "Elastic cross section:          " << cs << " A2" << endl;
 		cout << "Inelastic cross section:        " << ics << " A2" << endl;
@@ -644,7 +722,7 @@ Bplot*		particle_spectral_signal(Bmaterial& material, double mass,
 	double			ds(0.5/radius);
 	double			scut(ctf.frequency_cutoff());
 
-	map<string, vector<double>>		sc = calculate_scattering_curves(comp, ds, scut);
+	map<string, vector<double>>		sc = calculate_elastic_scattering_curves(comp, ds, scut);
 
 	string			e;
 	long			i, ns(sc.begin()->second.size());
@@ -681,3 +759,4 @@ Bplot*		particle_spectral_signal(Bmaterial& material, double mass,
 
 	return plot;
 }
+

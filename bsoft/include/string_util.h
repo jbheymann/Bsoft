@@ -1,7 +1,8 @@
 /**
 @file	string_util.h
 @author	Bernard Heymann
-@date	20160911 - 20210306
+@date	Created: 20160911
+@date	Modified: 20230706
 
 **/
 
@@ -25,7 +26,9 @@ string		extension(string filename);
 string		replace_extension(string& filename, string ext);
 string		insert(string& filename, string ins);
 string		insert(string& filename, int i, int n);
-void		remove_spaces(string s);
+void		remove_spaces(string& s);
+string		remove_spaces2(string& s);
+string		remove_quotes(string& s);
 string		parameter_file_path(string& filename);
 
 string 		quote_or_not(const string &s);
@@ -35,8 +38,8 @@ string 		quote_or_not(const string &s);
 @param  &s                      string to be split.
 @return vector<string>  vector of strings.
 **/
-vector<string> split(const string &s);
-vector<string> splitn(const string &s, long n);
+vector<string> split(const string s);
+vector<string> splitn(const string s, long n);
 
 /**
 @brief 	Splits a string using a given delimiter.
@@ -44,12 +47,13 @@ vector<string> splitn(const string &s, long n);
 @param	delim			delimiter.
 @return	vector<string>	vector of strings.
 **/
-vector<string> split(const string &s, char delim);
+vector<string> split(const string s, char delim);
 
 string	 concatenate(const vector<string>& vs);
+string	 concatenate(const vector<long>& v);
+string	 concatenate(const vector<double>& v);
 
 vector<long>	parse_integer_vector(string vecstr);
-
 vector<double>	parse_real_vector(string vecstr);
 
 string		local_time();
@@ -63,6 +67,11 @@ double		to_real(string s);
 bool		check_for_number(string& s);
 
 int			check_for_type(string& s);
+
+string		swap(string s, const long i, const long j);
+
+string		canonical(string s, int n);
+
 
 #define _STRINGUTIL_
 #endif

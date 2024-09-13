@@ -13,7 +13,6 @@
 #include "mg_select.h"
 #include "mg_ctf.h"
 #include "Matrix3.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -29,7 +28,7 @@ extern int 	verbose;		// Level of output to the screen
 @param 	*kernel			frequency space interpolation kernel.
 @param 	ctf_apply		apply CTF to projections.
 @param 	img_out			image output options: 0=none, 1=projections, 2=differences, 3=both
-@return long			particles selected.
+@return long				particles selected.
 
 	For every particle image, a projection is made from every reference map
 	according to the input orientation parameters and compared to the
@@ -40,6 +39,7 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 					int fom_type, double fom_cut, FSI_Kernel* kernel, int ctf_apply, int img_out)
 {
 	// Main loop over all reference maps
+	bool			invert(0);
 	long			i, j, m, nsel(0);
 	double			maxfom, CC, PD(0), R;
 	Vector3<double>	translate, origin;
@@ -53,8 +53,10 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 	Bimage*			pdiff = NULL;
 	Bimage*			mapproj = NULL;
 
-	long			nmap = count_list((char *)project->reference);
-	Bstring*		map = project->reference;
+	long			nmap(0);
+	Bstring*		map;
+	for ( nmap=0, map = project->reference; map; map = map->next ) nmap++;
+	map = project->reference;
 	
 	Bfield*			field;
 	Bmicrograph*	mg;
@@ -121,7 +123,8 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 					return error_show("mg_classify", __FILE__, __LINE__);
 				proj = p->copy_header(p->images());
 				delete p;
-				filename = proj->file_name();
+//				filename = p->file_name();
+				filename = mg->fpart;
 				filename = filename.pre_rev('.') + "_" + name_base + "." + filename.post_rev('.');
 				proj->file_name(filename.str());
 				proj->data_type(Float);
@@ -145,17 +148,17 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 						translate[0] = part->ori[0] - pmap->sizeX()/2;
 						translate[1] = part->ori[1] - pmap->sizeY()/2;
 						if ( kernel ) {
-							mapproj = pmap->central_section(mat, resolution_hi, kernel);
+							mapproj = pmap->central_section(mat, resolution_hi, kernel); 
 							mapproj->phase_shift_to_center();
 							if ( ctf_apply )
-								img_ctf_apply_to_proj(mapproj, *(mg->ctf), part->def, 1e6, resolution_hi, planf_2D, planb_2D);
+								img_ctf_apply_to_proj(mapproj, *(mg->ctf), part->def, 1e6, resolution_hi, invert, planf_2D, planb_2D);
 							mapproj->fft_back(planb_2D);
 							mapproj->shift(translate);
 							mapproj->correct_background();
 						} else {
 							mapproj = pmap->rotate_project(mat, translate, pmap->sizeX()/2.0);
 							if ( ctf_apply )
-								img_ctf_apply_to_proj(mapproj, *(mg->ctf), part->def, 1e6, resolution_hi, planf_2D, planb_2D);
+								img_ctf_apply_to_proj(mapproj, *(mg->ctf), part->def, 1e6, resolution_hi, invert, planf_2D, planb_2D);
 						}
 						mapproj->statistics();
 						mapproj->rescale_to_avg_std(0, 1);

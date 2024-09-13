@@ -1,15 +1,18 @@
 /**
 @file	mg_particles.cpp
-@brief	Calculates centers of single particle images.
-@author Bernard Heymann
+@brief	Analyzes and manipulates single particle images.
+@author 	Bernard Heymann
 @date	Created: 20080424
-@date	Modified: 20200401
+@date	Modified: 20240307
 **/
 
 #include "mg_processing.h"
 #include "mg_particles.h"
+#include "mg_particle_select.h"
 #include "mg_select.h"
 #include "mg_img_proc.h"
+#include "mg_ctf.h"
+#include "mg_ctf_fit.h"
 #include "rwimg.h"
 #include "matrix_linear.h"
 #include "file_util.h"
@@ -24,11 +27,11 @@ extern int 	verbose;		// Level of output to the screen
 
 /**
 @brief 	Aligns single particle images based on orientation parameters.
-@param 	*project 	micrograph processing parameter structure.
-@param 	part_select	selection number from the selection column.
-@param 	nuavg		rescale to new average.
-@param 	nustd		rescale to new standard deviation.
-@return	int					0.
+@param 	*project 		micrograph processing parameter structure.
+@param 	part_select		selection number from the selection column.
+@param 	nuavg			rescale to new average.
+@param 	nustd			rescale to new standard deviation.
+@return	int				0.
 
 	Each selected particle image is rotated and shifted.
 
@@ -126,11 +129,11 @@ int			project_align_particles(Bproject* project, int part_select,
 
 /**
 @brief 	Centers single particle images based on the parametric center.  
-@param 	*project 	micrograph processing parameter structure.
-@param 	part_select	selection number from the selection column.
-@param 	nuavg		rescale to new average.
-@param 	nustd		rescale to new standard deviation.
-@return	int					0.
+@param 	*project 		micrograph processing parameter structure.
+@param 	part_select		selection number from the selection column.
+@param 	nuavg			rescale to new average.
+@param 	nustd			rescale to new standard deviation.
+@return	int				0.
 
 	Each particle image is shifted to center the origin.
 
@@ -248,12 +251,12 @@ int			project_center_particles(Bproject* project, int part_select,
 
 /**
 @brief 	Calculates centers of single particle images by cross-correlation with a reference.  
-@param 	*project 	micrograph processing parameter structure.
-@param 	*pref		reference image.
-@param 	part_select	selection number from the selection column.
-@param 	hires		high resolution limit.
-@param 	lores		low resolution limit.
-@return	int					0.
+@param 	*project 		micrograph processing parameter structure.
+@param 	*pref			reference image.
+@param 	part_select		selection number from the selection column.
+@param 	hires			high resolution limit.
+@param 	lores			low resolution limit.
+@return	int				0.
 
 	Each particle image shift is determined by cross correlation with
 	the reference image.
@@ -343,7 +346,7 @@ long		project_find_part_centers_in_mgs(Bproject* project,
 @param 	hires			high resolution limit.
 @param 	lores			low resolution limit.
 @param 	filter_flag		flag to filter extremes in particles.
-@return long			number of particles.
+@return long				number of particles.
 
 	An image processing parameter structure loaded with micrograph
 	information is used to extract particle images from the micrograph
@@ -395,12 +398,12 @@ long		mg_find_part_centers(Bmicrograph* mg,
 
 /**
 @brief 	Calculates centers of single particle images.  
-@param 	*project 	image processing parameter structure.
-@param 	max_iter	maximum number of iterations.
-@param 	part_select	selection number from the selection column.
-@param 	hires		high resolution limit.
-@param 	lores		low resolution limit.
-@return	Bimage*		final image composite reference.
+@param 	*project 		image processing parameter structure.
+@param 	max_iter		maximum number of iterations.
+@param 	part_select		selection number from the selection column.
+@param 	hires			high resolution limit.
+@param 	lores			low resolution limit.
+@return	Bimage*			final image composite reference.
 
 	A composite image is generated from the selected particles and radially
 	symmetrized. Each image shift is then determined by cross correlation.
@@ -417,7 +420,7 @@ Bimage*		project_find_particle_centers(Bproject* project, int max_iter,
 	Bfield*			field = project->field;
 	Bmicrograph*	mg = field->mg;
 	Bparticle*		part = mg->part;
-	View			ref_view;
+	View2<double>		ref_view;
 	Bimage*			p;
 	Bimage* 		pref = NULL;
 	
@@ -572,7 +575,7 @@ long		particles_mask(Bmicrograph* mg, Bimage* pmask, Bstring& partpath)
 @param 	*project 	image processing parameter structure.
 @param 	*pmask	 	3D volume mask to be projected.
 @param 	&partpath	new path to particle files.
-@return	long		number of particles masked.
+@return	long			number of particles masked.
 
 	A 3D mask is projected into each particle view and the particle image masked.
 
@@ -641,7 +644,7 @@ long		project_mask_particles(Bproject* project, Bimage* pmask, Bstring& partpath
 @brief 	Compares the coordinates of particles between two files.  
 @param 	*project 	project parameter structure.
 @param 	*projcomp 	comparable project parameter structure.
-@return	long		number of common particles.
+@return	long			number of common particles.
 
 	The coordinates of particles in one parameter file is compared to
 	that of a reference parameter file.
@@ -796,7 +799,7 @@ double		project_tilt_from_particle_defocus(Bproject* project)
 @param 	*project 	project parameter structure.
 @param 	axis	 	tilt axis angle (radians).
 @param 	tilt	 	tilt angle (radians).
-@return	long		number of selected particles.
+@return	long			number of selected particles.
 
 
 **/
@@ -823,5 +826,371 @@ long		project_set_particle_defocus_from_tilt(Bproject* project, double axis, dou
 	}
 	
 	return npart;
+}
+
+Bimage*		particle_correlation_sum(Bparticle* part, Bimage* pref, double hires, FSI_Kernel* kernel, fft_plan planf)
+{
+	if ( !kernel ) {
+		error_show("Error in project_correlation_sum: No kernel defined for projection!", __FILE__, __LINE__);
+		return NULL;
+	}
+	
+	if ( pref->fourier_type() != Standard ) {
+		pref->fft();
+		pref->phase_shift_to_origin();
+	}
+
+	bool			invert(1);
+	long			ndone(0);
+	double			wl(0);
+	Matrix3			mat;
+	Bmicrograph*	mg = part->mg;
+	Bimage*			psec;
+	Bimage*			psec2;
+	Bimage*			ppart;
+
+	//			if ( mg->ctf ) wl = mg->ctf->lambda();
+
+	Bimage*			psum = new Bimage(Float, TComplex, pref->sizeX(), pref->sizeY(), 1, 1);
+	psum->sampling(part->pixel_size);
+	psum->origin(psum->size()/2);
+
+	psum->next = new Bimage(Float, TSimple, pref->sizeX(), pref->sizeY(), 1, 1);
+
+	for ( ; part; part = part->next ) if ( part->sel > 0 ) {
+		ppart = read_img(mg->fpart, 1, part->id-1);
+		ppart->sampling(part->pixel_size);
+		ppart->origin(part->ori);
+		ppart->view(part->view);
+		ppart->fft(planf);
+		ppart->phase_shift_to_origin();
+		mat = part->view.matrix();
+		part->ori[2] = 0;
+//		cout << mat << part->ori << endl;
+		psec = pref->central_section(mat, hires, kernel, wl);
+		if ( mg->ctf ) {
+//			cout << "particle_correlation_sum: Applying CTF" << endl;
+			if ( part->def > 0 ) mg->ctf->defocus_average(part->def);
+			img_ctf_apply(psec, *mg->ctf, 2, 0.1, 0, hires, invert);
+		}
+		psec2 = psec->copy();
+		psec2->complex_to_intensities();
+		psec->complex_conjugate_product(ppart, 0);
+		psum->add(psec);
+		psum->next->add(psec2);
+		delete ppart;
+		delete psec;
+		delete psec2;
+		ndone++;
+	}
+	
+	psum->image->select(ndone);
+
+	return psum;
+}
+
+/**
+@brief 	Correlates each particle with the CTF applied reference projection and sum the correlations.
+@param 	*project 	project parameter structure.
+@param	*pref		reference map.
+@param 	hires	 	high resolution limit (angstrom).
+@param 	*kernel	 	frequency space interpolation kernel lookup table.
+@return	Bimage*		sum of cross-correlations.
+
+
+**/
+Bimage*		project_correlation_sum(Bproject* project, Bimage* pref, double hires, FSI_Kernel* kernel)
+{
+	if ( !kernel ) {
+		error_show("Error in project_correlation_sum: No kernel defined for projection!", __FILE__, __LINE__);
+		return NULL;
+	}
+	
+	long			nsel = project_count_mg_part_selected(project);
+	
+	if ( verbose ) {
+		cout << "Cross-correlating particles with CTF-applied reference projections:" << endl;
+		cout << "Reference map:                  " << pref->file_name() << endl;
+		cout << "Resolution limit:               " << hires << " A" << endl;
+		cout << "Selected particles:             " << nsel << endl;
+	}
+	
+	if ( pref->fourier_type() != Standard ) {
+		if ( verbose )
+			cout << "Transforming the reference map" << endl;
+		pref->fft();
+	}
+
+	pref->phase_shift_to_origin();
+
+	long			nmg(0), nogrp(0);
+	Matrix3			mat;
+	Bparticle*		part = part_find_first(project);
+	
+	if ( verbose )
+		cout << "Setting up the micrograph array" << endl;
+	Bmicrograph**	mgarr = project_micrograph_array(project, nmg);
+	
+	map<string,long>	optgrp;
+	for ( long i=0; i<nmg; ++i )
+		if ( mgarr[i]->ctf )
+			if ( optgrp.find(mgarr[i]->ctf->identifier()) == optgrp.end() )
+				optgrp[mgarr[i]->ctf->identifier()] = 0;
+
+	for ( auto& g: optgrp ) g.second = nogrp++;	// Ensure the order is encoded properly
+	
+	if ( nogrp < 1 ) nogrp = 1;
+	
+	Bimage*			psum = new Bimage(Float, TComplex, pref->sizeX(), pref->sizeY(), 1, nogrp);
+	psum->sampling(part->pixel_size);
+	psum->origin(psum->size()/2);
+	
+	psum->next = new Bimage(Float, TSimple, pref->sizeX(), pref->sizeY(), 1, nogrp);
+	psum->next->fill(1);
+
+	fft_plan		planf = fft_setup_plan(psum->size(), FFTW_FORWARD, 1);
+	
+#ifdef HAVE_GCD
+	__block	long	ndone(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(nmg, dispatch_get_global_queue(0, 0), ^(size_t i){
+		long		n(0);
+		if ( mgarr[i]->ctf ) n = optgrp.at(mgarr[i]->ctf->identifier());
+		Bimage*		p1 = particle_correlation_sum(mgarr[i]->part, pref, hires, kernel, planf);
+		dispatch_sync(myq, ^{
+			cout << mgarr[i]->id << tab << mgarr[i]->ctf->identifier() << tab << n << tab << p1->image->select() << endl;
+			ndone += p1->image->select();
+			psum->add(n, p1);
+			psum->next->add(n, p1->next);
+			psum->image[n].select(psum->image[n].select() + p1->image->select());
+			delete p1;
+			if ( verbose & VERB_RESULT )
+				cerr << "Complete:                       " << setprecision(3)
+					<< ndone*100.0/nsel << " %    \r" << flush;
+		});
+	});
+#else
+	long			ndone(0);
+#pragma omp parallel for
+	for ( long i=0; i<nmg; ++i ) {
+		long		n(0);
+		if ( mgarr[i]->ctf ) n = optgrp[mgarr[i]->ctf->identifier()];
+		Bimage*		p1 = particle_correlation_sum(mgarr[i]->part, pref, hires, kernel, planf);
+	#pragma omp critical
+		{
+			cout << mgarr[i]->id << tab << mgarr[i]->ctf->identifier() << tab << n << tab << p1->image->select() << endl;
+			ndone += p1->image->select();
+			psum->add(n, p1);
+			psum->next->add(n, p1->next);
+			psum->image[n].select(psum->image[n].select() + p1->image->select());
+			delete p1;
+			if ( verbose & VERB_RESULT )
+				cerr << "Complete:                       " << setprecision(3)
+					<< ndone*100.0/nsel << " %    \r" << flush;
+		}
+	}
+#endif
+	
+	fft_destroy_plan(planf);
+
+	if ( verbose & VERB_RESULT )
+		cerr << endl;
+
+	if ( verbose ) {
+		cout << "Group\tParticles" << endl;
+//		for ( long n=0; n<optgrp.size(); ++n )
+//			cout << optgrp[n].first << tab << psum->image[n].select() << endl;
+		for ( auto g: optgrp )
+			cout << g.first << tab << psum->image[g.second].select() << endl;
+		cout << endl;
+	}
+
+	psum->divide(psum->next);
+
+	delete[] mgarr;
+	delete psum->next;
+	psum->next = NULL;
+
+	return psum;
+}
+
+
+
+Bimage*		particle_aberration_sum(Bparticle* part, Bimage* pref, double hires, bool ew_flag, FSI_Kernel* kernel, fft_plan planf)
+{
+	if ( !kernel ) {
+		error_show("Error in project_correlation_sum: No kernel defined for projection!", __FILE__, __LINE__);
+		return NULL;
+	}
+	
+	if ( pref->fourier_type() != Standard ) {
+		pref->fft();
+		pref->phase_shift_to_origin();
+	}
+
+	long			ndone(0);
+	double			wl(0);
+	Matrix3			mat;
+	Bmicrograph*	mg = part->mg;
+	Bimage*			psec;
+	Bimage*			ppart;
+	
+	if ( !mg->ctf ) {
+		cerr << "Error: The CTF parameters must be defined for micrograph " << mg->id << endl;
+		bexit(-1);
+	}
+
+	wl = mg->ctf->lambda();
+
+	Bimage*			psum = new Bimage(Float, 6, pref->sizeX(), pref->sizeY(), 1, 1);
+	psum->sampling(part->pixel_size);
+
+	for ( ; part; part = part->next ) if ( part->sel > 0 ) {
+		if ( part->def > 0 ) mg->ctf->defocus_average(part->def);
+		ppart = read_img(mg->fpart, 1, part->id-1);
+		ppart->sampling(part->pixel_size);
+		ppart->origin(part->ori);
+		ppart->view(part->view);
+		ppart->fft(planf);
+		ppart->phase_shift_to_origin();
+		mat = part->view.matrix();
+		part->ori[2] = 0;
+//		cout << mat << part->ori << endl;
+		if ( !ew_flag ) psec = pref->central_section(mat, hires, kernel, 0);
+		else psec = pref->central_section(mat, hires, kernel, wl);
+		img_add_aberration_terms(psum, psec, ppart, *mg->ctf, ew_flag);
+		delete ppart;
+		delete psec;
+		ndone++;
+	}
+	
+	psum->image->select(ndone);
+
+	return psum;
+}
+
+
+/**
+@brief 	Calculates the aberration phase difference from a set of particles.
+@param 	*project 	project parameter structure.
+@param	*pref		reference map.
+@param 	hires	 	high resolution limit (angstrom).
+@param	ew_flag		calculates projection along the Ewald sphere.
+@param 	*kernel	 	frequency space interpolation kernel lookup table.
+@return	Bimage*		aberration phase differences as a complex image.
+
+	Uses the method as described in Zivanov et al (2020).
+	The return image is complex with the even and odd phase differences
+	in real and imaginary parts, respectively.
+
+**/
+Bimage*		project_aberration_phase_difference(Bproject* project, Bimage* pref, double hires, bool ew_flag, FSI_Kernel* kernel)
+{
+	if ( !kernel ) {
+		error_show("Error in project_correlation_sum: No kernel defined for projection!", __FILE__, __LINE__);
+		return NULL;
+	}
+	
+	long			nsel = project_count_mg_part_selected(project);
+	
+	if ( verbose ) {
+		cout << "Calculating phase difference between particles and CTF-applied reference projections:" << endl;
+		cout << "Reference map:                  " << pref->file_name() << endl;
+		cout << "Resolution limit:               " << hires << " A" << endl;
+		cout << "Ewald sphere flag:              " << ew_flag << endl;
+		cout << "Selected particles:             " << nsel << endl;
+	}
+	
+	if ( pref->fourier_type() != Standard ) {
+		if ( verbose )
+			cout << "Transforming the reference map" << endl;
+		pref->fft();
+	}
+
+	pref->phase_shift_to_origin();
+
+	long			i, nmg(0), nogrp(0);
+	Matrix3			mat;
+	Bparticle*		part = part_find_first(project);
+	
+	part_select_micrographs_with_selected_particles(project);
+	
+	if ( verbose )
+		cout << "Setting up the micrograph array" << endl;
+	Bmicrograph**	mgarr = project_micrograph_array(project, nmg);
+	
+	map<string,long>	optgrp;
+	for ( i=0; i<nmg; ++i )
+		if ( mgarr[i]->ctf )
+			if ( optgrp.find(mgarr[i]->ctf->identifier()) == optgrp.end() )
+				optgrp[mgarr[i]->ctf->identifier()] = 0;
+
+	for ( auto& g: optgrp ) g.second = nogrp++;	// Ensure the order is encoded properly
+	
+	if ( nogrp < 1 ) nogrp = 1;
+	
+	Bimage*			psum = new Bimage(Float, 6, pref->sizeX(), pref->sizeY(), 1, nogrp);
+	psum->sampling(part->pixel_size);
+	for ( i=0; i<psum->images(); ++i ) psum->image[i].select(0);
+
+	fft_plan		planf = fft_setup_plan(psum->size(), FFTW_FORWARD, 1);
+	
+#ifdef HAVE_GCD
+	__block	long	ndone(0);
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(nmg, dispatch_get_global_queue(0, 0), ^(size_t i){
+		long		n(0);
+		if ( mgarr[i]->ctf ) n = optgrp.at(mgarr[i]->ctf->identifier());
+		Bimage*		p1 = particle_aberration_sum(mgarr[i]->part, pref, hires, ew_flag, kernel, planf);
+		dispatch_sync(myq, ^{
+//			cout << mgarr[i]->id << tab << mgarr[i]->ctf->identifier() << tab << n << tab << p1->image->select() << endl;
+			ndone += p1->image->select();
+			psum->add(n, p1);
+			psum->image[n].select(psum->image[n].select() + p1->image->select());
+			delete p1;
+			if ( verbose & VERB_RESULT )
+				cerr << "Complete:                       " << setprecision(3)
+					<< ndone*100.0/nsel << " %    \r" << flush;
+		});
+	});
+#else
+	long			ndone(0);
+#pragma omp parallel for
+	for ( long i=0; i<nmg; ++i ) {
+		long		n(0);
+		if ( mgarr[i]->ctf ) n = optgrp[mgarr[i]->ctf->identifier()];
+		Bimage*		p1 = particle_aberration_sum(mgarr[i]->part, pref, hires, ew_flag, kernel, planf);
+	#pragma omp critical
+		{
+//			cout << mgarr[i]->id << tab << mgarr[i]->ctf->identifier() << tab << n << tab << p1->image->select() << endl;
+			ndone += p1->image->select();
+			psum->add(n, p1);
+			psum->image[n].select(psum->image[n].select() + p1->image->select());
+			delete p1;
+			if ( verbose & VERB_RESULT )
+				cerr << "Complete:                       " << setprecision(3)
+					<< ndone*100.0/nsel << " %    \r" << flush;
+		}
+	}
+#endif
+	
+	fft_destroy_plan(planf);
+
+	if ( verbose & VERB_RESULT )
+		cerr << endl;
+
+	if ( verbose ) {
+		cout << "#\tGroup\tParticles" << endl;
+		for ( auto g: optgrp )
+			cout << g.second << tab << g.first << tab << psum->image[g.second].select() << endl;
+		cout << endl;
+	}
+
+	Bimage*		pphi = img_calculate_phase_differences(psum, 1);
+
+	delete[] mgarr;
+	delete psum;
+
+	return pphi;
 }
 

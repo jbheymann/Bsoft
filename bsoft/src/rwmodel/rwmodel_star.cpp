@@ -1,9 +1,9 @@
 /**
 @file	rwmodel_star.cpp
 @brief	Library routines to read and write STAR model parameters
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060919
-@date	Modified: 20210819
+@date	Modified: 20230706
 **/
 
 #include "rwmodel.h"
@@ -25,8 +25,9 @@ map<string, int>	comptype_tags()
 	tag[COMPTYPE_FILENAME] = 1;
 	tag[COMPTYPE_NUMBER] = 2;
 	tag[COMPTYPE_MASS] = 3;
-	tag[COMPTYPE_FOM] = 4;
-	tag[COMPTYPE_SELECT] = 5;
+	tag[COMPTYPE_CHARGE] = 4;
+	tag[COMPTYPE_FOM] = 5;
+	tag[COMPTYPE_SELECT] = 6;
 
 	return tag;
 }
@@ -80,6 +81,7 @@ map<string, int>	component_tags()
 	tag[COMPONENT_DENSITY] = 14;
 	tag[COMPONENT_FOM] = 15;
 	tag[COMPONENT_SELECT] = 16;
+	tag[COMPONENT_DESCRIPTION] = 17;
 
 	return tag;
 }
@@ -107,15 +109,12 @@ map<string, int>	link_tags()
 @param 	*file_list	list of model parameter file names.
 @return Bmodel*		model parameters.
 **/
-Bmodel*		read_model_star(Bstring* file_list)
+Bmodel*		read_model_star(vector<string> file_list)
 {
-	Bstar2			star;
+	Bstar			star;
 	star.line_length(200);                // Set the output line length
 
-	while ( file_list ) {
-		star.read(file_list->str());
-		file_list = file_list->next;
-	}
+	for ( auto f: file_list ) star.read(f);
 	
 	if ( verbose )
 		cout << "Converting from STAR to model" << endl;
@@ -125,12 +124,10 @@ Bmodel*		read_model_star(Bstring* file_list)
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	long			i(0), j, k, l;
-	Bstring			path;
-	string			id;
+	string			path, id, s;
 	RGBA<float>		rgba;
 	map<string,Bcomponent*>	htab;
 	
-//	for ( auto ib = star.blocks().begin(); ib != star.blocks().end(); ++ib ) {
 	for ( auto ib: star.blocks() ) {
 //		cout << ib.tag() << endl;
 		path = ib.file_name();
@@ -138,19 +135,18 @@ Bmodel*		read_model_star(Bstring* file_list)
 //		cout << path << endl;
 //		ib.show_tags();
 		id = ib.at(MODEL_ID);
-//		if ( id.length() < 1 ) id = Bstring(++i, "%d");
+//		if ( id.length() < 1 ) id = string(++i, "%d");
 		if ( id.size() < 1 ) id = to_string(++i);
 		if ( model ) mp = model->add(id);
 		else mp = model = new Bmodel(id);
 		mp->model_type(ib.at(MODEL_TYPE));
-		mp->mapfile(find_file(ib.at(MODEL_MAP_FILENAME), path).str());
-		mp->image_number(stol(ib.at(MODEL_MAP_NUMBER)));
+		mp->mapfile(find_file(ib.at(MODEL_MAP_FILENAME), path));
+		mp->image_number(to_integer(ib.at(MODEL_MAP_NUMBER)));
 		mp->symmetry(ib.at(MODEL_SYM));
-		mp->handedness(stol(ib.at(MODEL_HAND)));
-		mp->FOM(stod(ib.at(MODEL_FOM)));
-		mp->select(stol(ib.at(MODEL_SELECT)));
+		mp->handedness(to_integer(ib.at(MODEL_HAND)));
+		mp->FOM(to_real(ib.at(MODEL_FOM)));
+		mp->select(to_integer(ib.at(MODEL_SELECT)));
 
-//		for ( auto il = ib->loops().begin(); il != ib->loops().end(); ++il ) {
 		for ( auto il: ib.loops() ) {
 //			il.show_tags();
 			if ( ( k = il.find(COMPTYPE_ID) ) >= 0 ) {
@@ -161,10 +157,11 @@ Bmodel*		read_model_star(Bstring* file_list)
 					if ( comptype ) comptype = comptype->add(id);
 					else mp->type = comptype = new Bcomptype(id);
 					if ( ( j = il.find(COMPTYPE_FILENAME) ) >= 0 ) comptype->file_name(ir[j]);
-					if ( ( j = il.find(COMPTYPE_NUMBER) ) >= 0 ) comptype->image_number(stol(ir[j]));
-					if ( ( j = il.find(COMPTYPE_MASS) ) >= 0 ) comptype->mass(stod(ir[j]));
-					if ( ( j = il.find(COMPTYPE_FOM) ) >= 0 ) comptype->FOM(stod(ir[j]));
-					if ( ( j = il.find(COMPTYPE_SELECT) ) >= 0 ) comptype->select(stol(ir[j]));
+					if ( ( j = il.find(COMPTYPE_NUMBER) ) >= 0 ) comptype->image_number(to_integer(ir[j]));
+					if ( ( j = il.find(COMPTYPE_MASS) ) >= 0 ) comptype->mass(to_real(ir[j]));
+					if ( ( j = il.find(COMPTYPE_CHARGE) ) >= 0 ) comptype->charge(to_real(ir[j]));
+					if ( ( j = il.find(COMPTYPE_FOM) ) >= 0 ) comptype->FOM(to_real(ir[j]));
+					if ( ( j = il.find(COMPTYPE_SELECT) ) >= 0 ) comptype->select(to_integer(ir[j]));
 				}
 			} else if ( ( k = il.find(COMPONENT_ID) ) >= 0 ) {
 //				cout << "COMPONENT_ID found: " << COMPONENT_ID << endl;
@@ -179,24 +176,28 @@ Bmodel*		read_model_star(Bstring* file_list)
 					htab[id] = comp;
 					id = ir[l];
 					comp->type(mp->type->find(id));
-					if ( ( j = il.find(COMPONENT_X) ) >= 0 ) loc[0] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_Y) ) >= 0 ) loc[1] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_Z) ) >= 0 ) loc[2] = stod(ir[j]);
+					if ( ( j = il.find(COMPONENT_X) ) >= 0 ) loc[0] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_Y) ) >= 0 ) loc[1] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_Z) ) >= 0 ) loc[2] = to_real(ir[j]);
 					comp->location(loc);
-					if ( ( j = il.find(COMPONENT_VIEW_X) ) >= 0 ) view[0] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_VIEW_Y) ) >= 0 ) view[1] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_VIEW_Z) ) >= 0 ) view[2] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_VIEW_ANGLE) ) >= 0 ) view[3] = stod(ir[j]) *M_PI/180.0;
+					if ( ( j = il.find(COMPONENT_VIEW_X) ) >= 0 ) view[0] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_VIEW_Y) ) >= 0 ) view[1] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_VIEW_Z) ) >= 0 ) view[2] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_VIEW_ANGLE) ) >= 0 ) view[3] = to_real(ir[j]) *M_PI/180.0;
 					comp->view(view);
-					if ( ( j = il.find(COMPONENT_RADIUS) ) >= 0 ) comp->radius(stod(ir[j]));
-					if ( ( j = il.find(COMPONENT_RED) ) >= 0 ) rgba[0] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_GREEN) ) >= 0 ) rgba[1] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_BLUE) ) >= 0 ) rgba[2] = stod(ir[j]);
-					if ( ( j = il.find(COMPONENT_ALPHA) ) >= 0 ) rgba[3] = stod(ir[j]);
+					if ( ( j = il.find(COMPONENT_RADIUS) ) >= 0 ) comp->radius(to_real(ir[j]));
+					if ( ( j = il.find(COMPONENT_RED) ) >= 0 ) rgba[0] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_GREEN) ) >= 0 ) rgba[1] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_BLUE) ) >= 0 ) rgba[2] = to_real(ir[j]);
+					if ( ( j = il.find(COMPONENT_ALPHA) ) >= 0 ) rgba[3] = to_real(ir[j]);
 					comp->color(rgba);
-					if ( ( j = il.find(COMPONENT_DENSITY) ) >= 0 ) comp->density(stod(ir[j]));
-					if ( ( j = il.find(COMPONENT_FOM) ) >= 0 ) comp->FOM(stod(ir[j]));
-					if ( ( j = il.find(COMPONENT_SELECT) ) >= 0 ) comp->select(stol(ir[j]));
+					if ( ( j = il.find(COMPONENT_DENSITY) ) >= 0 ) comp->density(to_real(ir[j]));
+					if ( ( j = il.find(COMPONENT_FOM) ) >= 0 ) comp->FOM(to_real(ir[j]));
+					if ( ( j = il.find(COMPONENT_SELECT) ) >= 0 ) comp->select(to_integer(ir[j]));
+					if ( ( j = il.find(COMPONENT_DESCRIPTION) ) >= 0 ) {
+						s = remove_quotes(ir[j]);
+						comp->description() = split(s);
+					}
 				}
 			} else if ( ( k = il.find(COMPLINK_1) ) >= 0 ) {
 //				cout << "COMPLINK_1 found: " << COMPLINK_1 << endl;
@@ -215,16 +216,16 @@ Bmodel*		read_model_star(Bstring* file_list)
 					comp2 = htab[ir[l]];
 					if ( link ) link = link->add(comp1, comp2);
 					else link = mp->link = new Blink(comp1, comp2);
-					if ( ( j = il.find(COMPLINK_ANGLE) ) >= 0 ) link->angle(stod(ir[j]));
-					if ( ( j = il.find(COMPLINK_RADIUS) ) >= 0 ) link->radius(stod(ir[j]));
-					if ( ( j = il.find(COMPLINK_LENGTH) ) >= 0 ) link->length(stod(ir[j]));
-					if ( ( j = il.find(COMPLINK_RED) ) >= 0 ) rgba[0] = stod(ir[j]);
-					if ( ( j = il.find(COMPLINK_GREEN) ) >= 0 ) rgba[1] = stod(ir[j]);
-					if ( ( j = il.find(COMPLINK_BLUE) ) >= 0 ) rgba[2] = stod(ir[j]);
-					if ( ( j = il.find(COMPLINK_ALPHA) ) >= 0 ) rgba[3] = stod(ir[j]);
+					if ( ( j = il.find(COMPLINK_ANGLE) ) >= 0 ) link->angle(to_real(ir[j]));
+					if ( ( j = il.find(COMPLINK_RADIUS) ) >= 0 ) link->radius(to_real(ir[j]));
+					if ( ( j = il.find(COMPLINK_LENGTH) ) >= 0 ) link->length(to_real(ir[j]));
+					if ( ( j = il.find(COMPLINK_RED) ) >= 0 ) rgba[0] = to_real(ir[j]);
+					if ( ( j = il.find(COMPLINK_GREEN) ) >= 0 ) rgba[1] = to_real(ir[j]);
+					if ( ( j = il.find(COMPLINK_BLUE) ) >= 0 ) rgba[2] = to_real(ir[j]);
+					if ( ( j = il.find(COMPLINK_ALPHA) ) >= 0 ) rgba[3] = to_real(ir[j]);
 					link->color(rgba);
-					if ( ( j = il.find(COMPLINK_FOM) ) >= 0 ) link->FOM(stod(ir[j]));
-					if ( ( j = il.find(COMPLINK_SELECT) ) >= 0 ) link->select(stol(ir[j]));
+					if ( ( j = il.find(COMPLINK_FOM) ) >= 0 ) link->FOM(to_real(ir[j]));
+					if ( ( j = il.find(COMPLINK_SELECT) ) >= 0 ) link->select(to_integer(ir[j]));
 				}
 //				cout << "Setting up link lengths" << endl;
 				for ( link=mp->link; link; link=link->next )
@@ -244,13 +245,13 @@ Bmodel*		read_model_star(Bstring* file_list)
 @brief 	Writes STAR model parameters.
 @param 	&filename	model parameter file name.
 @param 	*model		model parameters.
-@param 	split		flag to split into data blocks.
+@param 	splt		flag to split into data blocks.
 @return int			models written.
 **/
-int			write_model_star(Bstring& filename, Bmodel* model, int split)
+int			write_model_star(string& filename, Bmodel* model, int splt)
 {
-	Bstring			id;
- 	Bstar2			star;
+	string			id;
+ 	Bstar			star;
 	
 	Bmodel*			mp = NULL;
 	Bcomptype*		comptype = NULL;
@@ -279,13 +280,14 @@ int			write_model_star(Bstring& filename, Bmodel* model, int split)
 			BstarLoop&			loop = block.add_loop();
 			loop.tags() = comptype_tags();
 			for ( comptype = mp->type; comptype; comptype = comptype->next ) {
-				vector<string>&	vs = loop.add_row(6);
+				vector<string>&	vs = loop.add_row();
 				vs[0] = comptype->identifier();
 				vs[1] = comptype->file_name();
 				vs[2] = to_string(comptype->image_number());
 				vs[3] = to_string(comptype->mass());
-				vs[4] = to_string(comptype->FOM());
-				vs[5] = to_string(comptype->select());
+				vs[4] = to_string(comptype->charge());
+				vs[5] = to_string(comptype->FOM());
+				vs[6] = to_string(comptype->select());
 			}
 		}
 //		cout << "writing components" << endl;
@@ -293,11 +295,11 @@ int			write_model_star(Bstring& filename, Bmodel* model, int split)
 			BstarLoop&			loop = block.add_loop();
 			loop.tags() = component_tags();
 			for ( comp = mp->comp; comp; comp = comp->next ) {
-				vector<string>&	vs = loop.add_row(17);
+				vector<string>&	vs = loop.add_row();
 				vs[0] = comp->identifier();
 				if ( comp->type() ) id = comp->type()->identifier();
 				else id = "?";
-				vs[1] = id.str();
+				vs[1] = id;
 				vs[2] = to_string(comp->location()[0]);
 				vs[3] = to_string(comp->location()[1]);
 				vs[4] = to_string(comp->location()[2]);
@@ -313,6 +315,7 @@ int			write_model_star(Bstring& filename, Bmodel* model, int split)
 				vs[14] = to_string(comp->density());
 				vs[15] = to_string(comp->FOM());
 				vs[16] = to_string(comp->select());
+				vs[17] = "\"" + concatenate(comp->description()) + "\"";
 			}
 		}
 //		cout << "writing links" << endl;
@@ -320,7 +323,7 @@ int			write_model_star(Bstring& filename, Bmodel* model, int split)
 			BstarLoop&			loop = block.add_loop();
 			loop.tags() = link_tags();
 			for ( link = mp->link; link; link = link->next ) {
-				vector<string>&	vs = loop.add_row(11);
+				vector<string>&	vs = loop.add_row();
 				vs[0] = link->comp[0]->identifier();
 				vs[1] = link->comp[1]->identifier();
 				vs[2] = to_string(link->angle()*180.0/M_PI);
@@ -339,7 +342,7 @@ int			write_model_star(Bstring& filename, Bmodel* model, int split)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_model_star: " << filename << endl;
 
-	err = star.write(filename.str(), split);
+	err = star.write(filename, splt);
 	
 	if ( err < 0 ) return err;
 	

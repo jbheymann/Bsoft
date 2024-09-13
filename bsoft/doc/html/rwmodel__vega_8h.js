@@ -1,5 +1,5 @@
 var rwmodel__vega_8h =
 [
-    [ "read_model_vega", "rwmodel__vega_8h.html#a1fa8ea5ab81fd9944f32934efd689cf6", null ],
-    [ "write_model_vega", "rwmodel__vega_8h.html#a8d4cd75a3a5166a573403f2a4272c89b", null ]
+    [ "read_model_vega", "rwmodel__vega_8h.html#a975704cf89fcde7459bcb2540383bd67", null ],
+    [ "write_model_vega", "rwmodel__vega_8h.html#aa514cf994238eeb0005c614492c756f6", null ]
 ];

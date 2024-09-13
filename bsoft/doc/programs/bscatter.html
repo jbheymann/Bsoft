@@ -1,0 +1,94 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
+<head>
+<meta name="Author" content="Bernard Heymann">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<!-- Author: Bernard Heymann -->
+<!-- Created: 20141222 -->
+<!-- Modified: 20180924 -->
+<title>Bsoft: bscatter </title>
+<link href="../bsoft.css" rel="stylesheet" type="text/css" />
+<link rel="icon" href="Bsoft_16x16.png" type="image/png" />
+<link rel="icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<script language="JavaScript" type="text/javascript" src="../bsoft.js"></script>
+</head>
+
+<body class="bsoft_layout">
+
+<div id="content">
+
+<h2><i><font color="#000099">Bsoft program</font></i></h2>
+<center><h1><font color="#FF0000">bscatter</font></h1></center>  <h3>Usage: bscatter [options] input.pdb</h3>
+Calculating properties from electron scattering cross sections. <br>
+Materials are specified either by input, from a materials  property file, or by providing elements and their counts.   <h3>Actions:</h3>
+<table><tbody>
+<tr><td>-list</td><td>List available materials from reference file.</td></tr>
+<tr><td>-crosssections</td><td>List cross sections for a material.</td></tr>
+<tr><td>-halfmaximum</td><td>Calculate the half-maximal frequency for each element.</td></tr>
+<tr><td>-mfp</td><td>Calculate the true mean free path.</td></tr>
+<tr><td>-emfp</td><td>Calculate the effective mean free path.</td></tr>
+<tr><td>-series 30,50,70</td><td>Calculate EMFP using series of aperture sizes (um).</td></tr>
+<tr><td>-angles 2.6,4.6,11.8</td><td>Calculate EMFP using series of collection angles (mrad).</td></tr>
+<tr><td></td><td> </td></tr>
+<tr><td></td><td>Material parameters:</td></tr>
+<tr><td>-material "Vitreous</td><td>ice" Material name to read from properties file.</td></tr>
+<tr><td>-elements H,C,O</td><td>Create material from elements.</td></tr>
+<tr><td>-counts 10,3,2</td><td>Element counts.</td></tr>
+<tr><td>-density 1.27g</td><td>Set density for all materials (g=g/cm3, d=Da/A3, n=#/A3).</td></tr>
+<tr><td>-mass 234m</td><td>Set molecular weight for all materials (k=kDa, m=MDa).</td></tr>
+<tr><td>-protein 65k</td><td>Add a protein with this mass (k=kDa, m=MDa).</td></tr>
+<tr><td>-addhydrogens</td><td>Add hydrogens to a protein.</td></tr>
+<tr><td>-ice</td><td>Fill volume with ice.</td></tr>
+<tr><td></td><td> </td></tr>
+<tr><td></td><td>Spatial parameters:</td></tr>
+<tr><td>-area 120.5,45.7</td><td>Area of imaging (angstrom).</td></tr>
+<tr><td>-thickness 1500</td><td>Specimen thickness (angstrom).</td></tr>
+<tr><td>-radius 284</td><td>Particle radius (angstrom).</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Parameters:</h3>
+<table><tbody>
+<tr><td>-verbose 1</td><td>Verbosity of output.</td></tr>
+<tr><td>-resolution 1.5</td><td>High resolution for calculating curves (A).</td></tr>
+<tr><td>-dose 25</td><td>Electron dose (electrons/pixel).</td></tr>
+<tr><td>-defocus 1.2,3.5,0.1</td><td>Defocus range an steps (µm).</td></tr>
+<tr><td></td><td> </td></tr>
+<tr><td></td><td>Microscope parameters:</td></tr>
+<tr><td>-Volt 100</td><td>Set the acceleration voltage (default 300 kV).</td></tr>
+<tr><td>-Amplitude 0.07</td><td>Set the amplitude contrast (default 0.07).</td></tr>
+<tr><td>-Cs 2.0</td><td>Set the spherical aberration, Cs (default 2.0 mm).</td></tr>
+<tr><td>-Cc 2.0</td><td>Set the chromatic aberration, Cc (default 2.0 mm).</td></tr>
+<tr><td>-alpha 0.15</td><td>Set the illumination half-angle (default 0.1 milliradians).</td></tr>
+<tr><td>-energyspread 0.9</td><td>Set the effective energy spread (default 1 eV).</td></tr>
+<tr><td>-aperture 100</td><td>Aperture size (default 100 µm).</td></tr>
+<tr><td>-focallength 2.5</td><td>Focal length (default 3.5 mm).</td></tr>
+<tr><td>-slitwidth 25</td><td>Energy filter slit width (default 0 eV - no filter).</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Input:</h3>
+<table><tbody>
+<tr><td>-coordinates prot.pdb</td><td>Input atomic coordinate model.</td></tr>
+<tr><td>-atoms atomprop.star</td><td>Input atom properties file.</td></tr>
+<tr><td>-residues resprop.star</td><td>Input residue properties file.</td></tr>
+<tr><td>-properties matter.star</td><td>Input material density and composition file.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table><br>
+<h3>Output:</h3>
+<table><tbody>
+<tr><td>-output material.star</td><td>File with a list of materials.</td></tr>
+<tr><td>-curves outfile.txt</td><td>File for scattering curve output (use with -elements option).</td></tr>
+<tr><td>-rps powerspec.ps</td><td>Posrtscript file for radial power spectrum.</td></tr>
+<tr><td></td><td> </td></tr>
+</tbody></table>
+<br>Bsoft version 2.2.0-20230831 (64 bit)<br>
+</div>
+
+<br/>
+
+<div id="footer">
+Generated by bprog.pl on Thu Aug 31 05:35:52 2023
+</div>
+</body>
+</html>

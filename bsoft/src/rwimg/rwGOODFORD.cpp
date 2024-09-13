@@ -114,7 +114,7 @@ int 	writeGOODFORD(Bimage *p)
 	
 	// Map the parameters
 	memset(header->title, ' ', 72);
-	strncpy(header->title, p->label().c_str(), 72);
+	p->label().copy(header->title, 72);
 	header->im = slice_header->im = p->sizeX();
 	header->jm = slice_header->jm = p->sizeY();
 	header->km = p->sizeZ();

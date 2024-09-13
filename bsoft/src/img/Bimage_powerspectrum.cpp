@@ -1,9 +1,9 @@
 /**
 @file	Bimage_powerspectrum.cpp
 @brief	Functions for calculating and using power spectra in electron micrographs
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210817
+@date	Modified: 20240109
 **/
 
 #include "Bimage.h"
@@ -13,8 +13,10 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
-int			set_tile_size(Vector3<long>& tile_size, Vector3<long> img_size)
+bool		set_tile_size(Vector3<long>& tile_size, Vector3<long> img_size)
 {
+	if ( tile_size == img_size ) return 0;
+	
 	// Minimum and maximum tile sizes allowed
 	long			min_size(64);
 	long			max_size(4096);
@@ -29,7 +31,7 @@ int			set_tile_size(Vector3<long>& tile_size, Vector3<long> img_size)
 		if ( img_size[2] > 1 ) tile_size[2] = tile_size[0];
 	}
 	
-	return 0;
+	return 1;
 }
 	
 
@@ -39,11 +41,15 @@ int			set_tile_size(Vector3<long>& tile_size, Vector3<long> img_size)
 @return int				error code.
 
 	All the sub-images are Fourier transformed.
-	The flags variable controls options base don which bits are set:
+	The flags variable controls options based on which bits are set:
 		1	normalize image before transformation
 		2	average all power spectra
 		4	shift the origin to the center
 		8	calculate the logarithm of the power spectrum
+		16	do edge smoothing to get rid of the cross artifact
+		32	reserved for further adding up power spectra
+		64	fix peaks on the horizontal zero-line
+		128	fix peaks on the vertical zero-line
 
 **/
 int			Bimage::power_spectrum(int flags)
@@ -56,22 +62,71 @@ int			Bimage::power_spectrum(int flags)
 	color_to_simple();
 	change_type(Float);
 	
-	if ( verbose & VERB_FULL ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Calculating a power spectrum:" << endl;
-		cout << "Flags:                           " << flags << endl;
-		cout << "Tiles:                           " << n << endl;
+		cout << "Flags:                          " << flags << endl;
+		cout << "Tiles:                          " << n << endl << endl;
 	}
 	
-//	if ( flags & 1 ) rescale_to_avg_std(0, 1);
-	
+//	Bimage*		pe = NULL;
+
+	if ( flags & 16 ) {
+//		pe = extract_edge_difference();
+//	} else {
+		Vector3<double>		start(1,1,0);
+		Vector3<long> 		rect(size()-start*2);
+		edge(0, rect, start, 1, FILL_AVERAGE);
+	}
+
 	if ( fft() )
 		return error_show("Bimage::power_spectrum", __FILE__, __LINE__);
-	
+
 	if ( flags & 1 ) zero_fourier_origin();
 	
+/*
+	if ( flags & 16 ) {		// Very slow! 3D does not seem to work
+		if ( verbose & VERB_PROCESS )
+			cout << "Decomposing for edge smoothing" << endl;
+			
+		pe->fft();
+		pe->zero_fourier_origin();
+
+		long		i, nn, xx, yy, zz;
+		double		cx = TWOPI/(double)x;
+		double		cy = TWOPI/(double)y;
+		double		cz = TWOPI/(double)z;
+		
+		vector<double>	dx(x);
+		vector<double>	dy(y);
+		vector<double>	dz(z,0);
+		
+		for ( xx=0; xx<x; ++xx ) dx[xx] = cos(cx*xx);
+		for ( yy=0; yy<y; ++yy ) dy[yy] = cos(cy*yy);
+		if ( z > 1 ) for ( zz=0; zz<z; ++zz ) dz[zz] = cos(cz*zz);
+	
+		for ( nn=0; nn<n; ++nn ) {
+//			cout << n << endl;
+			for ( i=nn*x*y*z, zz=0; zz<y; ++zz ) {
+ 				for ( yy=0; yy<y; ++yy ) {
+					for ( xx=0; xx<x; ++xx, ++i ) {
+   						if ( z == 1 )
+							set(i, complex(i) - pe->complex(i) * (0.5/(2.0-dx[xx]-dy[yy])));
+						else
+							set(i, complex(i) - pe->complex(i) * (0.5/(3.0-dx[xx]-dy[yy]-dz[zz])));
+					}
+				}
+			}
+		}
+	
+		delete pe;
+	}
+*/
 	complex_to_intensities();
 	
 	fourier_type(NoTransform);
+	metadata["type"] = "Power spectrum";
+
+	if ( flags & 192 ) fix_power_spectrum((flags>>5), 2);
 
 	if ( flags & 2 ) average_images();
 //	cout << "number of images = " << images() << endl;
@@ -119,7 +174,7 @@ Bimage*		Bimage::powerspectrum_tiled(long img_num, Vector3<long> tile_size, int 
 	
 	Vector3<long> 	start, ext_size, step_size;
 
-	set_tile_size(tile_size, size());
+	bool 			do_tile = set_tile_size(tile_size, size());
 
 	ext_size[0] = tile_size[0]*((x - 2*pad)/tile_size[0]);
 	ext_size[1] = tile_size[1]*((y - 2*pad)/tile_size[1]);
@@ -132,17 +187,40 @@ Bimage*		Bimage::powerspectrum_tiled(long img_num, Vector3<long> tile_size, int 
 	
 	if ( verbose & VERB_DEBUG ) {
 		cout << "DEBUG Bimage::powerspectrum_tiled: img_num=" << img_num << endl;
+		cout << "DEBUG Bimage::powerspectrum_tiled: ext_size=" << ext_size << endl;
 		cout << "DEBUG Bimage::powerspectrum_tiled: start=" << start << endl;
 		cout << "DEBUG Bimage::powerspectrum_tiled: tile_size=" << tile_size << endl;
 	}
 	
+	if ( verbose & VERB_PROCESS )
+		cout << "Tile size:                      " << tile_size << endl << endl;
+	
 	// If a single image assume a micrograph that needs to be tiled
+	Bimage* 		pex = NULL;
+	if ( do_tile )
+		pex = extract_tiles(img_num, start, ext_size, tile_size, step_size, 0);
+	else
+		pex = copy();
+	
+	pex->power_spectrum(flags);
+	
+	return pex;
+}
+
+Bimage*		Bimage::powerspectrum_tiled_exact(long img_num, Vector3<long> tile_size, int flags)
+{
+	Vector3<long> 	start, ext_size(size()), step_size;
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Tile size:                      " << tile_size << endl << endl;
+	
 	Bimage* 		pex = extract_tiles(img_num, start, ext_size, tile_size, step_size, 0);
 	
 	pex->power_spectrum(flags);
 	
 	return pex;
 }
+
 
 /**
 @brief 	Prepares a tiled powerspectrum from a tilted image for determining CTF parameters.
@@ -170,7 +248,7 @@ Bimage*		Bimage::powerspectrum_tilt_axis(long img_num, Vector3<long> tile_size,
 	Vector3<long> 	origin(size()/2);
 	vector<Vector3<long>>	tile;
 
-	set_tile_size(tile_size, size());
+	bool			do_tile = set_tile_size(tile_size, size());
 	
 	if ( fabs(tilt_axis) < ratang || fabs(tilt_axis) > M_PI - ratang ) {
 		origin[1] += (long)tilt_offset;
@@ -200,7 +278,11 @@ Bimage*		Bimage::powerspectrum_tilt_axis(long img_num, Vector3<long> tile_size,
 	}
 	
 	// If a single image assume a micrograph that needs to be tiled
-	Bimage* 			pex = extract_tiles(img_num, tile, tile_size);
+	Bimage* 			pex = NULL;
+	if ( do_tile )
+		pex = extract_tiles(img_num, tile, tile_size);
+	else
+		pex = extract(img_num);
 
 	Vector3<long> 		translate;
 	Vector3<long> 		nusize(1,1,1);
@@ -284,7 +366,7 @@ Bimage*		Bimage::powerspectrum_tilted(long img_num, Vector3<long> tile_size,
 	if ( image->origin()[0] <= 0 || image->origin()[1] <= 0 )
 		image->origin(size()/2);
 
-	set_tile_size(tile_size, size());
+	bool				do_tile = set_tile_size(tile_size, size());
 	
 	long				nn;
 	Vector3<long> 		start, region(size()), step_size(tile_size/2);
@@ -296,7 +378,11 @@ Bimage*		Bimage::powerspectrum_tilted(long img_num, Vector3<long> tile_size,
 	// The coordinates are the lower-left corners of the tiles
 	vector<Vector3<long>>	coor = tile_coordinates(start, region, tile_size, step_size, 0);
 
-	Bimage*				pex = extract_tiles(img_num, coor, tile_size);
+	Bimage*				pex = NULL;
+	if ( do_tile )
+		pex = extract_tiles(img_num, coor, tile_size);
+	else
+		pex = extract(img_num);
 
 	pex->edge(1, edge_rect, edge_start, edge_start[0]/2.0, FILL_AVERAGE, 0);
 	
@@ -351,7 +437,7 @@ Bimage*		Bimage::powerspectrum_tilted(long img_num, Vector3<long> tile_size,
 @param 	tilt_offset		offset perpendicular to tilt axis (in pixels).
 @param	defocus			average defocus to adjust for change in focus.
 @param	iCL2			inverse of product of spherical aberration and wavelenght squared.
-@param 	flags			1=norm, 2=avg, 4=shift, 8=log, 16=add.
+@param 	flags			1=norm, 2=avg, 4=shift, 8=log, 16=edge, 32=add, 64=xfix, 128=yfix.
 @return Bimage*			power spectrum.
 
 	A large single image (a micrograph) is converted to a number of tiles
@@ -368,31 +454,36 @@ Bimage*		Bimage::powerspectrum_tiled_and_tilted(Vector3<long> tile_size,
 {
 	long			nn, nimg(n);
 	Bimage*			ps1 = NULL;
-	if ( flags & 16 ) nimg = 1;
+	if ( flags & 32 ) nimg = 1;
 
-	set_tile_size(tile_size, size());
+	bool			do_tile = set_tile_size(tile_size, size());
 	
-	Bimage*			ps = new Bimage(Float, TSimple, tile_size, nimg);	
-	ps->sampling(sampling(0));
+	Bimage*			ps = NULL;
 	
-	for ( nn = 0; nn<n; nn++ ) {
-		if ( fabs(tilt_angle) > 1e-6 ) {
-			if ( defocus > 0 )
-				ps1 = powerspectrum_tilted(nn, tile_size, tilt_axis, tilt_angle, defocus, iCL2, flags);
-			else
-				ps1 = powerspectrum_tilt_axis(nn, tile_size, tilt_axis, tilt_offset, flags);
-		} else
-			ps1 = powerspectrum_tiled(nn, tile_size, flags);
-		if ( flags & 16 ) {
-			ps->add(ps1);
-		} else {
-			ps->replace(nn, ps1);
+	if ( do_tile ) {
+		ps = new Bimage(Float, TSimple, tile_size, nimg);
+		ps->sampling(sampling(0));
+		for ( nn = 0; nn<n; nn++ ) {
+			if ( fabs(tilt_angle) > 1e-6 ) {
+				if ( defocus > 0 )
+					ps1 = powerspectrum_tilted(nn, tile_size, tilt_axis, tilt_angle, defocus, iCL2, 	flags);
+				else
+					ps1 = powerspectrum_tilt_axis(nn, tile_size, tilt_axis, tilt_offset, flags);
+			} else
+				ps1 = powerspectrum_tiled(nn, tile_size, flags);
+			if ( flags & 32 ) {
+				ps->add(ps1);
+			} else {
+				ps->replace(nn, ps1);
+			}
+			delete ps1;
 		}
-		delete ps1;
+		if ( flags & 32 ) ps->multiply(1.0/nn);
+	} else {
+		ps = copy();
+		ps->power_spectrum(flags);
 	}
-	
-	if ( flags & 16 ) ps->multiply(1.0/nn);
-	
+		
 	ps->sampling(sampling(0));
 	ps->statistics();
 	ps->file_name(file_name());
@@ -419,11 +510,11 @@ double		isotropy_R(Bsimplex& simp)
 }
 
 /**
-@brief 	Calculates a measure of anisotropy in a poer spectrum.
+@brief 	Calculates a measure of anisotropy in a power spectrum.
 @param	n				sub-image number.
 @param 	&lores			low resolution limit.
 @param 	&hires			high resolution limit
-@return vector<double>		3-vlaue vector: power average and deviation and maximum power angle.
+@return vector<double>	3-vlaue vector: power average and deviation and maximum power angle.
 	The power between the indicated resolution shells are averaged for
 	each angle and fitted to an equation for anisotropy:
 		P = Pavg + Pdev*cos(2(a-phi))
@@ -485,7 +576,7 @@ vector<double>	Bimage::powerspectrum_isotropy(long n, double& lores, double& hir
 	y_var /= na;
 	y_var -= y_avg*y_avg;
 	
-	cout << "avg=" << y_avg << " var=" << y_var << endl;
+//	cout << "avg=" << y_avg << " var=" << y_var << endl;
 
 	Bsimplex		simp(1, 3, 0, na, vx, vy);
 	
@@ -524,3 +615,211 @@ vector<double>	Bimage::powerspectrum_isotropy(long n, double& lores, double& hir
 	
 	return fit;
 }
+
+double		Bimage::average_line(long xx, long yy, long zz, long nn, long len, int dir)
+{
+	long			i, j;
+	double			val(0);
+	
+	if ( dir & 1 ) {
+		if ( xx < 0 ) {
+			len += xx;
+			xx = 0;
+		} else if ( xx + len >= x ) {
+			len += x - xx - 1;
+		}
+		for ( i=index(xx, yy, zz, nn), j=0; j<len; ++i, ++j ) val += (*this)[i];
+	} else if ( dir & 2 ) {
+		if ( yy < 0 ) {
+			len += yy;
+			yy = 0;
+		} else if ( yy + len >= y ) {
+			len += y - yy - 1;
+		}
+		for ( i=index(xx, yy, zz, nn), j=0; j<len; i+=x, ++j ) val += (*this)[i];
+	}
+	
+	if ( len ) val /= len;
+	
+	return val;
+}
+
+/**
+@brief 	Removes high-intensity artifacts on the zero-frequency lines in a power spectrum.
+@param	dir				line direction: 1=horizontal, 2=vertical, 3=both.
+@param 	ratio			threshold ratio.
+@return long				number of fixed pixels.
+	The average of the lines above and below a pixel are calculated.
+	If the pixel vale divided by this average exceeds the given threshod ratio.
+	it is replaced by the average.
+**/
+long		Bimage::fix_power_spectrum(int dir, double ratio)
+{
+	long			nfix(0);
+	long			i, xx, yy, zz, nn;
+	double			v;
+	
+	if ( dir & 1 ) {	// Horizontal
+		yy = y/2;
+		for ( nn=0; nn<n; ++nn ) {
+			for ( zz=0; zz<z; ++zz ) {
+				for ( xx=0; xx<x; ++xx ) {
+					i = index(xx, yy, zz, nn);
+					v = (average_line(xx-1, yy-1, zz, nn, 3, dir) +
+						average_line(xx-1, yy+1, zz, nn, 3, dir))/2;
+					if ( (*this)[i] - v > ratio ) {
+						set(i, v);
+						nfix++;
+					}
+				}
+			}
+		}
+	}
+	
+	if ( dir & 2 ) {	// Vertical
+		xx = x/2;
+		for ( nn=0; nn<n; ++nn ) {
+			for ( zz=0; zz<z; ++zz ) {
+				for ( yy=0; yy<y; ++yy ) {
+					i = index(xx, yy, zz, nn);
+					v = (average_line(xx-1, yy-1, zz, nn, 3, dir) +
+						average_line(xx+1, yy-1, zz, nn, 3, dir))/2;
+					if ( (*this)[i] - v > ratio ) {
+						set(i, v);
+						nfix++;
+					}
+				}
+			}
+		}
+	}
+	
+	return nfix;
+}
+
+
+/*
+int			Bimage::powerspectrum_edge_smoothed(int flags)
+{
+	if ( verbose & VERB_DEBUG ) {
+		cout << "DEBUG Bimage::power_spectrum: flags=" << flags << endl;
+		cout << "DEBUG Bimage::power_spectrum: tiles=" << n << endl;
+	}
+	
+	color_to_simple();
+	change_type(Float);
+	
+	if ( verbose & VERB_FULL ) {
+		cout << "Calculating a power spectrum:" << endl;
+		cout << "Flags:                           " << flags << endl;
+		cout << "Tiles:                           " << n << endl;
+	}
+
+	Bimage*		pe = extract_edge_difference();
+
+	if ( fft() )
+		return error_show("Bimage::power_spectrum", __FILE__, __LINE__);
+
+	if ( flags & 1 ) zero_fourier_origin();
+
+	pe->fft();
+	pe->zero_fourier_origin();
+
+	long		i, nn, xx, yy;
+	double		dx, dy, v;
+	double		cx = TWOPI/(double)x;
+	double		cy = TWOPI/(double)y;
+	
+	for ( nn=0; nn<n; ++nn ) {
+		for ( i=nn*x*y*z, yy=0; yy<y; ++yy ) {
+   			dy = cos(cy*yy);
+			for ( xx=0; xx<x; ++xx, ++i ) {
+   				dx = cos(cx*xx);
+				set(i, complex(i) - pe->complex(i) * (0.5/(2.0-dx-dy)));
+			}
+		}
+	}
+	
+	delete pe;
+
+	complex_to_intensities();
+	
+	fourier_type(NoTransform);
+
+	if ( flags & 2 ) average_images();
+//	cout << "number of images = " << images() << endl;
+	
+	statistics();
+	
+	origin(0,0,0);
+	
+	show_maximum((complex(1)).power());
+	
+	if ( flags & 4 ) center_wrap();
+	
+	if ( flags & 8 ) logarithm();			// Get logarithm of intensities
+	
+	return 0;
+}
+*/
+
+/**
+@brief 	Plot a radial power spectrum.
+@param	resolution		high resolution limit.
+@param 	ps_flags		flags: 8=logarithm.
+@return Bplot*			plot.
+	
+**/
+Bplot*		Bimage::plot_radial_powerspectrum(double resolution, int ps_flags)
+{
+	long			i, j, k;
+	double			f;
+	Bstring			title("Radial power spectrum");
+	long			nc(n+1);
+	RGB<float>		color;
+	
+//	cout << "sampling = " << sampling(0) << endl;
+
+	Bplot*			plot = new Bplot(1, x, nc);
+	plot->title(title);
+	plot->page(0).title(title);
+	plot->page(0).columns(nc);
+	for ( i=0; i<nc; i++ ) plot->page(0).column(i).number(i);
+	plot->page(0).column(0).label("SpatialFrequency(1/A)");
+	plot->page(0).column(0).axis(1);
+	plot->page(0).axis(0).min(0);
+	plot->page(0).axis(0).max(1/resolution);
+	for ( i=1; i<nc; ++i ) {
+		plot->page(0).column(i).type(2);
+		plot->page(0).column(i).label(Bstring(i, "%d"));
+		plot->page(0).column(i).axis(3);
+		if ( nc > 2 ) color.spectrum(i,1,nc-1);
+		plot->page(0).column(i).color(color.r(),color.g(),color.b());
+	}
+	if ( ps_flags & 8 ) {
+		plot->page(0).axis(3).flags(2);
+		plot->page(0).axis(3).label("log Power");
+	} else {
+		plot->page(0).axis(3).min(0);
+		f = (*this)[1];
+		for ( i=1; i<x; ++i )
+			if ( f < (*this)[i] ) f = (*this)[i];
+		plot->page(0).axis(3).max(f);
+		plot->page(0).axis(3).label("Power");
+	}
+	for ( i=0; i<x; ++i ) (*plot)[i] = sampling(0)[0]*i;
+	for ( i=0, k=x; i<x*n; ++i, ++k ) (*plot)[k] = (*this)[i];
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Spatial Frequency (1/A)";
+		for ( k=1; k<=n; ++k ) cout << tab << k;
+		cout << scientific << endl;
+		for ( i=0; i<x; ++i ) {
+			cout << (*plot)[i];
+			for ( j=x+i, k=0; k<n; ++k, j+=x ) cout << tab << (*plot)[j];
+			cout << endl;
+		}
+	}
+		
+	return plot;
+}
+

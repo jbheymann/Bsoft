@@ -100,7 +100,7 @@ int 	main(int argc, char **argv)
 	int 			set_stats(0);
 	int 			set_sampling(0);			// 1=set sampling, 2=set sampling and reset unitcell
 	Vector3<double>	sam;						// Units for the three axes (A/pixel)
-	Bstring			symmetry_string;			// No symmetry specified
+	string			symmetry_string;			// No symmetry specified
 	int 			spacegroup(0);				// Space group
 	UnitCell		uc;							// Unit cell parameters
 	int 			calc_background(0);			// Flag to calculate background values
@@ -109,7 +109,7 @@ int 	main(int argc, char **argv)
 	int 			subtract_background(0);		// Flag to subtract backgrounds
 	int 			shift_background(0);		// Flag to shift backgrounds
 	double	 		newbackground(0);			// New background
-	View			view;						// View parameters
+	View2<double>	view;						// View parameters
 	int				set_view(0);				// Flag to set the view
 	Bstring			label;						// Header title or label
 	int				znswitch(0);				// 0=not, 1=z2n, 2=n2z
@@ -283,20 +283,20 @@ int 	main(int argc, char **argv)
 			p->max = p->smax = max;
 		}
 */		
-		if ( symmetry_string.length() ) p->symmetry(symmetry_string.str());
+		if ( symmetry_string.length() ) p->symmetry(symmetry_string);
 			
-		if ( uc.check() ) p->unit_cell(uc);
+		if ( uc.c() ) p->unit_cell(uc);
 	
 		if ( spacegroup ) {
-			Bstring			symfile;
+			string			symfile;
 			int				nsym(0);
-			char*			symop = read_symop(symfile, spacegroup, nsym);
+			vector<string>	symop = read_symop(symfile, spacegroup);
 			if ( verbose & VERB_FULL ) {
 				cout << "Symmetry operator file:         " << symfile << endl;
 				cout << "Number of symmetry operators:   " << nsym << endl;
 				cout << "Operators:" << endl;
-				for ( int i=0; i<80*nsym; i+=80 )
-					cout << &symop[i] << endl;
+				for ( int i=0; i<symop.size(); ++i )
+					cout << symop[i] << endl;
 				cout << endl;
 			}
 			p->space_group(spacegroup);
@@ -317,7 +317,7 @@ int 	main(int argc, char **argv)
 		
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

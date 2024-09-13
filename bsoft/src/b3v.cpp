@@ -3,7 +3,7 @@
 @brief	Program to extract 3 orthogonal views from a map
 @author Bernard Heymann
 @date	Created: 20100428
-@date	Modified: 20150718
+@date	Modified: 20230901
 **/
 
 #include "rwimg.h"
@@ -23,6 +23,7 @@ const char* use[] = {
 "Generates 3 orthogonal views of a map.",
 " ",
 "Actions:",
+"-center                  Center the origin before calculating views.",
 "-orthogonal 24,67,45     Extract orthogonal slices around this voxel.",
 "                         The voxel can be specified as center or origin.",
 "-montage 2               Montage the slices into a number of columns.",
@@ -41,6 +42,7 @@ NULL
 int 	main(int argc, char **argv)
 {
 	// Initialize variables
+	bool			center(0);
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
 	int				orth_type(0);				// Type of voxel specification: 1=center, 2=origin, 3=coor
 	long			montage_cols(0);			// Number of montage columns
@@ -55,11 +57,7 @@ int 	main(int argc, char **argv)
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "datatype" )
-			nudatatype = curropt->datatype();
-		if ( curropt->tag == "montage" )
-			if ( ( montage_cols = curropt->value.integer() ) < 1 )
-				cerr << "-montage: A number of columns must be specified!" << endl;
+		if ( curropt->tag == "center" ) center = 1;
 		if ( curropt->tag == "orthogonal" ) {
 			if ( curropt->value[0] == 'c' ) orth_type = 1;
 			else if ( curropt->value[0] == 'o' ) orth_type = 2;
@@ -69,6 +67,11 @@ int 	main(int argc, char **argv)
 				else orth_type = 3;
 			}
 		}
+		if ( curropt->tag == "montage" )
+			if ( ( montage_cols = curropt->value.integer() ) < 1 )
+				cerr << "-montage: A number of columns must be specified!" << endl;
+		if ( curropt->tag == "datatype" )
+			nudatatype = curropt->datatype();
 		if ( curropt->tag == "select" )
 			if ( ( img_num = curropt->value.integer() ) < 0 )
 				cerr << "-select: Image numbers start from 0!" << endl;
@@ -91,6 +94,9 @@ int 	main(int argc, char **argv)
 		delete p;
 		bexit(0);
 	}
+	
+	if ( center )
+		p->center_wrap();
 	
 	Bimage*			p3 = NULL;
 	
@@ -115,7 +121,12 @@ int 	main(int argc, char **argv)
 				vori = p->image[img_num].origin();
 			voxel = Vector3<long>(vori[0], vori[1], vori[2]);
 		}
-		p3 = p->orthogonal_slices(img_num, voxel, size);
+		if ( montage_cols == 2 ) {
+			p3 = p->orthogonal_montage(voxel, size, pad, fill_type, fill);
+			pad = 0;
+		} else {
+			p3 = p->orthogonal_slices(img_num, voxel, size);
+		}
 		delete p;
 		p = p3;
 	
@@ -125,7 +136,7 @@ int 	main(int argc, char **argv)
 			p->resize(newsize, translate, fill_type, fill);
 		}
 
-		if ( montage_cols ) {
+		if ( montage_cols%2 ) {
 			p3 = p->montage(0, montage_cols, 4 - montage_cols, 0, 1);
 			delete p;
 			p = p3;
@@ -133,11 +144,12 @@ int 	main(int argc, char **argv)
 	}
 	
 	p->change_type(nudatatype);
-	write_img(argv[optind], p, 0);
+	if ( optind < argc )
+		write_img(argv[optind], p, 0);
 
     delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

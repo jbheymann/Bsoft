@@ -3,7 +3,7 @@
 @brief	Program to generate random images
 @author Bernard Heymann
 @date	Created: 19990703
-@date	Modified: 20150725
+@date	Modified: 20240413
 **/
 
 #include "rwimg.h"
@@ -21,19 +21,22 @@ const char* use[] = {
 "Usage: brandom [options] [input.img] output.img",
 "-----------------------------------------------",
 "Generates random content images.",
-"If an input image is not found a random output image is generated.",
 "The default output data type is floating point.",
 " ",
 "Actions:",
+"-create 100,200,10       Create a new image of this size.",
 "-type gauss              Distribution type (default: uniform, ",
 "                         others: gaussian, poisson, logistical, spectral).",
+"-distance gauss          Distance distribution type (default: uniform, ",
+"                         others: gaussian)",
+"-phases uniform          Generate a complex image with random phases: uniform, gaussian",
 "-rescale -0.1,5.2        Rescale output data to average and standard deviation.",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
 "-datatype u              Data type (default: byte).",
 "-images 12               Number of images (default: 1).",
-"-size 10,50,8            Size (default: 256,256,1).",
+//"-size 10,50,8            Size (default: 256,256,1).",
 "-sampling 1.5,1.5,1.5    Sampling (default: 1,1,1; a single value can be given).",
 "-origin 0,-10,30         Set the origin (default image origin).",
 "-minmax -1.2,5.6         Set minimum and maximum of input and uniform random image (default: -1.732,1.732).",
@@ -48,7 +51,7 @@ int 	main(int argc, char **argv)
 {
 	// Initialize variables
 	DataType 		nudatatype(Unknown_Type);		// Data type to be set
-	Vector3<long>	size(256,256,1);
+	Vector3<long>	size;
 	int				set_origin(0);					// Flag to set origin
 	Vector3<double> origin;							// Origin
 	int 			set_sampling(0);
@@ -62,11 +65,15 @@ int 	main(int argc, char **argv)
 	double			snr(1);							// Signal-to-noise ratio
 	double			foreground_radius(0);			// Foreground radius
 	int 			rand_type(0);					// Default uniform distribution
+	int 			dist_type(0);					// Default none
+	int 			phase_type(0);					// Default none
 	
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
+		if ( curropt->tag == "create" )
+			size = curropt->size();
 		if ( curropt->tag == "datatype" )
 			nudatatype = curropt->datatype();
 		if ( curropt->tag == "origin" ) {
@@ -89,6 +96,16 @@ int 	main(int argc, char **argv)
 			else if ( curropt->value[0] == 's' ) rand_type = 4;
 			else
 				cerr << "-type: Type " << curropt->value << " not supported! Default to uniform distribution" << endl;
+		}
+		if ( curropt->tag == "distance" ) {
+			if ( curropt->value[0] == 'u' ) dist_type = 1;
+			else if ( curropt->value[0] == 'g' ) dist_type = 2;
+			else
+				cerr << "-distance: Distance type " << curropt->value << " not supported! Default to uniform distribution" << endl;
+		}
+		if ( curropt->tag == "phases" ) {
+			if ( curropt->value[0] == 'u' ) phase_type = 1;
+			if ( curropt->value[0] == 'g' ) phase_type = 2;
 		}
 		if ( curropt->tag == "minmax" ) {
 			if ( curropt->values(min, max) < 2 )
@@ -115,8 +132,6 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "images" )
 			if ( ( nimg = curropt->value.integer() ) < 1 )
 				cerr << "-images: The number of images must be specified!" << endl;
-		if ( curropt->tag == "size" )
-			size = curropt->size();
 		if ( curropt->tag == "snr" ) {
 			if ( curropt->values(snr, foreground_radius) < 1 )
 				cerr << "-snr: A value must be specified!" << endl;
@@ -135,7 +150,8 @@ int 	main(int argc, char **argv)
 	Bimage* 	p = NULL;
 	Bimage* 	pran = NULL;
 	
-	if ( optind < argc - 1 ) {
+	
+	if ( optind < argc - 1 && size.volume() < 1 ) {
 		p = read_img(argv[optind++], 1, -1);
 		p->change_type(Float);
 		if ( rand_type > 0 ) {
@@ -156,11 +172,19 @@ int 	main(int argc, char **argv)
 		}
 	} else {
 		if ( size[0] < 1 ) size[0] = 256;
-		if ( size[1] < 1 ) size[1] = 256;
+		if ( size[1] < 1 ) size[1] = size[0];
 		if ( size[2] < 1 ) size[2] = 1;
 	}
 
-	pran = new Bimage(Float, TSimple, size, nimg);
+	if ( size.volume() ) pran = new Bimage(Float, TSimple, size, nimg);
+
+	if ( set_sampling ) pran->sampling(sampling);
+	
+	if ( set_origin ) {
+		if ( set_origin == 2 ) pran->origin(pran->size()/2);
+		else pran->origin(origin);
+	}
+	
 	switch ( rand_type ) {
 		case 1:
 			pran->noise_gaussian(avg, std);
@@ -175,7 +199,29 @@ int 	main(int argc, char **argv)
 			pran->noise_spectral(alpha);
 			break;
 		default:
-			pran->noise_uniform(min, max);
+			if ( dist_type < 1 ) pran->noise_uniform(min, max);
+			break;
+	}
+	
+	switch ( dist_type ) {
+		case 1:
+			pran->noise_uniform_distance(avg*pran->size().volume());
+			break;
+		case 2:
+			pran->noise_gaussian_distance(avg*pran->size().volume(), std);
+			break;
+		default:
+			break;
+	}
+	
+	switch ( phase_type ) {
+		case 1:
+			pran->uniform_random_phases();
+			break;
+		case 2:
+			pran->gaussian_random_phases(avg, std);
+			break;
+		default:
 			break;
 	}
 	
@@ -185,7 +231,7 @@ int 	main(int argc, char **argv)
 			else fg = (M_PI*4.0/3.0)*foreground_radius*foreground_radius*foreground_radius;
 		}
 		if ( fg > size.volume() ) fg = size.volume();
-		scale = sqrt(size.volume()/(snr*fg));
+		scale = sqrt(size.volume()/(snr*fg)) * p->standard_deviation()/pran->standard_deviation();
 		p->add(pran, scale, -avg);
 		delete pran;
 		pran = p;
@@ -195,21 +241,14 @@ int 	main(int argc, char **argv)
 	
 	pran->change_type(nudatatype);
 	
-	if ( set_sampling ) pran->sampling(sampling);
-	
-	if ( set_origin ) {
-		if ( set_origin == 2 ) pran->origin(pran->size()/2);
-		else pran->origin(origin);
-	}
-	
 	if ( optind < argc )
 		write_img(argv[optind], pran, 0);
 	else
-		write_img("temp.pif", pran, 0);
+		write_img("temp.grd", pran, 0);
 	
 	delete pran;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

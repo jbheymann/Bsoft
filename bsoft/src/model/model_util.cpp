@@ -1,9 +1,9 @@
 /**
 @file	model_util.cpp
 @brief	Library routines used for model processing
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20210414
+@date	Modified: 20240330
 **/
 
 #include "model_util.h"
@@ -18,7 +18,6 @@
 #include "matrix_util.h"
 #include "Matrix3.h"
 #include "random_numbers.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -30,19 +29,17 @@ extern int 	verbose;		// Level of output to the screen
 @param 	modfunc			function to be called.
 @return long			aggregate number returned by function.
 
-	The function called process only one model.
-
 **/
 long		models_process(Bmodel* model, long (modfunc)(Bmodel*))
 {
 	long 			n(0);
 	Bmodel*			mp;
 	
-	for ( mp = model; mp; mp = mp->next )
-		n += (modfunc)(mp);
+	for ( mp = model; mp; mp = mp->next, ++n )
+		(modfunc)(mp);
 	
 	if ( verbose & VERB_PROCESS )
-		cout << "Elements processed:             " << n << endl << endl;
+		cout << "Models processed:               " << n << endl << endl;
 	
 	return n;
 }
@@ -54,19 +51,17 @@ long		models_process(Bmodel* model, long (modfunc)(Bmodel*))
 @fn 	(modfunc)(Bmodel*)	function to be called.
 @return long			aggregate number returned by function.
 
-	The function called process only one model.
-
 **/
 long		models_process(Bmodel* model, long i, long (modfunc)(Bmodel*, long))
 {
 	long 			n(0);
 	Bmodel*			mp;
 	
-	for ( mp = model; mp; mp = mp->next )
-		n += (modfunc)(mp, i);
+	for ( mp = model; mp; mp = mp->next, ++n )
+		(modfunc)(mp, i);
 	
 	if ( verbose & VERB_PROCESS )
-		cout << "Elements processed:             " << n << endl << endl;
+		cout << "Models processed:               " << n << endl << endl;
 	
 	return n;
 }
@@ -78,19 +73,17 @@ long		models_process(Bmodel* model, long i, long (modfunc)(Bmodel*, long))
 @fn 	(modfunc)(Bmodel*)	function to be called.
 @return long			aggregate number returned by function.
 
-	The function called process only one model.
-
 **/
 long		models_process(Bmodel* model, double d, long (modfunc)(Bmodel*, double))
 {
 	long 			n(0);
 	Bmodel*			mp;
 	
-	for ( mp = model; mp; mp = mp->next )
-		n += (modfunc)(mp, d);
+	for ( mp = model; mp; mp = mp->next, ++n )
+		(modfunc)(mp, d);
 	
 	if ( verbose & VERB_PROCESS )
-		cout << "Elements processed:             " << n << endl << endl;
+		cout << "Models processed:               " << n << endl << endl;
 	
 	return n;
 }
@@ -98,49 +91,39 @@ long		models_process(Bmodel* model, double d, long (modfunc)(Bmodel*, double))
 /**
 @brief 	Process a list of models using the specified function.
 @param 	*model			list of models.
-@param 	&str			an argument.
+@param 	str				an argument.
 @fn 	(modfunc)(Bmodel*)	function to be called.
-@return long			aggregate number returned by function.
-
-	The function called process only one model.
+@return long				aggregate number returned by function.
 
 **/
-long		models_process(Bmodel* model, Bstring& str, long (modfunc)(Bmodel*, Bstring& str))
+long		models_process(Bmodel* model, string str, long (modfunc)(Bmodel*, string str))
 {
 	long 			n(0);
 	Bmodel*			mp;
 	
-	for ( mp = model; mp; mp = mp->next )
-		n += (modfunc)(mp, str);
+	for ( mp = model; mp; mp = mp->next, ++n )
+		(modfunc)(mp, str);
 	
 	if ( verbose & VERB_PROCESS )
-		cout << "Elements processed:             " << n << endl << endl;
+		cout << "Models processed:               " << n << endl << endl;
 	
 	return n;
 }
 
 /**
-@brief 	Process a list of models using the specified function.
-@param 	*model			list of models.
-@param 	&str			an argument.
-@fn 	(modfunc)(Bmodel*)	function to be called.
-@return long			aggregate number returned by function.
-
-	The function called process only one model.
-
+@brief 	Counts all the components.
+@param 	*model		model parameters.
+@return long			number of components.
 **/
-long		models_process(Bmodel* model, string& str, long (modfunc)(Bmodel*, string& str))
+long		model_component_count(Bmodel* model)
 {
-	long 			n(0);
-	Bmodel*			mp;
+	long		ncomp(0);
+	Bmodel*		mp;
 	
 	for ( mp = model; mp; mp = mp->next )
-		n += (modfunc)(mp, str);
+		ncomp += mp->component_count();
 	
-	if ( verbose & VERB_PROCESS )
-		cout << "Elements processed:             " << n << endl << endl;
-	
-	return n;
+	return ncomp;
 }
 
 /**
@@ -155,7 +138,7 @@ long		model_list(Bmodel* model)
 	long			nmod(0), ncomp, nct(0);
 	Bmodel*			mp;
 	Bcomponent*		comp;
-	Bstring			type_id, sym, fmap;
+	string			type_id, sym, fmap;
 
 	cout << "Model\tType\tNcomp\tPG\tHand\tFOM\tSelect\tMap\tNumber" << endl;
 	for ( mp = model; mp; mp = mp->next, nmod++ ) {
@@ -188,39 +171,34 @@ long		model_list_comp(Bmodel* model)
 	Bmodel*			mp;
 	Bcomponent*		comp;
 	Bcomptype*		ct;
-	Bstring			type_id, sym, fmap;
-	Bstring*		comptypelist = NULL;
-	Bstring*		comptype = NULL;
-	Bstring*		type = NULL;
+	string			type_id, sym, fmap;
+	vector<string>	comptypelist;
 	
 	for ( mp = model; mp; mp = mp->next, nmod++ ) if ( mp->select() ) {
 		for ( ct = mp->type; ct; ct = ct->next ) {
-			for ( type = comptypelist; type && *type != ct->identifier(); type = type->next ) ;
-			if ( !type ) {
-				comptype = string_add(&comptype, ct->identifier().c_str());
-				if ( !comptypelist ) comptypelist = comptype;
+			if ( find(comptypelist.begin(), comptypelist.end(), ct->identifier()) == comptypelist.end() ) {
+				comptypelist.push_back(ct->identifier());
 				nct++;
 			}
 		}
 	}
     
-	int*			n = new int[nct];
-	int*			ntot = new int[nct];
-	for ( i=0; i<nct; i++ ) ntot[i] = 0;
+	vector<int>		n(nct, 0);
+	vector<int>		ntot(nct, 0);
 
 	cout << "Model";
-	for ( comptype = comptypelist; comptype; comptype = comptype->next )
-		cout << tab << *comptype;
+	for ( auto t: comptypelist ) cout << tab << t;
 	cout << endl;
 
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
 		for ( i=0; i<nct; i++ ) n[i] = 0;
 		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
-			for ( i=0, comptype = comptypelist; comptype && *comptype != comp->type()->identifier(); comptype = comptype->next, i++ ) ;
-			if ( comptype ) n[i]++;
+			i = 0;
+			for ( auto t = comptypelist.begin(); t != comptypelist.end() && *t != comp->type()->identifier(); ++t ) ++i;
+			if ( i < nct ) n[i]++;
 		}
 		cout << mp->identifier();
-		for ( i=0, comptype = comptypelist; comptype; comptype = comptype->next, i++ ) {
+		for ( i=0; i<nct; ++i ) {
 			ntot[i] += n[i];
 			cout << tab << n[i];
 		}
@@ -229,90 +207,11 @@ long		model_list_comp(Bmodel* model)
 	}
 
 	cout << "Total";
-	for ( i=0, comptype = comptypelist; comptype; comptype = comptype->next, i++ )
+	for ( i=0; i<nct; ++i )
 		cout << tab << ntot[i];
 	cout << endl << endl;
 
-	delete[] n;
-	delete[] ntot;
-	
 	return nmod;
-}
-
-/**
-@brief	Replaces all components in a model with reference components.
-@param 	*model			model structure to be modified.
-@param 	*modref			reference model.
-@return long			number of components used in reference.
-
-	Only the first model in the reference is used.
-	All models will have identical sets of components.
-
-**/
-long		model_replace_components(Bmodel* model, Bmodel* modref)
-{
-	int				i;
-	Bmodel*			mp;
-	Bcomptype*		ct;
-	Bcomptype*		ctref;
-	Bcomponent*		comp;
-	Bcomponent*		compref;
-	Blink*			link;
-	Blink*			linkref;
-	Bpolygon*		poly;
-	Bpolygon*		polyref;
-	
-	if ( verbose & VERB_FULL )
-		cout << "Replacing components in a model from a reference model: " << modref->identifier() << endl;
-
-	long	n = count_list((char *) modref->comp);
-	
-	for ( mp = model; mp; mp = mp->next ) {
-		model_link_list_kill(mp);
-		comp_type_list_kill(mp->type);
-		component_list_kill(mp->comp);
-		poly_list_kill(mp->poly);
-		mp->type = ct = NULL;
-		mp->comp = comp = NULL;
-		mp->link = link = NULL;
-		mp->poly = poly = NULL;
-		for ( ctref = modref->type; ctref; ctref = ctref->next ) {
-//			ct = (Bcomptype *) add_item((char **) &ct, sizeof(Bcomptype));
-//			if ( !mp->type ) mp->type = ct;
-//			component_type_copy(ctref, ct);
-			if ( mp->type ) mp->type->add(ctref);
-			else mp->type = new Bcomptype(ctref);
-		}
-		for ( compref = modref->comp; compref; compref = compref->next ) {
-			comp = mp->add_component(compref);
-			comp->type(mp->add_type(compref->type()->identifier()));
-		}
-		for ( linkref = modref->link; linkref; linkref = linkref->next ) {
-			link = (Blink *) add_item((char **) &link, sizeof(Blink));
-			if ( !modref->link ) modref->link = link;
-			for ( compref = modref->comp, comp = mp->comp; compref; compref = compref->next, comp = comp->next ) {
-				if ( linkref->comp[0] == compref ) link->comp[0] = comp;
-				if ( linkref->comp[1] == compref ) link->comp[1] = comp;
-			}
-			link->length(linkref->length());
-			link->radius(linkref->radius());
-			link->color(linkref->color());
-		}
-		for ( polyref = modref->poly; polyref; polyref = polyref->next ) {
-			poly = (Bpolygon *) add_item((char **) &poly, sizeof(Bpolygon));
-			if ( !modref->poly ) modref->poly = poly;
-			poly->normal(polyref->normal());
-			poly->closed(polyref->closed());
-			for ( compref = modref->comp, comp = mp->comp; compref; compref = compref->next, comp = comp->next ) {
-				for ( i=0; i<polyref->comp.size() && polyref->comp[i]; i++ )
-					if ( polyref->comp[i] == compref ) poly->comp.push_back(comp);
-			}
-		}
-	}
-	
-	model_setup_links(model);
-	
-	return n;
 }
 
 /**
@@ -372,7 +271,7 @@ long		model_merge(Bmodel* model)
 /**
 @brief 	Add a number to each model id.
 @param 	*model		model parameters.
-@return long		number of models.
+@return long			number of models.
 
 	The intention is to give unique id's to models.
 
@@ -383,20 +282,43 @@ long		model_number_ids(Bmodel* model)
 	
 	long			n(0);
 	Bmodel*			mp;
-	Bstring			id;
+	string			id;
 	
 	for ( mp = model; mp; mp = mp->next ) {
-		id = mp->identifier().c_str() + Bstring(++n, "_%04d");
-		mp->identifier() = id.str();
+		id = mp->identifier() + "_" + to_string(++n);
+		mp->identifier() = id;
 	}
 	
 	return n;
 }
 
 /**
+@brief 	Rename models with alphabetical letters.
+@param 	*model		model parameters.
+@param 	first_name	letter of first model.
+@return long			number of models.
+
+**/
+long		model_rename(Bmodel* model, char first_name)
+{
+	if ( first_name == 0 ) return 0;
+	
+	long			nmod(0);
+	char			letter(first_name);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next, nmod++ ) {
+		mp->identifier() = letter++;
+		if ( letter > 'Z' ) letter = 'A';
+	}
+	
+	return nmod;
+}
+
+/**
 @brief 	Rename components.
 @param 	*model		model parameters.
-@return long		number of components.
+@return long			number of components.
 
 	The number of links to a component determines its new name.
 	Only the first model is processed.
@@ -410,7 +332,7 @@ long		model_rename_components(Bmodel* model)
 	long			i, n(0);
 	Bcomponent*		comp;
 
-	Bstring			ctstr[10];
+	string			ctstr[10];
 	ctstr[0] = "NIL";
 	ctstr[1] = "MON";
 	ctstr[2] = "DI";
@@ -430,6 +352,183 @@ long		model_rename_components(Bmodel* model)
 	}
 	
 	return n;
+}
+
+/**
+@brief 	Associates a model file with a component type.
+@param 	*model			the model.
+@param 	associate_type	component type.
+@param 	associate_file	component file name.
+@return int				number of types associated.
+
+	Model files can be coordinates or maps.
+
+**/
+int			model_associate(Bmodel* model, string associate_type, string associate_file)
+{
+	if ( !model ) return 0;
+	
+	int				n(0);
+	Bmodel*			mp = NULL;
+	Bcomptype*		ct = NULL;
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Associating component " << associate_type << " with file " << associate_file << endl << endl;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( ct = mp->type; ct; ct = ct->next ) if ( ct->select() ) {
+			if ( ct->identifier() == associate_type ) {
+				ct->file_name(associate_file);
+				n++;
+			}
+		}
+	}
+	
+	return  n;
+}
+
+/**
+@brief 	Associates a mass with a component type.
+@param 	*model			model list.
+@param 	associate_type	component type.
+@param 	mass			component type mass.
+@return int				number of types associated.
+**/
+int			model_associate_mass(Bmodel* model, string associate_type, double mass)
+{
+	if ( !model ) return 0;
+	
+	int				n(0);
+	Bmodel*			mp = NULL;
+	Bcomptype*		ct = NULL;
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Associating component " << associate_type << " with mass = " << mass << endl << endl;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( ct = mp->type; ct; ct = ct->next ) if ( ct->select() ) {
+			if ( ct->identifier() == associate_type ) {
+				ct->mass(mass);
+				n++;
+			}
+		}
+	}
+	
+	return  n;
+}
+
+/**
+@brief 	Sets the filenames of all selected component types to the given string.
+@param 	*model		model parameters.
+@param 	filename	component file name.
+@return int			number of component types set.
+
+	The image numbers are sequentially set as well.
+
+**/
+int			model_set_comptype_filenames(Bmodel* model, string filename)
+{
+	if ( !model ) return 0;
+	
+	int				n(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
+		n += mp->set_type_filenames(filename);
+	
+	return  n;
+}
+
+
+/**
+@brief 	Set the display radius for all components to a specific value.
+@param 	*model		model parameters.
+@param 	comprad		component display radius.
+@return long			number of components selected.
+**/
+long		model_set_component_radius(Bmodel* model, double comprad)
+{
+	if ( !model ) return 0;
+
+	int				n(0);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
+		n += mp->set_component_radius(comprad);
+
+	return n;
+}
+
+/**
+@brief 	Sets all the map file names of selected models.
+@param 	*model		model parameters.
+@param 	mapfile	map file name.
+@return int			0.
+**/
+int			model_set_map_filenames(Bmodel* model, string mapfile)
+{
+	Bmodel*		mp;
+	
+	for ( mp = model; mp; mp = mp->next )
+		if ( mp->select()) mp->mapfile(mapfile);
+	
+	return 0;
+}
+
+/**
+@brief 	Reset the component types.
+@param 	*model		model.
+@param 	set_type	component type.
+@return int			number of models.
+
+	Sets all the component types to the given string.
+
+**/
+int			model_set_type(Bmodel* model, string set_type)
+{
+	if ( !model ) return 0;
+	
+	int				n;
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	Bcomptype*		ct;
+
+	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
+		comp_type_list_kill(mp->type);
+		mp->type = NULL;
+		ct = mp->add_type(set_type);
+		for ( comp = mp->comp; comp; comp = comp->next )
+			comp->type(ct);
+	}
+	
+	return  n;
+}
+
+/**
+@brief 	Change a component type name.
+@param 	*model			model.
+@param 	change_type	component type.
+@return int				number of models.
+
+	Sets all the component types to the given string.
+
+**/
+int			model_change_type(Bmodel* model, string change_type)
+{
+	if ( !model ) return 0;
+	
+	int				n;
+	Bmodel*			mp;
+	Bcomptype*		ct;
+	
+	vector<string>	t = split(change_type, ',');
+
+	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
+		for ( ct = mp->type; ct; ct = ct->next )
+			if ( ct->identifier() == t[0] ) ct->identifier(t[1]);
+	}
+	
+	return  n;
 }
 
 /**
@@ -475,12 +574,15 @@ long		model_mass_all(Bmodel* model)
 	long			nmod(0);
 	Bmodel*			mp;
 	
-	cout << "Model\tMass" << endl;
+	if ( verbose )
+		cout << "Model\tMass" << endl;
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-		cout << mp->identifier() << tab << model_mass(mp) << endl;
+//		cout << mp->identifier() << tab << model_mass(mp) << endl;
+		cout << mp->identifier() << tab << mp->mass() << endl;
 		nmod++;
 	}
-	cout << endl;
+	if ( verbose )
+		cout << endl;
 	
 	return nmod;
 }
@@ -510,6 +612,35 @@ Vector3<double>	model_center_of_mass(Bmodel* model)
 	}
 	
 	com /= n;
+	
+	return com;
+}
+
+/**
+@brief 	Calculates the center-of-mass of a list of models.
+@param 	*model			model parameters.
+@return Vector3<double>	center-of-mass.
+
+**/
+Vector3<double>	models_center_of_coordinates(Bmodel* model)
+{
+	Vector3<double>	com;
+
+	if ( !model ) return com;
+	if ( !model->select() ) return com;
+	
+	long		ncomp(0);
+	Bmodel* 	mp;
+	Bcomponent*	comp;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			com += comp->location();
+			ncomp++;
+		}
+	}
+	
+	com /= ncomp;
 	
 	return com;
 }
@@ -631,6 +762,42 @@ double		model_gyration_radius(Bmodel* model)
 	
 	return R;
 }
+
+/**
+@brief 	Calculates the effective thickness for a model.
+@param 	*model		model parameters.
+@return double		effective thickness.
+
+	The variance in z is related to the effective thickness:
+		sigma^2 = (1/12)*thickness^2
+
+**/
+double		model_effective_thickness(Bmodel* model)
+{
+	if ( !model ) return 0;
+	if ( !model->select() ) return 0;
+	
+	int				n(0);
+	double			za(0), zv(0);
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			za += comp->location()[2];
+			zv += comp->location()[2]*comp->location()[2];
+			n++;
+		}
+	}
+	
+	if ( n ) {
+		za /= n;
+		zv = zv/n - za*za;
+	}
+	
+	return sqrt(12*zv);
+}
+
 
 /**
 @brief	Calculates the principal axes of a model.
@@ -818,14 +985,14 @@ long		molgroup_write_into_grid(Bmolgroup* molgroup, Vector3<int> size, Vector3<d
 /**
 @brief 	Concatenates selected molecules into one group.
 @param 	*model		model parameters.
-@param 	&paramfile	atomic parameter file.
+@param 	paramfile	atomic parameter file.
 @param 	separate	flag to generate separate molecule groups.
 @return Bmolgroup*	list of molecule groups.
 
 	Only the first model in the linked list is processed.
 
 **/
-Bmolgroup*	model_assemble(Bmodel* model, Bstring& paramfile, int separate)
+Bmolgroup*	model_assemble(Bmodel* model, string paramfile, int separate)
 {
 	Bcomponent*		comp = NULL;
 //	Bcomptype*		comptype = NULL;
@@ -834,7 +1001,7 @@ Bmolgroup*	model_assemble(Bmodel* model, Bstring& paramfile, int separate)
 	Bmolgroup*		molgroup = NULL;
 	Bmolgroup*		molgroup1 = NULL;
 	Bmolecule*		mol = NULL;
-    Bstring    		atom_select("all");
+    string    		atom_select("all");
 	Quaternion		q;
 	Transform		t;
 
@@ -852,8 +1019,8 @@ Bmolgroup*	model_assemble(Bmodel* model, Bstring& paramfile, int separate)
 		nsel++;
 	}
 	
-	Bstring 		fn(model->type->file_name());
-	molgroup1 = read_molecule(fn, atom_select, paramfile);
+	string 		fn(model->type->file_name());
+	molgroup1 = read_molecule(fn.c_str(), atom_select.c_str(), paramfile.c_str());
 	min -= molgroup1->box;
 	max += molgroup1->box;
 	molgroup_kill(molgroup1);
@@ -872,7 +1039,7 @@ Bmolgroup*	model_assemble(Bmodel* model, Bstring& paramfile, int separate)
 		nsel++;
 //		comptype = model_get_type(model, comp->type);
 		fn = comp->type()->file_name();
-		molgroup1 = read_molecule(fn, atom_select, paramfile);
+		molgroup1 = read_molecule(fn.c_str(), atom_select.c_str(), paramfile.c_str());
 		molgroup1->id = comp->identifier();
 //		q = quaternion_from_view(comp->view);
 		q = comp->view().quaternion();
@@ -932,8 +1099,8 @@ Bmolgroup*	model_assemble(Bmodel* model, Bstring& paramfile, int separate)
 **/
 Bmodel*		model_generate_com(Bmolgroup* molgroup)
 {
-	Bstring			id, path;
-	Bstring			comptype("VER");
+	string			id, path;
+	string			comptype("VER");
 	Bmolgroup*		mg;
 	Bmolecule*		mol;
 	
@@ -946,10 +1113,14 @@ Bmodel*		model_generate_com(Bmolgroup* molgroup)
 		cout << "Generating a centers-of-mass model" << endl << endl;
 	
 	for ( i=1, mg = molgroup; mg; mg = mg->next, i++ ) {
-		mp = (Bmodel *) add_item((char **) &mp, sizeof(Bmodel));
-		if ( !model ) model = mp;
-		if ( mg->id.length() ) mp->identifier(mg->id);
-		else mp->identifier() = to_string(i);
+//		mp = (Bmodel *) add_item((char **) &mp, sizeof(Bmodel));
+//		if ( !model ) model = mp;
+//		if ( mg->id.length() ) mp->identifier(mg->id.str());
+//		else mp->identifier() = to_string(i);
+		if ( mg->id.length() ) id = mg->id.str();
+		else id = to_string(i);
+		if ( model ) mp = mp->add(id);
+		else mp = model = new Bmodel(id);
 		comp = NULL;
 		for ( j=1, mol = molgroup->mol; mol; mol = mol->next, j++, n++ ) {
 			cout << "Adding molecule " << j << " as component" << endl;
@@ -958,10 +1129,10 @@ Bmodel*		model_generate_com(Bmolgroup* molgroup)
 			if ( comp ) comp = comp->add(j);
 			else mp->comp = comp = new Bcomponent(j);
 			comp->location(mol_center_of_mass(mol));
-			if ( mol->id.length() ) id = mol->id.no_space();
+			if ( mol->id.length() ) id = mol->id.no_space().str();
 			else id = comptype;
 //			comp->type = model_add_type_by_id_and_filename(mp, id, molgroup->filename, 0);
-			comp->type(mp->add_type(id.str(), molgroup->filename.str(), 0));
+			comp->type(mp->add_type(id, molgroup->filename.c_str(), 0));
 		}
 	}
 	
@@ -1119,6 +1290,28 @@ Vector3<double>	component_plane(vector<Bcomponent*>& comparray, double& offset)
 	return normal;
 }
 
+/**
+@brief	Calculates the bounds of a list of models.
+@param 	*model	 	model list.
+@return vector<Vector3<double>>	minimum and maximum bounds.
+
+**/
+vector<Vector3<double>>	models_calculate_bounds(Bmodel* model)
+{
+	vector<Vector3<double>> bounds;
+	Vector3<double>			mn(1e30,1e30,1e30), mx(-1e30,-1e30,-1e30);
+	Bmodel*					mp;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		mp->calculate_bounds();
+		mn = mn.min(mp->minimum());
+		mx = mx.max(mp->maximum());
+	}
+	
+	bounds.push_back(mn);
+	bounds.push_back(mx);
+	return bounds;
+}
 
 /**
 @brief	Generates lists of atoms based on a grid.
@@ -1177,4 +1370,117 @@ vector<vector<Bcomponent*>>	model_component_grid(Bmodel* model, Vector3<long>& s
 	return grid;
 }
 
+/**
+@brief	Generates an array of pointers to model components.
+@param 	*model 				model.
+@return vector<Bcomponent*>	array of pointers to components.
+**/
+vector<Bcomponent*>	models_get_component_array(Bmodel* model)
+{
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	vector<Bcomponent*>	carr;
 
+    for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
+		for( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() )
+			carr.push_back(comp);
+
+	return carr;
+}
+
+/**
+@brief	Splits the components of models into slices.
+@param 	*model 				model.
+@param 	bottom 				minimum coordinate in z.
+@param 	top 					maximum coordinate in z.
+@param 	thickness 			slice thickness.
+@return vector<vector<Bcomponent*>>	sets of arrays of pointers to components.
+**/
+vector<vector<Bcomponent*>>	model_split_into_slices(Bmodel* model, double bottom, double top, double thickness)
+{
+	long			i, n((top - bottom)/thickness);
+	vector<vector<Bcomponent*>>	comp_slice(n);
+	
+	if ( verbose ) {
+		cout << "Splitting model into slices:" << endl;
+		cout << "Bottom:                         " << bottom << " A" << endl;
+		cout << "Top:                            " << top << " A" << endl;
+		cout << "Slice thickness:                " << thickness << " A" << endl;
+		cout << "Number of slices:               " << n << endl;
+	}
+	
+	Bmodel*			mp;
+	Bcomponent*		comp;
+
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			i = (comp->location()[2] - bottom)/thickness;
+			if ( i>=0 && i<n )
+				comp_slice[i].push_back(comp);
+		}
+	}
+	
+	if ( verbose ) {
+		long		ncomp(0);
+		cout << "Slice\tComponents" << endl;
+		for ( i=0; i<n; ++i ) {
+			ncomp += comp_slice[i].size();
+			cout << i+1 << tab << comp_slice[i].size() << endl;
+		}
+		cout << "Total number of components:     " << ncomp << endl << endl;
+	}
+	
+	return comp_slice;
+}
+
+/**
+@brief	Splits the components of models into slices and write to new models.
+@param 	*model 				model.
+@param 	bottom 				minimum coordinate in z.
+@param 	top 					maximum coordinate in z.
+@param 	thickness 			slice thickness.
+@return vector<Bmodel*>	sets of arrays of pointers to components.
+**/
+vector<Bmodel*>	model_split_into_slice_models(Bmodel* model, double bottom, double top, double thickness)
+{
+	long			i(0), n((top - bottom)/thickness);
+	vector<Bmodel*>	model_slice(n);
+	
+	if ( verbose ) {
+		cout << "Splitting model into slices:" << endl;
+		cout << "Bottom:                         " << bottom << " A" << endl;
+		cout << "Top:                            " << top << " A" << endl;
+		cout << "Slice thickness:                " << thickness << " A" << endl;
+		cout << "Number of slices:               " << n << endl;
+	}
+	
+	for ( auto& m: model_slice ) m = new Bmodel(++i);
+	
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	vector<Bcomponent*>	comp_slice(n, NULL);
+
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
+			i = (comp->location()[2] - bottom)/thickness;
+			if ( i>=0 && i<n ) {
+				if ( comp_slice[i] ) comp_slice[i] = comp_slice[i]->add(comp);
+				else comp_slice[i] = model_slice[i]->add_component(comp);
+				comp_slice[i]->description() = comp->description();
+//				cout << comp_slice[i]->description().size() << endl;
+			}
+		}
+	}
+	
+	if ( verbose ) {
+		long		ncomp(0);
+		cout << "Slice\tComponents" << endl;
+		for ( auto& m: model_slice ) {
+			ncomp += m->component_count();
+			cout << m->identifier() << tab << m->component_count() << endl;
+		}
+		cout << "Total number of components:     " << ncomp << endl << endl;
+	}
+	
+	return model_slice;
+}

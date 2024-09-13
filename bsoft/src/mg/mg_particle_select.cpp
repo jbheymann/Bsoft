@@ -1,9 +1,9 @@
 /**
 @file	mg_particle_select.cpp
 @brief	Select particles
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20200517
+@date	Modified: 20220623
 **/
 
 #include "mg_processing.h"
@@ -15,7 +15,6 @@
 #include "matrix_linear.h"
 #include "Matrix.h"
 #include "random_numbers.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -240,7 +239,7 @@ long		part_invert_selection(Bproject* project)
 @brief 	Sets selection to the micrographs indicated.
 @param 	*project		project parameter structure with all parameters.
 @param 	&mgselect		string with selection.
-@return long			number of particles.
+@return long				number of particles.
 
 	Only the micrograph selection fields are modified.
 **/
@@ -271,6 +270,41 @@ long		part_select_micrograph(Bproject* project, Bstring& mgselect)
 		}
 	}
 		
+	return nsel;
+}
+
+/**
+@brief 	Sets selection to the micrographs with selected particles.
+@param 	*project		project parameter structure with all parameters.
+@return long				number of particles.
+
+	Only the micrograph selection fields are modified.
+**/
+long		part_select_micrographs_with_selected_particles(Bproject* project)
+{
+	long			nsel(0);
+	Bfield*			field;
+	Bmicrograph*	mg;
+	Bparticle*		part;
+	
+	long			nmg = project_count_micrographs(project);
+	
+	for ( field = project->field; field; field = field->next ) {
+		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select ) {
+			mg->select = 0;
+			for ( part = mg->part; part; part = part->next ) {
+				if ( part->sel ) {
+					mg->select = 1;
+					break;
+				}
+			}
+			nsel += mg->select;
+		}
+	}
+		
+	if ( verbose )
+		cout << "Micrographs selected:           " << nsel << " (" << nsel*100.0/nmg << " %)" << endl;
+	
 	return nsel;
 }
 
@@ -345,7 +379,7 @@ long		part_set_selection(Bproject* project, int number)
 }
 
 /**
-@brief 	Selects one selection number and sets all others to zero.
+@brief 	Sets selection numbers sequentially.
 @param 	*project	project parameter structure with all parameters.
 @return long			number of particles selected.
 **/
@@ -830,8 +864,8 @@ double		part_series_comparison(Bproject* project, Bsymmetry& sym, double angle_c
 {	
 	int 			i, max(0), nsel(0);
 	double			angle, min_angle, avg_angle(0);
-	View			view_pred;
-	View*			symview;
+	View2<double>	view_pred;
+	vector<View2<double>>	symview;
 	Vector3<double> axis(1,0,0);
 	Quaternion		qt, q;
 	
@@ -857,8 +891,8 @@ double		part_series_comparison(Bproject* project, Bsymmetry& sym, double angle_c
 			for ( part=mg->part, part0=mg0->part; part; part=part->next, part0=part0->next ) {
 				q = part->view.quaternion();
 				q = qt * q;
-				view_pred = View(q);
-				symview = symmetry_get_all_views(sym, part0->view);
+				view_pred = View2<double>(q);
+				symview = sym.get_all_views(part0->view2());
 				min_angle = M_PI;
 				for ( i=0; i<nsymviews; i++ ) {
 					angle = view_pred.angle(symview[i]);
@@ -873,7 +907,6 @@ double		part_series_comparison(Bproject* project, Bsymmetry& sym, double angle_c
 				i = (int) (min_angle*180.0/M_PI);
 				hist[i]++;
 				if ( max < i ) max = i;
-				delete[] symview;
 			}
 		}
 		for ( mg=field->mg->next; mg; mg=mg->next )
@@ -1514,31 +1547,28 @@ long		part_select_random_within_view(Bproject* project, Bsymmetry& sym,
 {
 	random_seed();
 
-	View*			viewlist = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+	vector<View2<double>>	viewlist = sym.asymmetric_unit_views(theta_step, phi_step, 1);
+	long			nview(viewlist.size());
 	
-	long	nview = count_list((char *) viewlist);
 	long			i, j, k, n0;
 	double			d, dmin;
 	double			rnf = 1.0L/get_rand_max();
 	
-	int*			np = new int[nview];
-	int*			nr = new int[number];
-	int*			nrn = new int[number];
-	for ( i=0; i<nview; i++ ) np[i] = 0;
-	for ( i=0; i<number; i++ ) nr[i] = nrn[i] = 0;
+	vector<int>		np(nview, 0);
+	vector<int>		nr(number, 0);
+	vector<int>		nrn(number, 0);
 	
 	Bfield*			field;
 	Bmicrograph*	mg;
 	Bparticle*		part;
-	View*			view;
 	
 	// Assign views and count the number of particles per view
 	for ( i=0, field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) {
 			for ( part = mg->part; part; part = part->next ) {
 				if ( part->sel > 0 ) {
-					for ( j=0, dmin=10, view = viewlist; view; view = view->next, j++ ) {
-						d = view->distance(part->view);
+					for ( j=0, dmin=10; j<nview; ++j ) {
+						d = viewlist[j].distance(part->view2());
 						if ( d < dmin ) {
 							dmin = d;
 							part->sel = -(j+1);	// Negative to not be confused with positive selection later
@@ -1550,8 +1580,6 @@ long		part_select_random_within_view(Bproject* project, Bsymmetry& sym,
 		}
 	}
 	
-	kill_list((char *) viewlist, sizeof(View));
-
 	for ( j=n0=0; j<nview; j++ ) if ( np[j] < 1 ) n0++;
 	
 	if ( verbose ) {
@@ -1587,10 +1615,6 @@ long		part_select_random_within_view(Bproject* project, Bsymmetry& sym,
 		}
 	}
 	
-	delete[] np;
-	delete[] nr;
-	delete[] nrn;
-
 	long			nsel = project_count_mg_part_selected(project);
 
 	if ( verbose & VERB_PROCESS )
@@ -1616,28 +1640,27 @@ long		part_select_random_within_view(Bproject* project, Bsymmetry& sym,
 long		part_select_maxsmooth(Bproject* project, Bsymmetry& sym, 
 				double theta_step, double phi_step, double threshfrac, double sigma, int fom_index)
 {
-	View*			viewlist = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+	vector<View2<double>>	view = sym.asymmetric_unit_views(theta_step, phi_step, 1);
+	long			nview(view.size());
 	
-	long			nview = count_list((char *) viewlist);
 	long			i, j, n0;
 	double			isig2(-0.5/(sigma*sigma)), d, dmin, f;
 	
-	long*			np = new long[nview];
-	double*			fommax = new double[nview];
-	for ( i=0; i<nview; i++ ) fommax[i] = np[i] = 0;
+	vector<long>	np(nview, 0);
+	vector<double>	fommax(nview, 0);
 	
 	Bfield*			field;
 	Bmicrograph*	mg;
 	Bparticle*		part;
-	View			*view, *view2, symview;
+	View2<double>	symview;
 	
 	// Assign views and count the number of particles per view
 	for ( field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) {
 			for ( part = mg->part; part; part = part->next ) {
 				if ( part->sel > 0 ) {
-					for ( j=0, dmin=10, view = viewlist; view; view = view->next, j++ ) {
-						d = view->angle(part->view);
+					for ( j=0, dmin=10; j<nview; ++j ) {
+						d = view[j].angle(part->view2());
 						if ( d < dmin ) {
 							dmin = d;
 							part->sel = j+1;
@@ -1664,16 +1687,15 @@ long		part_select_maxsmooth(Bproject* project, Bsymmetry& sym,
 	
 	if ( verbose & VERB_FULL ) {
 		cout << "Maxima:" << endl << "#\tViewX\tViewY\tCount\tFOMmax" << endl;
-		for ( i=0, view = viewlist; view; view = view->next, i++ )
-			cout << i+1 << tab << view->x() << tab << view->y() << tab << np[i] << tab << fommax[i] << endl;
+		for ( i=0; i<nview; ++i )
+			cout << i+1 << tab << view[i][0] << tab << view[i][1] << tab << np[i] << tab << fommax[i] << endl;
 	}
 	
 	// Smooth maxima surface
-	for ( i=0, view = viewlist; view; view = view->next, i++ ) {
-		for ( j=0, view2 = viewlist; view2; view2 = view2->next, j++ ) 
-				if ( i != j ) {
-			symview = find_closest_symmetric_view(sym, *view, *view2);
-			d = view->angle(symview);
+	for ( i=0; i<nview; ++i ) {
+		for ( j=0; j<nview; ++j ) if ( i != j ) {
+			symview = sym.find_closest_symmetric_view(view[i], view[j]);
+			d = view[i].angle(symview);
 			f = exp(d*d*isig2);
 			if ( fommax[i] > fommax[j] ) {
 				f *= fommax[i];
@@ -1687,12 +1709,10 @@ long		part_select_maxsmooth(Bproject* project, Bsymmetry& sym,
 
 	if ( verbose & VERB_FULL ) {
 		cout << "Smoothed maxima:" << endl << "#\tViewX\tViewY\tCount\tFOMmax" << endl;
-		for ( i=0, view = viewlist; view; view = view->next, i++ )
-			cout << i+1 << tab << view->x() << tab << view->y() << tab << np[i] << tab << fommax[i] << endl;
+		for ( i=0; i<nview; ++i )
+			cout << i+1 << tab << view[i][0] << tab << view[i][1] << tab << np[i] << tab << fommax[i] << endl;
 	}
 	
-	kill_list((char *) viewlist, sizeof(View));
-
 	// Set the thresholds
 	for ( i=0; i<nview; i++ ) fommax[i] *= threshfrac;
 
@@ -1729,28 +1749,26 @@ long		part_select_maxsmooth(Bproject* project, Bsymmetry& sym,
 long		part_select_best_within_view(Bproject* project, Bsymmetry& sym, 
 				double theta_step, double phi_step, int number, int fom_index)
 {
-	View*			viewlist = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+	vector<View2<double>>	view = sym.asymmetric_unit_views(theta_step, phi_step, 1);
+	long			nview(view.size());
 	
-	long	nview = count_list((char *) viewlist);
 	long			j, k, n, n0, imin;
 	double			d, dmin, fommin;
 	
-	int*			np = new int[nview];
-	Bparticle**		bestpart = new Bparticle*[number];
-	for ( j=0; j<nview; j++ ) np[j] = 0;
+	vector<int>		np(nview, 0);
+	vector<Bparticle*>	bestpart(number);
 	
 	Bfield*			field;
 	Bmicrograph*	mg;
 	Bparticle*		part;
-	View*			view;
 	
 	// Assign views and count the number of particles per view
 	for ( field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) {
 			for ( part = mg->part; part; part = part->next ) {
 				if ( part->sel > 0 ) {
-					for ( j=0, dmin=10, view = viewlist; view; view = view->next, j++ ) {
-						d = view->distance(part->view);
+					for ( j=0, dmin=10; j<nview; ++j ) {
+						d = view[j].distance(part->view2());
 						if ( d < dmin ) {
 							dmin = d;
 							part->sel = j+1;
@@ -1762,8 +1780,6 @@ long		part_select_best_within_view(Bproject* project, Bsymmetry& sym,
 		}
 	}
 	
-	kill_list((char *) viewlist, sizeof(View));
-
 	for ( j=n0=0; j<nview; j++ ) if ( np[j] < 1 ) n0++;
 	
 	if ( verbose ) {
@@ -1799,9 +1815,6 @@ long		part_select_best_within_view(Bproject* project, Bsymmetry& sym,
 		}
 	}
 	
-	delete[] np;
-	delete[] bestpart;
-
 	long			nsel = project_count_mg_part_selected(project);
 
 	if ( verbose & VERB_PROCESS )
@@ -1902,7 +1915,7 @@ long		part_select_group(Bproject* project, int group)
 @param 	*project	parameter structure with all parameters.
 @param 	size		number of particles in each set.
 @param 	flag		flag to not count across mg or rec boundaries.
-@return long		number of particles selected.
+@return long			number of sets selected.
 
 	Sets up sets of particles, each set identified as a number in the
 	selection array.
@@ -1977,7 +1990,7 @@ long		part_select_sets(Bproject* project, int size, int flag)
 		cout << "Number of particles selected:   " << nsel << " (" << nsel*100.0/ntot << " %)" << endl << endl;
 	}
 	
-	return nsel;
+	return number;
 }
 
 /**
@@ -2016,13 +2029,88 @@ long		part_select_frames(Bproject* project, int frame_start, int frame_end)
 	return nsel;
 }
 
+/**
+@brief 	List of particle images for reciprocal space reconstruction.
+@param 	*project		image processing parameter structure.
+@param 	num_select		selection number from the selection column.
+@param 	bootstrap		flag to indicate a bootstrap reconstruction.
+@return	Bimage*			3D reconstructed map.
+
+	An image is used in the reconstruction if its selection flag has been set.
+	If the selection number is less than zero, all particles with selection flags
+	greater than zero are used. If the selection number is zero or above, all
+	particles with the selection flag set to the same number are used.
+	A bootstrap reconstruction uses the particle selection to weigh each
+	selected particle.
+
+**/
+Bparticle* 	project_selected_partlist(Bproject* project,
+				int num_select, int bootstrap)
+{
+	Bfield*			field = project->field;
+	Bmicrograph*	mg = field->mg;
+	Breconstruction*	rec = project->rec;
+	Bparticle*		part = mg->part;
+	Bparticle*		partlist = NULL;
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG project_selected_partlist: num_select = " << num_select << endl;
+
+	long 			psel;
+
+	if ( project->select < 1 ) {
+		for ( field = project->field; field; field = field->next ) {
+			for ( mg = field->mg; mg; mg = mg->next ) {
+				for ( part = mg->part; part; part = part->next ) {
+					psel = 0;
+					if ( part->sel ) {
+						if ( bootstrap ) {
+							psel = 1;
+						} else if ( num_select < 0 ) {
+							psel = 1;
+						} else if ( part->sel == num_select ) {
+							psel = 1;
+						}
+					}
+					if ( psel )	// Use only selected images
+						particle_copy(&partlist, part);
+				}
+			}
+		}
+	} else {
+		for ( rec = project->rec; rec; rec = rec->next ) {
+			for ( part = rec->part; part; part = part->next ) {
+				psel = 0;
+				if ( part->sel ) {
+					if ( bootstrap ) {
+						psel = 1;
+					} else if ( num_select < 0 ) {
+						psel = 1;
+					} else if ( part->sel == num_select ) {
+						psel = 1;
+					}
+				}
+				if ( psel )	// Use only selected images
+					particle_copy(&partlist, part);
+			}
+		}
+	}
+	
+/*	if ( num_select == 4) {
+		cout << num_select;
+		for ( part = partlist; part; part = part->next ) cout << tab << part->id;
+		cout << endl;
+	}
+*/
+	return partlist;
+}
 
 long		part_fix_fil_direction(Bparticle* partlist)
 {
 	long				nchanged(0);
 	int					i, group(-1), n[2], dir(0);
 	double				da, a[2];
-	View				view, pview;
+	View2<double>		view, pview;
 	Bparticle*			part;
 	Bparticle*			fil_start = NULL;
 	Bparticle*			fil_part = NULL;
@@ -2139,9 +2227,9 @@ vector<long>	part_fix_fil_direction(Bparticle* partlist, double minpct)
 {
 	if ( minpct < 1 ) minpct *= 100;
 	
-	long				n(0), up(0), dn(0), nt(0), nf(0), fup(0), fdn(0);
+	long				n(0), up(0), dn(0), nf(0), fup(0), fdn(0);
 	long				group(-1), fin(0), dir;
-	double				tol(M_PI/4.0), pup, pdn, theta, da, ccmax;
+	double				tol(M_PI/4.0), pup, pdn, theta(0), da, ccmax;
 //	Matrix3				mat1, mat;
 	Euler				euler;
 	Bparticle*			part;
@@ -2190,7 +2278,6 @@ vector<long>	part_fix_fil_direction(Bparticle* partlist, double minpct)
 			if ( n ) {
 				pup = up*100.0/n;
 				pdn = dn*100.0/n;
-				nt += up + dn;
 			}
 			
 			if ( pup >= minpct || pdn >= minpct ) {
@@ -2238,9 +2325,9 @@ vector<long>	part_fix_fil_direction(Bparticle* partlist, Bparticle* partlist2, d
 {
 	if ( minpct < 1 ) minpct *= 100;
 	
-	long				n(0), up(0), dn(0), nt(0), nf(0), fup(0), fdn(0);
+	long				n(0), up(0), dn(0), nf(0), fup(0), fdn(0);
 	long				group(-1), fin(0), dir;
-	double				tol(M_PI/4.0), pup, pdn, theta, da, ccmax;
+	double				tol(M_PI/4.0), pup, pdn, theta(0), da, ccmax;
 	Euler				euler;
 	Bparticle*			part;
 	Bparticle*			part2;
@@ -2288,7 +2375,6 @@ vector<long>	part_fix_fil_direction(Bparticle* partlist, Bparticle* partlist2, d
 			if ( n ) {
 				pup = up*100.0/n;
 				pdn = dn*100.0/n;
-				nt += up + dn;
 			}
 			
 			if ( pup >= minpct || pdn >= minpct ) {
@@ -2461,12 +2547,12 @@ long 		part_filament_direction(Bproject* project, Bproject* project2, double min
 @param 	*project	project structure with all parameters.
 @param 	view		central view to search for.
 @param 	angle		angular distance from the view.
-@return long		number of particles selected.
+@return long			number of particles selected.
 
 	Only particles already selected are subject to the test.
 
 **/
-long 		part_view_select(Bproject* project, View view, double angle)
+long 		part_view_select(Bproject* project, View2<double> view, double angle)
 {	
 	long				nsel(0);
 	double				da;
@@ -2486,7 +2572,7 @@ long 		part_view_select(Bproject* project, View view, double angle)
 		for ( field = project->field; field; field = field->next ) {
 			for ( mg = field->mg; mg; mg = mg->next ) {
 				for ( part = mg->part; part; part = part->next ) {
-					da = part->view.angle(view);
+					da = part->view2().angle(view);
 					if ( da > angle ) part->sel = 0;
 					if ( part->sel ) nsel++;
 				}
@@ -2495,7 +2581,7 @@ long 		part_view_select(Bproject* project, View view, double angle)
 	} else {
 		for ( rec = project->rec; rec; rec = rec->next ) {
 			for ( part = rec->part; part; part = part->next ) {
-				da = part->view.angle(view);
+				da = part->view2().angle(view);
 				if ( da > angle ) part->sel = 0;
 				if ( part->sel ) nsel++;
 			}
@@ -2891,7 +2977,7 @@ long		part_series_from_seed(Bproject* project, int flags)
 				part->ori = part_ori;
 				if ( use_view )
 					mat = part_ref->view.matrix();
-				part->view = View(mat * mg->matrix);
+				part->view = View2<double>(mat * mg->matrix);
 				for ( i=0; i<NFOM; i++ ) part->fom[i] = part_ref->fom[i];
 				part->sel = part_ref->sel;
 				if ( mg->ctf ) {

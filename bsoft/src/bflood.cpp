@@ -36,7 +36,7 @@ const char* use[] = {
 "Actions for seeding:",
 "-peaks 12,1.4,1,1        Find peaks within a kernel size, above a threshold,",
 "                         with optional flooding and wrapping.",
-"-threshold 3.4           Segment at a threshold,",
+"-threshold 3.4           Segment at a threshold.",
 //"-addmodel                Add input model components as additional regions.",
 " ",
 "Actions for flooding:",
@@ -163,7 +163,8 @@ int 	main(int argc, char* argv[])
 		project = read_project(filename);
 		if ( project->rec ) filename = project->rec->frec;
 	} else if ( file_type(filename) == Model ) {
-		model = read_model(filename, paramfile);
+		vector<string>	file_list = {filename.str()};
+		model = read_model(file_list, paramfile.str());
 		filename = model->mapfile();
 	}
 	
@@ -207,7 +208,8 @@ int 	main(int argc, char* argv[])
 	if ( mask_file.length() ) {
 		pmask = read_img(mask_file, 1, -1);
 	} else if ( seed_file.length() ) {
-		seed = read_model(seed_file, paramfile);
+		vector<string>	file_list = {seed_file.str()};
+		seed = read_model(file_list, paramfile.str());
 		pseed = img_from_model(seed, origin, size, sam, 1);
 		pmask = pseed->regions(0.5, 1);
 		delete pseed;
@@ -265,7 +267,7 @@ int 	main(int argc, char* argv[])
 	project_kill(project);
 	model_kill(model);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

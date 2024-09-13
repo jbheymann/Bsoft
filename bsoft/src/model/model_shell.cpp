@@ -29,7 +29,7 @@ extern int 	verbose;		// Level of output to the screen
 	Only the first model in the list is used.
 
 **/
-long		model_add_shell(Bmodel* model, double add_distance, Bstring& nutype)
+long		model_add_shell(Bmodel* model, double add_distance, string nutype)
 {
 	if ( !model ) return -1;
 	if ( !model->comp ) return 0;
@@ -135,7 +135,7 @@ int			model_adjust_shell_to_guide(Bmodel* model, Bmodel* gmod, double fraction, 
 	components and their radii.
 
 **/
-Bmodel*		model_components_to_shells(Bmodel* model, double distance, Bstring& nutype, int twod)
+Bmodel*		model_components_to_shells(Bmodel* model, double distance, string nutype, int twod)
 {
 	if ( !model ) return NULL;
 	if ( !model->comp ) return NULL;

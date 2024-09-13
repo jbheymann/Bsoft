@@ -257,18 +257,17 @@ int 	main(int argc, char **argv)
 	
 	double			ti = timer_start();
 
-	Bstring*		file_list = NULL;
-	Bmodel*			model = NULL;		
+	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;		
 	Bmodel*			sph = NULL;		
 	Bmodel*			guide = NULL;
 	
 	// Read all the model parameter files
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
 	
-	if ( file_list ) {
+	if ( file_list.size() ) {
 		model = read_model(file_list);		
-		string_kill(file_list);
 		if ( !model ) {
 			cerr << "Error: Input file not read!" << endl;
 			bexit(-1);
@@ -278,7 +277,7 @@ int 	main(int argc, char **argv)
 				model_reset_selection(mp);
 	}
 
-	if ( guidefile.length() ) guide = read_model(guidefile, paramfile);
+	if ( guidefile.length() ) guide = read_model(guidefile.str(), paramfile.str());
 
 	sph = model;
 	
@@ -314,16 +313,16 @@ int 	main(int argc, char **argv)
 	
 	if ( mod_select.length() ) model_select(sph, mod_select);
 
-	if ( nutype.length() ) model_set_type(sph, nutype);
+	if ( nutype.length() ) model_set_type(sph, nutype.str());
 	
 	if ( guide ) model_align_to_guide(sph, guide);
 	
-	if ( model_id.length() ) sph->identifier(model_id);
+	if ( model_id.length() ) sph->identifier(model_id.str());
 	
-	if ( add_distance ) model_add_shell(sph, add_distance, nutype);
+	if ( add_distance ) model_add_shell(sph, add_distance, nutype.str());
 
 	if ( comp2shell ) {
-		sph = model_components_to_shells(model, comp2shell, nutype, twod);
+		sph = model_components_to_shells(model, comp2shell, nutype.str(), twod);
 		model_kill(model);
 		model = sph;
 	}
@@ -363,12 +362,12 @@ int 	main(int argc, char **argv)
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

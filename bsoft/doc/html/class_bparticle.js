@@ -1,6 +1,9 @@
 var class_bparticle =
 [
     [ "Bparticle", "class_bparticle.html#a7ccd86695da6991d7e075cc85fb8125f", null ],
+    [ "count", "class_bparticle.html#ac8592e302d7fda3184bce524e77b25fe", null ],
+    [ "view2", "class_bparticle.html#a6a782af4600801655af9894eeb0d7a57", null ],
+    [ "view2", "class_bparticle.html#a24d2f71682aedbd0a38a3b0d4857a737", null ],
     [ "ast", "class_bparticle.html#afc006afacf9fc3934ce2645a739b7d62", null ],
     [ "def", "class_bparticle.html#af7005e6a2798510dc5661a527f170f16", null ],
     [ "dev", "class_bparticle.html#a71c09913dfd008d01bdc96679912a207", null ],
@@ -16,5 +19,5 @@ var class_bparticle =
     [ "pixel_size", "class_bparticle.html#ad6ee65e8eb8d79a8abbf42d653e26bf2", null ],
     [ "rec", "class_bparticle.html#a839bf572ba0531efe8997e087cfb1b90", null ],
     [ "sel", "class_bparticle.html#a90fa1387181c89f11bf7d7fe4a7374ec", null ],
-    [ "view", "class_bparticle.html#a4bc0767c5072ef2b15b37b0a5528fd30", null ]
+    [ "view", "class_bparticle.html#aaec23d30f413b5389a1e9b60cb4cf1d0", null ]
 ];

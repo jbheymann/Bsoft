@@ -3,14 +3,14 @@
 @brief	A program to determine and correct for the CTF (contrast transfer function) in electron micrographs.
 @author Bernard Heymann
 @date	Created: 19970715
-@date	Modified: 20210817
+@date	Modified: 20240320
 **/
 
 #include "rwimg.h"
 #include "mg_ctf.h"
 #include "mg_ctf_fit.h"
 #include "mg_ctf_sim.h"
-#include "ps_ctf_plot.h" 
+#include "ps_ctf_plot.h"
 #include "ps_micrograph.h" 
 #include "mg_processing.h"
 #include "mg_tomography.h"
@@ -32,15 +32,23 @@ const char* use[] = {
 " ",
 "Actions:",
 "-action correct          Action: 1=flip, 2=apply, 3=correct, 4=wienerfilter,",
-"                         5=baseline, 6=baseline2, 7=baseflip, 8=basecorrect,",
+"                         5=baseline, 6=baseline2, 7=baseflip, 8=basecorrect, 9=ewald,",
 "                         11=prepare, 12=fit, 13=prepfit (default 0=none).",
+"-contrast                Inverts contrast by negating the CTF.",
 "-invertaxis              Inverts the tilt axis to correct for improper setup.",
 "-filter                  Filter extremes before doing anything with the image.",
 "-background              Correct background after applying CTF (default not).",
 "-fitastigmatism 2        Fit astigmatism for individual micrographs (1) or combined (2) (default not).",
 "-isotropy                Assess the power spectrum isotropy.",
 "-toparticle              Transfer micrograph CTF parameters to particle records (default not).",
-"-ctf 512,512,2           Generate a CTF image of this size with flag: 1=center, 2=power, 3=both.",
+//"-noaberration odd        Delete aberration weights (all, odd or even).",
+"-statistics              Display CTF parameter statistics.",
+" ",
+"Simulations:",
+"-ctf 512,512,10          Generate a CTF image of this size (z>1 for focal series).",
+"-center                  Center the simulated image.",
+"-power                   Convert to intensities.",
+//"-series 1.2,1.4,0.05     Calculate a focal series function: start, end, increment.",
 "-simulate                Simulate a tilted CTF for each x or y-line.",
 " ",
 "Parameters:",
@@ -54,37 +62,25 @@ const char* use[] = {
 "-frames                  Use micrograph frames file given in parameter file instead of particle file.",
 "-sampling 1.5,1.5,1.5    Sampling (angstrom/pixel, a single value sets all three).",
 "-resolution 27.5,125.3   Resolution limits for CTF determination and application (default 0.1,1e6).",
-"-wiener 0.15             Wiener factor for CTF correction (default 0.2).",
+"-wiener 0.15             Wiener factor for CTF correction (default 0).",
 " ",
 #include "use_ctf.inc"
 " ",
 "Imaging parameters:",
-"-Defocus 1.2,1.0,47      Defocus average & deviation, and astigmatism angle (default 2 um, 0 um, 0).",
-"-Astigmatism 0.3,-34     Set defocus deviation and astigmatism angle (um, degrees).",
+"-Defocus 1.2,1.0,47      Defocus average & deviation, and astigmatism angle (default 2 um, 0, 0).",
+"-Astigmatism 0.3,-34     Set defocus deviation and astigmatism angle.",
 "-axis 74.7               Tilt axis angle relative to x-axis (default 0 or from parameter file).",
 "-tilt 15                 Tilt angle (default from parameter file).",
-"-basetype 2              Baseline type: (default 1)",
-"                         Type 1: Polynomial with 5 coefficients.",
-"                         Type 2: Double Gaussian with 5 coefficients.",
-"                         Type 3: EMAN style with 4 coefficients.",
-"                         Types 4-6: 1-3 with gaussian fit of water ring (only for high resolution limit < 3 A).",
-"-baseline 1,1.5,-2.6,12.9,30,118 Baseline type and 4 or 5 coefficients: (default 1,0,0,0,0)",
-"-envtype 3               Envelope type: (default 4)",
-"                         Type 1: Single gaussian (2 coefficients).",
-"                         Type 2: Single gaussian with constant (3 coefficients).",
-"                         Type 3: Double gaussian (4 coefficients).",
-"                         Type 4: Double gaussian with constant (5 coefficients).",
-"-envelope 28,-563,0.78,-215 Envelope coefficients: Double gaussian with 4 coefficients (default 1,-10,0,0).",
 " ",
 "Fitting parameters:",
 "-Range 0.6,3.5,0.2       Defocus minimum, maximum and increment for fitting (default 0.1,20,0.1 um).",
 " ",
 "Input:",
-"-json file.json          Input JSON file with CTF parameters.",
+"-jsin file.json          Input JSON file with CTF parameters.",
 " ",
 "Output:",
 "-output file.star        Output parameter file.",
-"-jsonout file.json       Output CTF parameters to a JSON file.",
+"-jsout file.json         Output CTF parameters to a JSON file.",
 "-PSaverage file.mrc      Output average power spectrum.",
 "-Postscript file.ps      Postscript output file name for CTF fit.",
 "-Histogram file.ps       Postscript output file name for defocus histogram.",
@@ -152,28 +148,25 @@ int 		main(int argc, char **argv)
 	double			resolution_hi(0);		// High resolution limit
 	int 			action(0); 				// Default no CTF operation
 	int				ctf_flag(0);			// Flag for CTF image: bit 1 = center, bit 2 = power
-	double			wiener(0.2);			// Wiener for CTF correction
+	double			wiener(0);				// Wiener for CTF correction
 	double			def_avg(2e4);			// In angstrom
 	double			def_dev(0);				// In angstrom
 	double			ast_angle(-1);	 		// Used to limit astigmatism
 	double			tilt_axis(0);			// Tilt axis angle in radians
 	double			tilt_angle(0);			// Tilt angle start in radians
 	int				isotropy(0);			// Flag to assess isotropy
-//	double			volts(120000);	 		// In volts
-//	double			amp_fac(0.07);			// Amplitude fraction
-//	double			Cs(2e7);				// Spherical aberration (angstrom)
-//	double			Cc(2e7);				// Chromatic aberration (angstrom)
-//	double			alpha(0.0001);			// Beam source size (radians)
-//	double			energy_spread(1);		// Effective energy spread (eV)
-	int				basetype(1);			// Baseline type: 1=poly, 2=double_gauss, 3=EMAN
-	double			base[5] = {1,0,0,0,0};	// Baseline coefficients
-	int				envtype(4);				// Envelope type: 1=gauss, 2=gauss+, 3=double_gauss, 4=double_gauss+
-	double			env[5] = {1,-10,0,0,0};	// Envelope coefficients
+//	int				noab(0);				// Flag to delete aberration weights
+	int				stats(0);				// Flag to display CTF parameter statistics
+/*	int				basetype(1);			// Baseline type: 1=poly, 2=double_gauss, 3=EMAN
+	vector<double>	base = {1,0,0,0,0};		// Baseline coefficients
+	int				envtype(1);				// Envelope type: 1=gauss, 2=gauss+, 3=double_gauss, 4=double_gauss+
+	vector<double>	env = {1,-1,0,0,0};		// Envelope coefficients
+*/
 	double			def_start(1e3), def_end(2e5), def_inc(1e3);	// Defocus fitting range and increment
 	int				setDefocus(0);			// Flags
-	int				setbase(0);
-	int				setenv(0);
-	int				flags(0);				// Flags for using mg (1), filter extremes (2), background (4), astigmatism (8), use frames (16)
+//	int				setbase(0);
+//	int				setenv(0);
+	int				flags(0);				// Flags for using mg (1), filter extremes (2), background (4), astigmatism (8), use frames (16), invert contrast (32)
 	int				fitastig(0);			// Flag to fit astigmatism individually (1) or global (2)
 	int				simulate(0);			// Flag to simulate a tilted micrograph
 	Vector3<long>	size(1,1,1);			// Size of CTF output file
@@ -196,6 +189,22 @@ int 		main(int argc, char **argv)
 	int				i, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
+
+	// If the JSON file with CTF parameters is specified, read it first
+	for ( curropt = option; curropt; curropt = curropt->next ) {
+		if ( curropt->tag == "jsin" ) {
+			jsin = curropt->filename();
+			JSvalue		js;
+			if ( jsin.length() ) js = JSparser(jsin.c_str()).parse();
+			if ( js.type() == JSarray ) jsctf = js[0];
+			else jsctf = js;
+			if ( !jsctf.exists("Volt") ) {
+				cerr << "CTF parameters not found in file " << jsin << endl;
+				bexit(-1);
+			}
+		}
+	}
+
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "datatype" )
 			nudatatype = curropt->datatype();
@@ -204,13 +213,10 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "invertaxis" )
 			invert_axis = 1;
 		if ( curropt->tag == "toparticle" ) toparticle = 1;
-		if ( curropt->tag == "ctf" ) {
+		if ( curropt->tag == "ctf" )
 			size = curropt->size();
-			ctf_flag = size[2];
-			size[2] = 1;
-			if ( size.volume() < 1 )
-				cerr << "-size: All three dimensions must be specified." << endl;
-		}
+		if ( curropt->tag == "center" ) ctf_flag |= 1;
+		if ( curropt->tag == "power" ) ctf_flag |= 2;
 		if ( curropt->tag == "tile" ) {
 			tile_size = curropt->size();
 			if ( tile_size.volume() < 1 )
@@ -222,16 +228,21 @@ int 		main(int argc, char **argv)
 			flags |= 17;
 		if ( curropt->tag == "filter" )
 	        flags |= 2;
-		if ( curropt->tag == "background" )
-			flags |= 4;
+//		if ( curropt->tag == "background" )
+//			flags |= 4;
+		if ( curropt->tag == "contrast" )
+			flags |= INVERT;
 		if ( curropt->tag == "fitastigmatism" ) {
 			fitastig = curropt->value.integer();
 			if ( fitastig == 1 ) flags |= 8;
+			else if ( fitastig == 3 ) flags |= 32;
 		}
 		if ( curropt->tag == "isotropy" )
 			isotropy = 1;
 		if ( curropt->tag == "simulate" )
 			simulate = 1;
+		if ( curropt->tag == "statistics" )
+			stats = 1;
 		if ( curropt->tag == "mgpath" ) {
 			mgpath = curropt->value;
 			if ( mgpath.length() < 1 )
@@ -275,25 +286,22 @@ int 		main(int argc, char **argv)
 			}
 		}
 		if ( curropt->tag == "Defocus" ) {
-			if ( curropt->values(def_avg, def_dev, ast_angle) < 1 )
+			if ( curropt->real_units(def_avg, def_dev, ast_angle) < 1 )
 				cerr << "-Defocus: At least the defocus average must be specified!" << endl;
 			else {
-				if ( fabs(def_avg) < 20 ) def_avg *= 1e4;	// Assume um
-				if ( fabs(def_dev) < 10 ) def_dev *= 1e4;	// Assume um
 				ast_angle *= M_PI/180;				// Assume degrees
 				setDefocus = 1;
 			}
 		}
 		if ( curropt->tag == "Astigmatism" ) {
-			if ( curropt->values(def_dev, ast_angle) < 1 )
+			if ( curropt->real_units(def_dev, ast_angle) < 1 )
 				cerr << "-Astigmatism: A defocus value must be specified!" << endl;
 			else {
-				if ( def_dev < 1e3 ) def_dev *= 1e4;			// Assume um
 				ast_angle *= M_PI/180.0;						// Assume degrees
 			}
 		}
 #include "ctf.inc"
-		if ( curropt->tag == "basetype" ) {
+/*		if ( curropt->tag == "basetype" ) {
 			basetype = curropt->value.integer();
 			if ( basetype < 1 || basetype > 6 ) {
 				basetype = 1;
@@ -324,19 +332,11 @@ int 		main(int argc, char **argv)
 				cerr << "-envelope: At least an envelope amplitude must be specified!" << endl;
 			else
 				setenv = 2;
-		}
-		if ( curropt->tag == "Range" ) {
-			if ( curropt->values(def_start, def_end, def_inc) < 1 )
+		}*/
+		if ( curropt->tag == "Range" )
+			if ( curropt->real_units(def_start, def_end, def_inc) < 2 )
 				cerr << "-Range: At least two values must be specified!" << endl;
-			else {
-				if ( def_start < 100 ) def_start *= 1e4;	// Assume um
-				if ( def_end < 100 ) def_end *= 1e4;		// Assume um
-				if ( def_inc < 10 ) def_inc *= 1e4;			// Assume um
-			}
-		}
-		if ( curropt->tag == "json" )
-			jsin = curropt->filename();
-		if ( curropt->tag == "jsonout" )
+		if ( curropt->tag == "jsout" )
 			jsout = curropt->filename();
 		if ( curropt->tag == "output" )
 			outfile = curropt->filename();
@@ -366,12 +366,14 @@ int 		main(int argc, char **argv)
 	option_kill(option);
 	
 	double			ti = timer_start();
-
-	if ( jsin.length() ) jsctf = JSparser(jsin.c_str()).parse();
+	
 	CTFparam		cp = ctf_from_json(jsctf);
 	cp.defocus_average(def_avg);
-	cp.defocus_deviation(def_dev);
-	cp.astigmatism_angle(ast_angle);
+	cp.astigmatism(def_dev, ast_angle);
+//	if ( setbase ) cp.baseline(basetype, base);
+//	if ( setenv ) cp.envelope(envtype, env);
+
+//			ctf_to_json(cp).write("test.json");
 
 	if ( pszeroesfile.length() ) if ( pszeroesfile.contains(".ps") )
 		ps_ctf_defocus_zeroes(pszeroesfile, cp.volt(), cp.Cs(), cp.amp_shift());
@@ -402,13 +404,19 @@ int 		main(int argc, char **argv)
 		}
 		if ( size.volume() > 1 ) {
 			if ( action < 1 ) action = 2;	// Only CTF function - no baseline or envelope
-			if ( wave_aberration )
+			if ( wave_aberration ) {
 				p = img_wave_aberration(cp, size, sam);
-			else
-				p = img_ctf_calculate(cp, action, wiener, size, 
+			} else if ( action > 2 ) {
+				p = img_ctf_calculate(cp, action, wiener, size,
 						sam, resolution_lo, resolution_hi);
+			} else {
+				p = img_ctf_calculate(cp, (action==1), wiener, size,
+						sam, resolution_lo, resolution_hi);
+			}
+//			p->complex_to_real();
 			if ( ctf_flag & 1 ) p->center_wrap();
-			if ( ctf_flag & 2 ) p->square();
+//			if ( ctf_flag & 2 ) p->square();
+			if ( ctf_flag & 2 ) p->complex_to_intensities();
 			p->change_type(nudatatype);
 			write_img(funcfile, p, 0);
 			delete p;
@@ -425,6 +433,7 @@ int 		main(int argc, char **argv)
 	Bparticle*			part = NULL;
 	Bstring*			file_list = NULL;
 	Bstring				basename, filename, newfilename;
+	JSvalue				jsarr(JSarray);
 	
 	if ( optind < argc ) {
 		if ( file_type(argv[optind]) == Micrograph ) {
@@ -432,7 +441,19 @@ int 		main(int argc, char **argv)
 			project = read_project(file_list);
 			string_kill(file_list);
 			if ( project_count_mg_particles(project) < 1 ) flags |= 1;
+			if ( jsin.length() ) {						// replace CTF with input
+//				project->field->mg->ctf->update(cp);
+				project_update_ctf(project, jsctf);
+			} else if ( project->field->mg->ctf ) {
+				jsarr = project_export_ctf(project);
+/*				cp.update(project->field->mg->ctf);
+				cp.show();
+				cp.show_baseline();
+				cp.show_envelope();
+				jsctf = ctf_to_json(cp);*/
+			}
 		} else {
+			jsarr.push_back(ctf_to_json(cp));
 			filename =  argv[optind++];
 			if ( simulate && fabs(tilt_angle) > 0.001 ) {
 				p = read_img(filename, 1, -1);
@@ -446,8 +467,10 @@ int 		main(int argc, char **argv)
 			if ( !p ) bexit(-1);
 			if ( nudatatype == Unknown_Type )
 				nudatatype = p->data_type();
+//			img_ctf_fit_prepare(p, 10);
 			project = new Bproject;
-			basename = (Bstring(p->file_name())).base();
+//			basename = (Bstring(p->file_name())).base();
+			basename = filename.base();
 			if ( p->sizeZ() < 2 ) {	// Create a micrograph record
 				field = field_add(&project->field, basename);
 				mg = micrograph_add(&field->mg, basename);
@@ -458,15 +481,19 @@ int 		main(int argc, char **argv)
 				mg->tilt_axis = tilt_axis;
 				mg->origin = p->image->origin();
 				if ( action == 12 ) {
-					mg->fps = p->file_name();
+//					mg->fps = p->file_name();
+					mg->fps = filename;
 				} else if ( p->images() > 1 ) {
-					mg->fpart = p->file_name();
+//					mg->fpart = p->file_name();
+					mg->fpart = filename;
 					for ( i=1; i<=p->images(); i++ ) {
 						part = particle_add(&part, i);
 						if ( !mg->part ) mg->part = part;
+						part->mg = mg;
 					}
 				} else {
-					mg->fmg = p->file_name();
+//					mg->fmg = p->file_name();
+					mg->fmg = filename;
 					flags |= 1;
 				}
 			} else {	// Create a reconstruction record
@@ -477,13 +504,15 @@ int 		main(int argc, char **argv)
 				rec->voxel_size = p->sampling(0);
 				rec->origin = p->image->origin();
 				if ( p->images() > 1 ) {
-					rec->fpart = p->file_name();
+//					rec->fpart = p->file_name();
+					rec->fpart = filename;
 					for ( i=1; i<=p->images(); i++ ) {
 						part = particle_add(&part, i);
 						if ( !rec->part ) rec->part = part;
 					}
 				} else {
-					rec->frec = p->file_name();
+//					rec->frec = p->file_name();
+					rec->frec = filename;
 					flags |= 1;
 				}
 			}
@@ -498,6 +527,8 @@ int 		main(int argc, char **argv)
 	
 	if ( project == NULL )  {
 		cerr << "Error: No input file read!" << endl;
+		if ( jsout.length() )
+			ctf_to_json(cp).write(jsout.c_str());
 		bexit(-1);
 	}
 
@@ -524,15 +555,10 @@ int 		main(int argc, char **argv)
 	if ( invert_axis )
 		project_invert_tilt_axis(project);
 
-	// Set other parameters
-	if ( setbase == 1 )
-		project_set_baseline_type(project, basetype);
-	if ( setenv == 1 )
-		project_set_envelope_type(project, envtype);
-	if ( setbase > 1 )
-		project_set_baseline(project, basetype, base);
-	if ( setenv > 1 )
-		project_set_envelope(project, envtype, env);
+	// Set baseline and envelope parameters
+	if ( jsctf.exists("Baseline_type") || jsctf.exists("Envelope_type") ||
+		jsctf.exists("Baseline") || jsctf.exists("Envelope") )
+			project_set_baseline_envelope(project, cp);
 
 	if ( toparticle )
 		project_CTF_to_part(project);
@@ -551,7 +577,8 @@ int 		main(int argc, char **argv)
 		project_powerspectrum_isotropy(project, resolution_lo, resolution_hi);
 
 	if ( jsout.length() )
-		jsctf.write(jsout.c_str());
+//		jsctf.write(jsout.c_str());
+		jsarr.write(jsout.c_str());
 
 	if ( psctffile.length() )
 		project_plot_ctf(project, psctffile);
@@ -584,6 +611,8 @@ int 		main(int argc, char **argv)
 		}
 	}
 	
+	if ( stats ) project_ctf_statistics(project);
+	
  	if ( ps && psaverage.length() )
     	write_img(psaverage, ps, 0);
 
@@ -596,7 +625,7 @@ int 		main(int argc, char **argv)
 	
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -1,7 +1,7 @@
 /**
 @file	mol_symmetry.cpp
 @brief	Library routines used for symmetry operations on atomic coordinates
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20021020
 @date	Modified: 20180226
 **/
@@ -27,16 +27,16 @@ extern int 	verbose;		// Level of output to the screen
 /**
 @brief	Generates all symmetry-related coordinates.
 @param 	*molgroup			molecule group structure.
-@param 	*sym				symmetry structure.
+@param 	&sym				symmetry structure.
 @param 	ref_view			reference view.
 @return int					0.
 **/
-int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_view)
+int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View2<double> ref_view)
 {
 	int 			i, j;
-	int 			nunits(sym.order()), nmol;
+	int 			nunits(sym.order());
 	
-	if ( ref_view.vector_size() < 1e-10 ) ref_view = View(0, 0, 1, 0);
+	if ( ref_view.vector_size() < 1e-10 ) ref_view = View2<double>(0, 0, 1, 0);
 	
 	if ( verbose & VERB_PROCESS ) {
 		cout << endl << "Applying symmetry " << sym.label() << ":" << endl;
@@ -56,7 +56,7 @@ int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_v
 	Bresidue		*res;
 	Batom			*atom;
 	Bbond*			bond;
-	Bangle*			angle;
+//	Bangle*			angle;
 	
 	// Initial user-specified rotation to get the map in a standard orientation
 //	if ( fabs(ref_view.a) > 1e-30 )
@@ -65,9 +65,6 @@ int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_v
 	Matrix3			ref_mat = ref_view.matrix();
 	Matrix3			mat(1);
 	Vector3<double>	new_axis;
-
-	nmol = 0;
-	for ( mol = molgroup->mol; mol; mol = mol->next ) nmol++;
 
 	for ( i=0; i<sym.operations(); i++ ) {
 		new_axis = ref_mat * sym[i].axis();
@@ -87,7 +84,7 @@ int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_v
 		}
 		mol = molgroup->mol;
 		bond = molgroup->bond;
-		angle = molgroup->angle;
+//		angle = molgroup->angle;
 		for ( new_molgroup = molgroup->next; new_molgroup; new_molgroup = new_molgroup->next ) {
 			if ( mol ) {
 				for ( ; mol->next; mol = mol->next ) ;
@@ -103,19 +100,18 @@ int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_v
 				bond = molgroup->bond = new_molgroup->bond;
 			}
 			new_molgroup->bond = NULL;
-			if ( angle ) {
+/*			if ( angle ) {
 				for ( ; angle->next; angle = angle->next ) ;
 				angle->next = new_molgroup->angle;
 			} else {
 				angle = molgroup->angle = new_molgroup->angle;
 			}
-			new_molgroup->angle = NULL;
+			new_molgroup->angle = NULL;*/
 		}
 		molgroup_list_kill(molgroup->next);
 		molgroup->next = NULL;
 		new_molgroup = molgroup;
 		molgroup_atom_renumber(molgroup, 1);
-		nmol *= sym[i].order();
 	}
 	
 	return 0;
@@ -131,12 +127,12 @@ int 		molgroup_apply_point_group(Bmolgroup* molgroup, Bsymmetry& sym, View ref_v
 @param 	gen_up				number of asymmetric units generated downwards.
 @return int					0.
 **/
-int			molgroup_generate_helix(Bmolgroup* molgroup, View ref_view, 
+int			molgroup_generate_helix(Bmolgroup* molgroup, View2<double> ref_view,
 				double helix_rise, double helix_angle, int gen_down, int gen_up)
 {
 	int 			i;
 	
-	if ( ref_view.vector_size() < 1e-10 ) ref_view = View(0, 0, 1, 0);
+	if ( ref_view.vector_size() < 1e-10 ) ref_view = View2<double>(0, 0, 1, 0);
 	
 	if ( gen_down < 0 ) gen_down = 0;
 	if ( gen_up < 0 ) gen_up = 0;
@@ -228,11 +224,16 @@ int			molgroup_apply_symmetry_from_pdb(Bmolgroup* molgroup, Bstring& filename)
 	
     fpdb.close();
 	
-	Bmolecule		*mol, *new_mol;
+	Bmolecule*		mol = molgroup->mol;
+	Bmolecule*		newmol = mol;
 	Bresidue		*res;
 	Batom			*atom;
 	int				nmol(0), m;
-	for ( mol = molgroup->mol; mol; mol = mol->next ) nmol++;
+	
+	for ( nmol=0, mol = molgroup->mol; mol; mol = mol->next ) {
+		nmol++;
+		newmol = mol;
+	}
 	
 	if ( verbose & VERB_PROCESS )
 		cout << "Extracting " << n << " matrices from " << filename << " and applying:" << endl;
@@ -244,8 +245,10 @@ int			molgroup_apply_symmetry_from_pdb(Bmolgroup* molgroup, Bstring& filename)
 			cout << "Shift:                          " << trans[i] << endl;
 		}
 		for ( m=0, mol = molgroup->mol; m<nmol; mol = mol->next, m++ ) {
-			new_mol = mol_copy_and_add_to_molgroup(molgroup, mol);
-			for( res = new_mol->res; res; res = res->next ) {
+//			newmol = mol_copy_and_add_to_molgroup(molgroup, mol);
+			newmol->next = molecule_copy(mol);
+			newmol = newmol->next;
+			for( res = newmol->res; res; res = res->next ) {
 				for ( atom = res->atom; atom; atom = atom->next ) {
 					atom->coord = mat[i] * atom->coord;
 					atom->coord += trans[i];
@@ -298,11 +301,16 @@ int			molgroup_apply_matrices_from_pdb(Bmolgroup* molgroup, Bstring& filename)
 	
     fpdb.close();
 
-	Bmolecule		*mol, *new_mol;
+	Bmolecule*		mol = molgroup->mol;
+	Bmolecule*		newmol = mol;
 	Bresidue		*res;
 	Batom			*atom;
 	int				nmol(0), m;
-	for ( mol = molgroup->mol; mol; mol = mol->next ) nmol++;
+	
+	for ( nmol=0, mol = molgroup->mol; mol; mol = mol->next ) {
+		nmol++;
+		newmol = mol;
+	}
 	
 	if ( verbose & VERB_PROCESS )
 		cout << "Extracting " << n << " matrices from " << filename << " and applying:" << endl;
@@ -314,8 +322,10 @@ int			molgroup_apply_matrices_from_pdb(Bmolgroup* molgroup, Bstring& filename)
 			cout << "Shift:                          " << trans[i] << endl;
 		}
 		for ( m=0, mol = molgroup->mol; m<nmol; mol = mol->next, m++ ) {
-			new_mol = mol_copy_and_add_to_molgroup(molgroup, mol);
-			for( res = new_mol->res; res; res = res->next ) {
+//			newmol = mol_copy_and_add_to_molgroup(molgroup, mol);
+			newmol->next = molecule_copy(mol);
+			newmol = newmol->next;
+			for( res = newmol->res; res; res = res->next ) {
 				for ( atom = res->atom; atom; atom = atom->next ) {
 					atom->coord = mat[i] * atom->coord;
 					atom->coord += trans[i];
@@ -349,7 +359,7 @@ static int  QsortMassCOM(const void *x, const void *y)
 /**
 @brief	Searches for the standard view based on point group symmetry.
 @param 	*molgroup		molecule group structure.
-@param 	*sym			point group symmetry.
+@param 	&sym			point group symmetry.
 @param 	ref_view		reference view.
 @return int				0.
 
@@ -362,7 +372,7 @@ static int  QsortMassCOM(const void *x, const void *y)
 	group, but it may be off by up to an angstrom!!!
 
 **/
-int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View ref_view)
+int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View2<double> ref_view)
 {
 	molgroup_shift_to_center_of_mass(molgroup);
 	
@@ -553,14 +563,14 @@ int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View ref_
 	
 	// The first matrix rotates it to the major symmetry axis
 	// The second does the in-plane rotation
-	View			view(-axis[0], -axis[1], axis[2], 0);
+	View2<double>	view(-axis[0], -axis[1], axis[2], 0);
 	Matrix3			mat = view.matrix();
 	if ( sym.point() > 200 ) {
 		v1 = 0;
 		v1[0] = 1;	
 		v2 = mat * v2;
 		ang = fmod(v1.angle(v2), M_PI*2.0/sym[0].order());
-		view= View(0, 0, 1, ang);
+		view = View2<double>(0, 0, 1, ang);
 		mat = view.matrix() * mat;
 	}
 	
@@ -584,7 +594,7 @@ int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View ref_
 /**
 @brief	Searches for the standard view based on point group symmetry.
 @param 	*molgroup 	molecule group structure.
-@param 	*sym		point group symmetry.
+@param 	&sym		point group symmetry.
 @param 	ref_view	reference view (default should be 0,0,1,0).
 @param 	*simat		residue similarity matrix.
 @return int 		0.
@@ -604,7 +614,7 @@ int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View ref_
 
 **/
 int 		molgroup_orient_to_standard_view(Bmolgroup* molgroup, Bsymmetry& sym,
-				View ref_view, Bresidue_matrix* simat)
+				View2<double> ref_view, Bresidue_matrix* simat)
 {
 	random_seed();
 	
@@ -959,37 +969,51 @@ double		molgroup_symmetry_B(Bmolgroup* molgroup, Bsymmetry& sym)
 int 		molgroup_generate_crystal(Bmolgroup* molgroup, UnitCell uc, Vector3<int> number)
 {
 	if ( number.volume() < 2 ) return 0;
-	
+/*
 	if ( !uc.check() ) {
 		cerr << "Error: Please specify the unit cell!" << endl;
 		return -1;
 	}
-	
+*/
 	int				i, x, y, z, nmol(0);
 	Vector3<double>	d;
-	Matrix3			mat(uc.a(), uc.b()*cos(uc.gamma()), uc.c()*cos(uc.beta()),
-						0, uc.b()*sin(uc.gamma()), uc.c()*(cos(uc.alpha()) - cos(uc.beta())*cos(uc.gamma()))/sin(uc.gamma()),
+/*	Matrix3			mat(uc.a(), uc.b()*cos(uc.gamma()), uc.c()*cos(uc.beta()),
+						0, uc.b()*sin(uc.gamma()), uc.c()*(cos(uc.alpha()) -cos(uc.beta())*cos(uc.gamma()))/sin(uc.gamma()),
 						0, 0, uc.volume()/(uc.a()*uc.b()*sin(uc.gamma())));
-	Bmolecule		*mol, *newmol;
+*/
+/*
+	Matrix3			mat(uc.a(), uc.b()*cos(uc.gamma()), uc.c()*cos(uc.beta()),
+						0, uc.b()*sin(uc.gamma()), uc.c()*(cos(uc.alpha()) -cos(uc.beta())*cos(uc.gamma()))/sin(uc.gamma()),
+						0, 0, uc.c());
+*/
+	Matrix3			mat = uc.skew_matrix_inverse();
+
+	Bmolecule*		mol = molgroup->mol;
+	Bmolecule*		newmol = mol;
 	Bresidue		*res, *newres;
 	Batom			*atom, *newatom;
 	
-	for ( nmol=0, mol = molgroup->mol; mol; mol = mol->next ) nmol++;
+	for ( nmol=0, mol = molgroup->mol; mol; mol = mol->next ) {
+		nmol++;
+		newmol = mol;
+	}
 	
 	if ( verbose ) {
 		cout << "Generating new unit cells for " << nmol << " molecules:" << endl;
 		cout << "Number:                         " << number << " = " << (int)number.volume() << endl;
+		cout << mat << endl;
 	}
 	
 	for ( z=0; z<number[2]; z++ ) {
 		for ( y=0; y<number[1]; y++ ) {
 			for ( x=0; x<number[0]; x++ ) {
-				if ( verbose )
-					cout << "Generating unit cell:           " << x << " " << y << " " << z << endl;
 				d = Vector3<double>(x,y,z);
 				d = mat * d;
-				if ( x+y+z > 0 ) for ( i=0, mol = molgroup->mol; i<nmol; mol = mol->next, i++ ) { 
-					newmol = mol_copy_and_add_to_molgroup(molgroup, mol);
+				if ( verbose & VERB_FULL )
+					cout << "Generating unit cell:           " << x << " " << y << " " << z << tab << d << endl;
+				if ( x+y+z > 0 ) for ( i=0, mol = molgroup->mol; i<nmol; mol = mol->next, i++ ) {
+					newmol->next = molecule_copy(mol);
+					newmol = newmol->next;
 					for ( res = mol->res, newres = newmol->res; res; res = res->next, newres = newres->next ) {
 						for ( atom = res->atom, newatom = newres->atom; atom; atom = atom->next, newatom = newatom->next ) {
 							newatom->coord = atom->coord + d;

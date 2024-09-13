@@ -1,8 +1,8 @@
 /**
 @file	Bimage_nad.cpp
 @brief	Denoising by nonlinear anisotropic diffusion: Coherence and edge enhancing diffusion.
-@author Achilleas Frangakis
-@author Bernard Heymann
+@author 	Achilleas Frangakis
+@author 	Bernard Heymann
 @date	Created: 20020803
 @date	Modified: 20161210 (BH)
 **/
@@ -161,6 +161,201 @@ int			Bimage::diffusion_tensor_2D(double lambda, double C, double alpha)
 	
 	return 0;
 }
+
+// Macros
+#define SQR(x)      ((x)*(x))                        // x^2 
+
+/*
+@brief 	Reduces a symmetric 3x3 matrix to tridiagonal form.
+@param 	A					matrix, replaced by tridiagonal matrix.
+@param 	d					diagonal.
+@param 	e					off-diagonal.
+
+	Reduces a symmetric 3x3 matrix to tridiagonal form by applying
+	(unitary) Householder transformations:
+	            [ d[0]  e[0]       ]
+	    A = Q . [ e[0]  d[1]  e[1] ] . Q^T
+	            [       e[1]  d[2] ]
+	The function accesses only the diagonal and upper triangular parts of A.
+	
+Reference: 	Kopp (2008).
+
+**/
+void 		dsytrd3(Matrix& A, vector<double>& d, vector<double>& e)
+{
+  const int 		n(3);
+  int 				i, j;
+  double 			u[3], q[3];
+  double 			omega, f;
+  double 			K, h, g;
+  double 			Q[3][3];
+  
+  // Initialize Q to the identitity matrix
+  for (i=0; i < n; i++)
+  {
+    Q[i][i] = 1.0;
+    for (j=0; j < i; j++)
+      Q[i][j] = Q[j][i] = 0.0;
+  }
+
+  // Bring first row and column to the desired form 
+  h = SQR(A[0][1]) + SQR(A[0][2]);
+  if (A[0][1] > 0)
+    g = -sqrt(h);
+  else
+    g = sqrt(h);
+  e[0] = g;
+  f    = g * A[0][1];
+  u[1] = A[0][1] - g;
+  u[2] = A[0][2];
+  
+  omega = h - f;
+  if (omega > 0.0)
+  {
+    omega = 1.0 / omega;
+    K     = 0.0;
+    for (i=1; i < n; i++)
+    {
+      f    = A[1][i] * u[1] + A[i][2] * u[2];
+      q[i] = omega * f;                  // p
+      K   += u[i] * f;                   // u* A u
+    }
+    K *= 0.5 * SQR(omega);
+
+    for (i=1; i < n; i++)
+      q[i] = q[i] - K * u[i];
+    
+    d[0] = A[0][0];
+    d[1] = A[1][1] - 2.0*q[1]*u[1];
+    d[2] = A[2][2] - 2.0*q[2]*u[2];
+    
+    // Calculate updated A[1][2] and store it in e[1]
+    e[1] = A[1][2] - q[1]*u[2] - u[1]*q[2];
+
+    // Store inverse Householder transformation in Q
+    for (j=1; j < n; j++)
+    {
+      f = omega * u[j];
+      for (i=1; i < n; i++)
+        Q[i][j] = Q[i][j] - f*u[i];
+    }
+
+  }
+  else
+  {
+    for (i=0; i < n; i++)
+      d[i] = A[i][i];
+    e[1] = A[1][2];
+  }
+
+  for ( i=0; i<3; ++i )
+  	for ( j=0; j<3; ++j )
+  		A[j][i] = Q[j][i];
+
+}
+
+/*
+@brief 	Calculates the eigenvalues and normalized eigenvectors of a symmetric 3x3 matrix.
+@param 	A					matrix, replaced by normalized eigenvectors.
+@return double*				eigenvalues.
+
+	Calculates the eigenvalues and normalized eigenvectors of a symmetric 3x3
+	matrix A using the QL algorithm with implicit shifts, preceded by a
+	Householder reduction to tridiagonal form.
+	The function accesses only the diagonal and upper triangular parts of A.
+	
+Reference: 	Kopp (2008).
+
+**/
+vector<double>	dsyevq3(Matrix& A)
+{
+  const int 		n(3);
+  vector<double>	e(3);                   // The third element is used only as temporary workspace
+  double 			g, r, p, f, b, s, c, t; // Intermediate storage
+  int 				nIter;
+  int 				m, k, l, i;
+  vector<double>	w(3);        			/* Array with unordered eigenvalues */
+
+  // Transform A to real tridiagonal form by the Householder method
+  dsytrd3(A, w, e);
+  // Calculate eigensystem of the remaining real symmetric tridiagonal matrix
+  // with the QL method
+  //
+  // Loop over all off-diagonal elements
+  for (l=0; l < n-1; l++)
+  {
+    nIter = 0;
+    while (1)
+    {
+      // Check for convergence and exit iteration loop if off-diagonal
+      // element e(l) is zero
+      for (m=l; m <= n-2; m++)
+      {
+        g = fabs(w[m])+fabs(w[m+1]);
+        if (fabs(e[m]) + g == g)
+          break;
+      }
+      if (m == l)
+        break;
+      
+      if (nIter++ >= 30)
+        return w;
+
+      // Calculate g = d_m - k
+      g = (w[l+1] - w[l]) / (e[l] + e[l]);
+      r = sqrt(SQR(g) + 1.0);
+      if (g > 0)
+        g = w[m] - w[l] + e[l]/(g + r);
+      else
+        g = w[m] - w[l] + e[l]/(g - r);
+
+      s = c = 1.0;
+      p = 0.0;
+      for (i=m-1; i >= l; i--)
+      {
+        f = s * e[i];
+        b = c * e[i];
+        if (fabs(f) > fabs(g))
+        {
+          c      = g / f;
+          r      = sqrt(SQR(c) + 1.0);
+          e[i+1] = f * r;
+          c     *= (s = 1.0/r);
+        }
+        else
+        {
+          s      = f / g;
+          r      = sqrt(SQR(s) + 1.0);
+          e[i+1] = g * r;
+          s     *= (c = 1.0/r);
+        }
+        
+        g = w[i+1] - p;
+        r = (w[i] - g)*s + 2.0*c*b;
+        p = s * r;
+        w[i+1] = g + p;
+        g = c*r - b;
+
+        // Form eigenvectors
+        for (k=0; k < n; k++)
+        {
+         t = A[k][i+1];
+          A[k][i+1] = s*A[k][i] + c*t;
+          A[k][i]   = c*A[k][i] - s*t;
+        }
+      }
+      w[l] -= p;
+      e[l]  = g;
+      e[m]  = 0.0;
+    }
+  }
+  
+  return w;
+}
+
+
+
+
 
 /*
 Calculates the diffusion tensor of EED or CED using the structure tensor.

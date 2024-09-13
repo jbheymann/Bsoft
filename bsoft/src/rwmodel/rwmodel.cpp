@@ -1,21 +1,27 @@
 /**
 @file	rwmodel.cpp
-@brief	Library routines to read and write atomic model parameters
+@brief	Library routines to read and write model parameters
 @author Bernard Heymann
 @date	Created: 20060919
-@date	Modified: 20210126
+@date	Modified: 20230706
 **/
 
 #include "rwmodel.h"
+#include "rwmodel_param.h"
 #include "rwmodel_star.h"
 #include "rwmodel_xml.h"
 #include "rwmodel_cmm.h"
 #include "rwmodel_bild.h"
 #include "rwmodel_mol.h"
+#include "rwmodel_pdb.h"
+#include "rwmodel_cif.h"
 #include "rwmodel_vega.h"
+#include "rwmodel_xyz.h"
 #include "model_links.h"
+#include "model_mol.h"
 #include "file_util.h"
-#include "linked_list.h"
+#include "string_util.h"
+//#include "linked_list.h"
 #include "Color.h"
 #include "utilities.h"
 
@@ -26,49 +32,93 @@ extern string	command;		// Command line
 // Internal function prototypes
 
 
-Bmodel*		read_model(Bstring& filename)	
+Bmodel*		read_model(string filename)
 {
-	return read_model(&filename);
+	string			paramfile;
+	vector<string> file_list;
+	file_list.push_back(filename);
+	return read_model(filename, paramfile, 0);
 }
 
-Bmodel*		read_model(Bstring* file_list)	
+Bmodel*		read_model(vector<string> file_list)
 {
-	Bstring		paramfile;
-	return read_model(file_list, paramfile);
+	string		paramfile;
+	return read_model(file_list, paramfile, 0);
 }
 
-Bmodel*		read_model(Bstring& filename, Bstring& paramfile)
+Bmodel*		read_model(string filename, string paramfile)
 {
-	return read_model(&filename, paramfile);
+	vector<string> file_list;
+	file_list.push_back(filename);
+	return read_model(file_list, paramfile, 0);
+}
+
+Bmodel*		read_model(vector<string> file_list, string paramfile)
+{
+	return read_model(file_list, paramfile, 0);
+}
+
+Bmodel*		read_model(string filename, int type_select)
+{
+	string			paramfile;
+	vector<string> file_list;
+	file_list.push_back(filename);
+	return read_model(file_list, paramfile, type_select);
+}
+
+Bmodel*		read_model(vector<string> file_list, int type_select)
+{
+	string			paramfile;
+	return read_model(file_list, paramfile, type_select);
+}
+
+Bmodel*		read_model(string filename, string paramfile, int type_select)
+{
+	vector<string> file_list;
+	file_list.push_back(filename);
+	return read_model(file_list, paramfile, type_select);
 }
 
 /**
 @brief 	Reads model parameters.
-@param 	*file_list	list of model parameter file names.
-@param 	&paramfile	parameter file.
-@return Bmodel*		model parameters.
+@param 	file_list		list of model parameter file names.
+@param 	paramfile		parameter file.
+@param	type_select		component types: 0=keep from file, 1=elements, 2=atoms
+@return Bmodel*			model parameters.
 **/
-Bmodel*		read_model(Bstring* file_list, Bstring& paramfile)
+Bmodel*		read_model(vector<string> file_list, string paramfile, int type_select)
 {
-	Bstring			ext = file_list->extension();
+	string			ext = extension(file_list[0]);
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_model: extension=" << ext << endl;
 
+	long			nf(0);
+	JSvalue			js;
 	Bmodel*			model = NULL;
-	Bstring			path;
+	string			path;
 
-    if ( ext.contains("star") || ext.contains("cif") )
+	map<string,Bcomptype>	param;
+	if ( type_select ) param = read_atom_properties(paramfile);
+
+    if ( ext == "star" )
 		model = read_model_star(file_list);
-    else if ( ext.contains("xml") )
+    else if ( ext == "xml" )
 		model = read_model_xml(file_list);
-    else if ( ext.contains("cmm") )
+    else if ( ext == "cmm" )
 		model = read_model_chimera(file_list);
-    else if ( ext.contains("bld") ||  ext.contains("bild") )
+    else if ( ext == "bld" ||  ext == "bild" )
 		model = read_model_bild(file_list);
-	else if ( ext.contains("v3d") )
+	else if ( ext == "v3d" )
 		model = read_model_vega(file_list);
-    else
+	else if ( ext == "pdb" || ext == "pdb1" || ext == "ent" )
+		model = read_model_pdb(file_list);
+	else if ( ext == "cif" )
+		model = read_model_cif(file_list);
+	else if ( ext == "xyz" ) {
+		if ( param.size() < 1 ) param = read_atom_properties(paramfile);
+		model = read_model_xyz(file_list, param);
+    } else
 		model = read_model_molecule(file_list, paramfile);
 
 	if ( verbose & VERB_DEBUG )
@@ -76,31 +126,51 @@ Bmodel*		read_model(Bstring* file_list, Bstring& paramfile)
 
 	if ( !model ) {
 		cerr << "Error: File with extension " << ext << " not read!" << endl;
-		error_show(file_list->c_str(), __FILE__, __LINE__);
+		error_show(file_list[0].c_str(), __FILE__, __LINE__);
 	} else {
 //		if ( !model->link ) model_list_setup_links(model);
-		path = file_list->pre_rev('/');
+//		path = file_list->pre_rev('/');
+		path = file_list[0].substr(file_list[0].rfind("/")+1);
 		model_check(model, path);
+//		map<string,Bcomptype>	param = read_atom_properties(paramfile);
+		if ( type_select == 1 ) js = model_elements_json(model, param);
+		else if ( type_select == 2 ) {
+			if ( verbose )
+				cout << "Adding atom type parameters based on the atomic specification" << endl;
+			for ( Bmodel* mp = model; mp; mp = mp->next )
+				nf += mp->update_component_types(param);
+			if ( nf )
+				cerr << "Component types not found:      " << nf << "/" << model->component_type_count() << endl << endl;
+		}
 	}
+	
+//	if ( model->type ) model->type->show();
 	
 	return model;
 }
 
 /**
 @brief 	Writes model parameters.
-@param 	&filename	model parameter file name.
+@param 	filename	model parameter file name.
 @param 	*model		model parameters.
 @return int			number of models.
 **/
-int			write_model(Bstring& filename, Bmodel* model)
+int			write_model(string filename, Bmodel* model)
 {
 	return write_model(filename, model, 0);
 }
 
-int			write_model(Bstring& filename, Bmodel* model, int split)
+/**
+@brief 	Writes model parameters.
+@param 	filename	model parameter file name.
+@param 	*model		model parameters.
+@param 	splt		number of digits for writing multiple models.
+@return int			number of models.
+**/
+int			write_model(string filename, Bmodel* model, int splt)
 {
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG write_model: starting" << endl;
+		cout << "DEBUG write_model: starting with " << filename << endl;
 
 	if ( !model ) return 0;
 	
@@ -113,10 +183,10 @@ int			write_model(Bstring& filename, Bmodel* model, int split)
 		return  -1;
 	}
 	
-	Bstring			path(0);
+	string			path("");
 	model_check(model, path);
 	
-	Bstring			ext = filename.extension();
+	string			ext = extension(filename);
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_model: extension=" << ext << endl;
@@ -124,19 +194,25 @@ int			write_model(Bstring& filename, Bmodel* model, int split)
 	if ( verbose & VERB_LABEL )
 	    cout << "Writing file:                   " << filename << endl;
 
-//	Bstring			path = filename.pre_rev('/');
+//	string			path = filename.pre_rev('/');
 //	model_check(model, path);
 	
-    if ( ext.contains("star") || ext.contains("cif") )
-		n = write_model_star(filename, model, split);
-    else if ( ext.contains("xml") )
+    if ( ext == "star" )
+		n = write_model_star(filename, model, splt);
+    else if ( ext == "xml" )
 		n = write_model_xml(filename, model);
-    else if ( ext.contains("cmm") )
-		n = write_model_chimera(filename, model);
-    else if ( ext.contains("bld") ||  ext.contains("bild") )
-		n = write_model_bild(filename, model);
-    else if ( ext.contains("v3d") )
-		n = write_model_vega(filename, model);
+    else if ( ext == "cmm" )
+		n = write_model_chimera(filename, model, splt);
+    else if ( ext == "bld" ||  ext == "bild" )
+		n = write_model_bild(filename, model, splt);
+    else if ( ext == "v3d" )
+		n = write_model_vega(filename, model, splt);
+	else if ( ext == "pdb" )
+		n = write_model_pdb(filename, model, splt);
+	else if ( ext == "cif" )
+		n = write_model_cif(filename, model);
+	else if ( ext == "xyz" )
+		n = write_model_xyz(filename, model, splt);
     else
 		n = write_model_molecule(filename, model);
 	
@@ -242,77 +318,6 @@ Blink*		link_add(Blink** link, Bcomponent* comp1, Bcomponent* comp2)
 	return link_add(link, comp1, comp2, 0, 0);
 }
 
-/**
-@brief 	Sets all the map file names of selected models.
-@param 	*model		model parameters.
-@param 	&mapfile	map file name.
-@return int			0.
-**/
-int			model_set_map_filenames(Bmodel* model, Bstring& mapfile)
-{
-	Bmodel*		mp;
-	
-	for ( mp = model; mp; mp = mp->next )
-		if ( mp->select()) mp->mapfile(mapfile.str());
-	
-	return 0;
-}
-
-/**
-@brief 	Reset the component types.
-@param 	*model		model.
-@param 	&set_type	component type.
-@return int			number of models.
-
-	Sets all the component types to the given string.
-
-**/
-int			model_set_type(Bmodel* model, Bstring& set_type)
-{
-	if ( !model ) return 0;
-	
-	int				n;
-	Bmodel*			mp;
-	Bcomponent*		comp;
-	Bcomptype*		ct;
-
-	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
-		comp_type_list_kill(mp->type);
-		mp->type = NULL;
-		ct = mp->add_type(set_type);
-		for ( comp = mp->comp; comp; comp = comp->next )
-			comp->type(ct);
-	}
-	
-	return  n;
-}
-
-/**
-@brief 	Change a component type name.
-@param 	*model			model.
-@param 	&change_type	component type.
-@return int				number of models.
-
-	Sets all the component types to the given string.
-
-**/
-int			model_change_type(Bmodel* model, Bstring& change_type)
-{
-	if ( !model ) return 0;
-	
-	int				n;
-	Bmodel*			mp;
-	Bcomptype*		ct;
-	
-	Bstring			ot(change_type.pre(',')), nt(change_type.post(','));
-
-	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
-		for ( ct = mp->type; ct; ct = ct->next )
-			if ( ct->identifier() == ot.str() ) ct->identifier(nt.str());
-	}
-	
-	return  n;
-}
 
 /**
 @brief 	Checks model properties.
@@ -320,7 +325,7 @@ int			model_change_type(Bmodel* model, Bstring& change_type)
 @param	path		search path to find map files.
 @return int			0.
 **/
-int			model_check(Bmodel* model, Bstring path)
+int			model_check(Bmodel* model, string path)
 {
 	if ( !model ) return 0;
 	
@@ -329,13 +334,17 @@ int			model_check(Bmodel* model, Bstring path)
 //	Bcomptype*		ct = NULL;
 //	Bcomponent*		comp = NULL;
 //	Blink*			link = NULL;
-//	Bstring			nutype("UNK");
+//	string			nutype("UNK");
 
  	
 	for ( mp = model; mp; mp = mp->next ) {
+		if ( verbose & VERB_DEBUG )
+			cout << "DEBUG model_check: " << mp->identifier() << endl;
 		if ( path.length() ) {
-			if ( mp->mapfile().empty() ) mp->mapfile("?");
-			else mp->mapfile(find_file(mp->mapfile().c_str(), path).str());
+//			if ( mp->mapfile().empty() ) mp->mapfile("?");
+//			else mp->mapfile(find_file(mp->mapfile().c_str(), path).str());
+			if ( mp->mapfile().size() < 1 ) mp->mapfile("?");
+			else mp->mapfile(find_file(mp->mapfile().c_str(), path));
 		}
 		mp->check();
 /*		for ( comp = mp->comp; comp; comp = comp->next, ncomp++ ) {
@@ -441,8 +450,10 @@ Bmodel*		model_copy(Bmodel* model)
 	}
 	
 	for ( link = model->link; link; link = link->next ) {
-		link_nu = (Blink *) add_item((char **) &link_nu, sizeof(Blink));
-		if ( !model_nu->link ) model_nu->link = link_nu;
+//		link_nu = (Blink *) add_item((char **) &link_nu, sizeof(Blink));
+//		if ( !model_nu->link ) model_nu->link = link_nu;
+		if ( model_nu->link ) link_nu = model_nu->link->add(link);
+		else link_nu = model_nu->link = new Blink(link);
 		for ( comp = model->comp, comp_new = model_nu->comp; comp; comp = comp->next, comp_new = comp_new->next ) {
 			if ( link->comp[0] == comp ) link_nu->comp[0] = comp_new;
 			if ( link->comp[1] == comp ) link_nu->comp[1] = comp_new;
@@ -453,8 +464,10 @@ Bmodel*		model_copy(Bmodel* model)
 	}
 	
 	for ( poly = model->poly; poly; poly = poly->next ) {
-		poly_nu = (Bpolygon *) add_item((char **) &poly_nu, sizeof(Bpolygon));
-		if ( !model_nu->poly ) model_nu->poly = poly_nu;
+//		poly_nu = (Bpolygon *) add_item((char **) &poly_nu, sizeof(Bpolygon));
+//		if ( !model_nu->poly ) model_nu->poly = poly_nu;
+		if ( model_nu->poly ) poly_nu = model_nu->poly->add(poly);
+		else poly_nu = model_nu->poly = new Bpolygon(poly);
 		poly_nu->normal(poly->normal());
 		poly_nu->closed(poly->closed());
 		for ( comp = model->comp, comp_new = model_nu->comp; comp; comp = comp->next, comp_new = comp_new->next ) {
@@ -466,19 +479,6 @@ Bmodel*		model_copy(Bmodel* model)
 	model_setup_links(model_nu);
 	
 	return model_nu;
-}
-
-/**
-@brief 	Deallocates memory for one component.
-@param	*comp	component.
-@return int					0.
-**/
-int			component_kill(Bcomponent* comp)
-{
-	comp->type(NULL);
-	delete comp;
-	
-	return 0;
 }
 
 /**
@@ -494,24 +494,12 @@ int			component_list_kill(Bcomponent* comp)
 	
 	for ( c = comp; c; ) {
 		c2 = c->next;
-		component_kill(c);
+		delete c;
 		c = c2;
 		n++;
 	}
 	
 	return  n;
-}
-
-/**
-@brief 	Deallocates memory for one component type.
-@param	*type		component type.
-@return int					0.
-**/
-int			comp_type_kill(Bcomptype* type)
-{
-	delete type;
-	
-	return 0;
 }
 
 /**
@@ -527,7 +515,7 @@ int			comp_type_list_kill(Bcomptype* type)
 	
 	for ( ct = type; ct; ) {
 		ct2 = ct->next;
-		comp_type_kill(ct);
+		delete ct;
 		ct = ct2;
 		n++;
 	}
@@ -735,109 +723,4 @@ int 		model_kill(Bmodel* model)
 	return 0;
 }
 
-/**
-@brief 	Associates a model file with a component type.
-@param 	*model			the model.
-@param 	&associate_type	component type.
-@param 	&associate_file	component file name.
-@return int				number of types associated.
-
-	Model files can be coordinates or maps.
-
-**/
-int			model_associate(Bmodel* model, Bstring& associate_type, Bstring& associate_file)
-{
-	if ( !model ) return 0;
-	
-	int				n(0);
-	Bmodel*			mp = NULL;
-	Bcomptype*		ct = NULL;
-
-	if ( verbose & VERB_PROCESS )
-		cout << "Associating component " << associate_type << " with file " << associate_file << endl << endl;
-	
-	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-		for ( ct = mp->type; ct; ct = ct->next ) if ( ct->select() ) {
-			if ( ct->identifier() == associate_type.str() ) {
-				ct->file_name(associate_file.str());
-				n++;
-			}
-		}
-	}
-	
-	return  n;
-}
-
-/**
-@brief 	Associates a mass with a component type.
-@param 	*model			model list.
-@param 	&associate_type	component type.
-@param 	mass			component type mass.
-@return int				number of types associated.
-**/
-int			model_associate_mass(Bmodel* model, Bstring& associate_type, double mass)
-{
-	if ( !model ) return 0;
-	
-	int				n(0);
-	Bmodel*			mp = NULL;
-	Bcomptype*		ct = NULL;
-
-	if ( verbose & VERB_PROCESS )
-		cout << "Associating component " << associate_type << " with mass = " << mass << endl << endl;
-	
-	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-		for ( ct = mp->type; ct; ct = ct->next ) if ( ct->select() ) {
-			if ( ct->identifier() == associate_type.str() ) {
-				ct->mass(mass);
-				n++;
-			}
-		}
-	}
-	
-	return  n;
-}
-
-/**
-@brief 	Sets the filenames of all selected component types to the given string.
-@param 	*model		model parameters.
-@param 	&filename	component file name.
-@return int			number of component types set.
-
-	The image numbers are sequentially set as well.
-
-**/
-int			model_set_comptype_filenames(Bmodel* model, Bstring& filename)
-{
-	if ( !model ) return 0;
-	
-	int				n(0);
-	Bmodel*			mp;
-	string			fn(filename.str());
-	
-	for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
-		n += mp->set_type_filenames(fn);
-	
-	return  n;
-}
-
-
-/**
-@brief 	Set the display radius for all components to a specific value.
-@param 	*model		model parameters.
-@param 	comprad		component display radius.
-@return long			number of components selected.
-**/
-long		model_set_component_radius(Bmodel* model, double comprad)
-{
-	if ( !model ) return 0;
-
-	int				n(0);
-	Bmodel*			mp;
-	
-	for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
-		n += mp->set_component_radius(comprad);
-
-	return n;
-}
 

@@ -1,14 +1,13 @@
 /**
 @file	ps_views.cpp
 @brief	Postscript output for views
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20011127
-@date	Modified: 20201125
+@date	Modified: 20230512
 **/
 
 #include "ps_views.h"
 #include "ps_plot.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -19,8 +18,8 @@ extern int 	verbose;		// Level of output to the screen
 /**
 @brief 	Generates postscript plot of views on the unit sphere.
 @param 	&filename			output postscript file name.
-@param 	&symmetry_string 	symmetry string to print at the top of the page.
-@param 	*view				linked list of views.
+@param 	symmetry_string 	symmetry string to print at the top of the page.
+@param 	views				list of views.
 @param 	flags				flags.
 @return int					0.
 
@@ -31,7 +30,7 @@ extern int 	verbose;		// Level of output to the screen
 			The gray level indicates an estimated increase in signal-to-noise ratio.
 
 **/
-int 		ps_views(Bstring& filename, Bstring& symmetry_string, View* view, int flags)
+int 		ps_views(string filename, string symmetry_string, vector<View2<double>>& views, int flags)
 {
 	if ( verbose & VERB_LABEL )
 		cout << "Writing postscript file: " << filename << endl << endl;
@@ -41,186 +40,14 @@ int 		ps_views(Bstring& filename, Bstring& symmetry_string, View* view, int flag
 	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
 	*fps << "40 740 moveto (" << filename << ") show" << endl;
 	
-	ps_views(fps, symmetry_string, view, flags);
+	ps_views(fps, symmetry_string, views, flags);
 
 	ps_close(fps);
 
 	return 0;
 }
 
-int 		ps_views(ofstream* fps, Bstring& symmetry_string, View* view, int flags)
-{
-	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG ps_views: symmetry=" << symmetry_string << " flags=" << flags << endl;
-		
-	int 		i, m, left(50), bottom(150), width(500), height(500), order(1);
-	View*		v;
-
-	int			h(100);
-	int			ix, iy, nx(2*h+1), ny(2*h+1), sx(h), sy(h);
-	double		isx(1.0L/sx), isy(1.0L/sy);
-	float		snr(0.1);
-	float*		count = NULL;
-
-	long		n = count_list((char *) view);
-	double		textscale(0.06), textoffset(0.02);
-	if ( n > 50 ) textscale = 3.0/n;
-	if ( textscale < 5 ) textscale = 5;
-	textoffset = textscale/3;
-	
-	if ( flags == 2 ) {
-		count = new float[nx*ny];
-		for ( i=0; i<nx*ny; i++ ) count[i] = 0;
-		for ( v = view, n=m=0; v; v = v->next ) {
-			ix = (int) (v->x()*sx + sx);
-			iy = (int) (v->y()*sy + sy);
-			i = iy*nx+ix;
-			count[i]++;
-			if ( m < count[i] ) m = (int) count[i];
-			n++;
-		}
-		snr = 1/sqrt((double)m);
-		if ( snr < 0.1 ) snr = 0.1;
-	}
-	
-	*fps << "%%%%Page: Views 1" << endl;
-	*fps << "/Helvetica-Bold findfont 14 scalefont setfont" << endl;
-	*fps << "40 720 moveto (Symmetry:        " << symmetry_string << ") show" << endl;
-	*fps << "40 700 moveto (Number of views: " << n << ") show" << endl;
-	*fps << "/Left " << left << " def\n/Bottom " << bottom << " def\n/Height " << height << " def\n/Width " << width << " def" << endl;
-	*fps << "/Scale 200 def" << endl;
-	
-	*fps << "/View [" << endl;
-	if ( flags == 2 ) {
-		*fps << "%x y count weight" << endl;
-		for ( i=iy=0; iy<ny; iy++ )
-			for ( ix=0; ix<nx; ix++, i++ )
-				if ( count[i] ) *fps << ix*isx - 1 << " " << iy*isy - 1 << " " << count[i] << " " << 1/(1+1/(snr*sqrt(count[i]))) << endl;
-		delete[] count;
-	} else {
-		*fps << "%x y z a" << endl;
-		for ( v = view; v; v = v->next )
-			*fps << v->x() << " " << v->y() << " " << v->z() << " " << v->angle() << endl;
-	}
-	*fps << "] def" << endl;
-		
-	*fps << "/Geom { newpath " << endl;
-	*fps << "	1 0 moveto 0 0 1 0 360 arc stroke" << endl;
-	if ( symmetry_string[0] == 'T' ) {
-		*fps << "	0 0 moveto 1 0 lineto" << endl;
-		*fps << "	-0.577 0.577 moveto 0.577 -0.577 lineto stroke" << endl;
-		*fps << "	-0.577 -0.577 moveto 0.577 0.577 lineto stroke" << endl;
-		*fps << "	0 1 moveto 0 0.39 0.61 90 162 arc stroke" << endl;
-		*fps << "	-0.577 0.577 moveto -0.39 0 0.61 108 180 arc stroke" << endl;
-		*fps << "	1 0 moveto 0.39 0 0.61 0 72 arc stroke" << endl;
-		*fps << "	0.577 0.577 moveto 0 0.39 0.61 18 90 arc stroke" << endl;
-		*fps << "	0 -1 moveto 0 -0.39 0.61 -90 -18 arc stroke" << endl;
-		*fps << "	0.577 -0.577 moveto 0.39 0 0.61 -72 0 arc stroke" << endl;
-		*fps << "	-1 0 moveto -0.39 0 0.61 180 252 arc stroke" << endl;
-		*fps << "	-0.577 -0.577 moveto 0 -0.39 0.61 198 270 arc stroke" << endl;
-	} else if ( symmetry_string[0] == 'O' ) {
-		*fps << "	-1 0 moveto 1 0 lineto" << endl;
-		*fps << "	0 -1 moveto 0 1 lineto" << endl;
-		*fps << "	0 0 moveto 0.707 0.707 lineto stroke" << endl;
-		*fps << "	0 0 moveto 0.707 -0.707 lineto stroke" << endl;
-		*fps << "	-0.577 0.577 moveto -0.707 0.707 lineto stroke" << endl;
-		*fps << "	-0.577 -0.577 moveto -0.707 -0.707 lineto stroke" << endl;
-		*fps << "	0.577 -0.577 moveto -0.637 0 1.344 -25.4 25.4 arc stroke" << endl;
-		*fps << "	0.577 0.577 moveto 0 -0.637 1.344 64.6 115.4 arc stroke" << endl;
-		*fps << "	-0.577 0.577 moveto 0.637 0 1.344 154.6 205.4 arc stroke" << endl;
-		*fps << "	-0.577 -0.577 moveto 0 0.637 1.344 -115.4 -64.6 arc stroke" << endl;
-	} else if ( symmetry_string[0] == 'I' ) {
-		if ( symmetry_string.contains("I90") ) {
-			*fps << "-0.526 0 moveto 0.526 0 lineto" << endl;
-			*fps << "0 -0.357 lineto -0.526 0 lineto 0 0.357 lineto 0.526 0 lineto" << endl;
-			*fps << "0 0.357 moveto 0 -0.357 lineto" << endl;
-			*fps << "-0.851 -0.526 moveto" << endl;
-			*fps << "-0.526 0 lineto" << endl;
-			*fps << "0 -0.851 lineto" << endl;
-			*fps << "-0.851 -0.526 lineto" << endl;
-			*fps << "-0.851 0.526 lineto" << endl;
-			*fps << "0 0.851 lineto" << endl;
-			*fps << "-0.526 0 lineto" << endl;
-			*fps << "-0.851 0.526 lineto" << endl;
-			*fps << "0.851 -0.526 moveto" << endl;
-			*fps << "0.526 0 lineto" << endl;
-			*fps << "0 -0.851 lineto" << endl;
-			*fps << "0.851 -0.526 lineto" << endl;
-			*fps << "0.851 0.526 lineto" << endl;
-			*fps << "0 0.851 lineto" << endl;
-			*fps << "0.526 0 lineto" << endl;
-			*fps << "0.851 0.526 lineto" << endl;
-		} else {
-			*fps << "0 0 moveto 0.357 0 lineto" << endl;
-			*fps << "0 0.526 lineto 0 -0.526 lineto 0.357 0 lineto" << endl;
-			*fps << "-0.526 -0.851 moveto" << endl;
-			*fps << "0 -0.526 lineto" << endl;
-			*fps << "-0.851 0 lineto" << endl;
-			*fps << "-0.526 -0.851 lineto" << endl;
-			*fps << "0.526 -0.851 lineto" << endl;
-			*fps << "0.851 0 lineto" << endl;
-			*fps << "0 -0.526 lineto" << endl;
-			*fps << "0.526 -0.851 lineto" << endl;
-			*fps << "-0.526 0.851 moveto" << endl;
-			*fps << "0 0.526 lineto" << endl;
-			*fps << "-0.851 0 lineto" << endl;
-			*fps << "-0.526 0.851 lineto" << endl;
-			*fps << "0.526 0.851 lineto" << endl;
-			*fps << "0.851 0 lineto" << endl;
-			*fps << "0 0.526 lineto" << endl;
-			*fps << "0.526 0.851 lineto" << endl;
-		}
-	} else {
-		sscanf(&symmetry_string[1], "%d", &order);
-		*fps << "	0 0 moveto 1 0 lineto" << endl;
-		for ( i=0; i<order; i++ )
-			*fps << "	0 0 moveto " << cos((i+0.5)*M_PI*2.0/order) << " " 
-				<< sin((i+0.5)*M_PI*2.0/order) << " lineto stroke" << endl;
-	}
-	*fps << "	closepath } def" << endl;
-
-	*fps << "gsave" << endl;
-	*fps << "	Width 2 div Left add Height 2 div Bottom add translate" << endl;
-	*fps << "	Scale Scale scale" << endl;
-	*fps << "	0.005 setlinewidth Geom stroke" << endl;
-	*fps << "	/Helvetica findfont " << textscale << " scalefont setfont" << endl;
-	if ( flags == 2 ) {
-		*fps << "	0 0.1 1 {" << endl;
-		*fps << "		/f exch def" << endl;
-		*fps << "		0 4 View length 4 sub {" << endl;
-		*fps << "			/Index exch def" << endl;
-		*fps << "			/x View Index get def" << endl;
-		*fps << "			/y View Index 1 add get def" << endl;
-		*fps << "			/v View Index 3 add get def" << endl;
-		*fps << "			v f ge {" << endl;
-		*fps << "				1 v sub setgray" << endl;
-		*fps << "				x y 0.01 0 360 arc fill" << endl;
-		*fps << "			} if" << endl;
-		*fps << "		} for stroke" << endl;
-		*fps << "	} for" << endl;
-	} else {
-		*fps << "	/n 0 def" << endl;
-		*fps << "	0 4 View length 4 sub {" << endl;
-		*fps << "		/Index exch def" << endl;
-		*fps << "		/x View Index get def" << endl;
-		*fps << "		/y View Index 1 add get def" << endl;
-		*fps << "		/z View Index 2 add get def" << endl;
-		*fps << "		z 0 lt { x y 0.02 0 360 arc stroke }" << endl;
-		*fps << "		{ x y 0.01 0 360 arc fill } ifelse" << endl;
-		if ( flags == 1 ) {
-			*fps << "		/n n 1 add def" << endl;
-			*fps << "		x y moveto " << textoffset << " " << textoffset <<
-				" rmoveto n cvi (xxxx) cvs show stroke" << endl;
-		}
-		*fps << "	} for stroke" << endl;
-	}
-	*fps << "grestore" << endl;
-	*fps << "showpage" << endl;
-	
-	return 0;
-}
-
-int 		ps_views2(ofstream* fps, string& symmetry_string, list<View2<float>>& view, int flags)
+int 		ps_views(ofstream* fps, string symmetry_string, vector<View2<double>>& views, int flags)
 {
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG ps_views: symmetry=" << symmetry_string << " flags=" << flags << endl;
@@ -233,7 +60,7 @@ int 		ps_views2(ofstream* fps, string& symmetry_string, list<View2<float>>& view
 	float		snr(0.1);
 	vector<float>	count(nx*ny,0);
 
-	long		n = view.size();
+	long		n = views.size();
 	double		textscale(0.06), textoffset(0.02);
 	if ( n > 50 ) textscale = 3.0/n;
 	if ( textscale < 5 ) textscale = 5;
@@ -241,9 +68,9 @@ int 		ps_views2(ofstream* fps, string& symmetry_string, list<View2<float>>& view
 	
 	if ( flags == 2 ) {
 		n = m = 0;
-		for ( auto v = view.begin(); v != view.end(); ++v ) {
-			ix = (int) (v->x()*sx + sx);
-			iy = (int) (v->y()*sy + sy);
+		for ( auto v: views ) {
+			ix = (int) (v[0]*sx + sx);
+			iy = (int) (v[1]*sy + sy);
 			i = iy*nx+ix;
 			count[i]++;
 			if ( m < count[i] ) m = (int) count[i];
@@ -268,8 +95,8 @@ int 		ps_views2(ofstream* fps, string& symmetry_string, list<View2<float>>& view
 				if ( count[i] ) *fps << ix*isx - 1 << " " << iy*isy - 1 << " " << count[i] << " " << 1/(1+1/(snr*sqrt(count[i]))) << endl;
 	} else {
 		*fps << "%x y z a" << endl;
-		for ( auto v = view.begin(); v != view.end(); ++v )
-			*fps << v->x() << " " << v->y() << " " << v->z() << " " << v->angle() << endl;
+		for ( auto& v: views )
+			*fps << v[0] << " " << v[1] << " " << v[2] << " " << v[3] << endl;
 	}
 	*fps << "] def" << endl;
 		
@@ -391,19 +218,19 @@ int 		ps_views2(ofstream* fps, string& symmetry_string, list<View2<float>>& view
 
 /**
 @brief 	Generates postscript plot of views projected as phi and theta.
-@param 	&filename		output postscript file name.
-@param 	*view			linked list of views.
+@param 	filename		output postscript file name.
+@param 	&views			list of views.
 @return int				0.
 
 **/
-int 		ps_views(Bstring& filename, View* view)
+int 		ps_views(string filename, vector<View2<double>>& views)
 {
-	if ( !view ) return -1;
+	if ( views.size() < 1 ) return -1;
 	
 	Bstring			title("Views");
 	ofstream*		fps = ps_open_and_init(filename, title, 1, 600, 800);
 
-	ps_views(fps, view);
+	ps_views(fps, views);
 	
 	ps_close(fps);
 	
@@ -413,25 +240,24 @@ int 		ps_views(Bstring& filename, View* view)
 /**
 @brief 	Generates postscript plot of views projected as phi and theta.
 @param 	*fps			output postscript file stream.
-@param 	*view			linked list of views.
+@param 	&views			list of views.
 @return int				0.
 
 **/
-int 		ps_views(ofstream* fps, View* view)
+int 		ps_views(ofstream* fps, vector<View2<double>>& views)
 {
 	int 			i(1), left(50), bottom(200), width(500), height(250);
 	float			x, y;
 	Euler			euler;
 	
-	View*			v;
-	if ( !view ) return -1;
+	if ( views.size() < 1 ) return -1;
 	
 	*fps << "%%Page: " << i << " " << i << endl;
 	*fps << "/Helvetica findfont 12 scalefont setfont" << endl;
 //	*fps << "50 755 moveto (Views: " << filename << ") show" << endl;
 	*fps << "/Data [" << endl << "%x y fom" << endl;
-	for ( v = view; v; v = v->next ) {
-		euler = Euler(*v);
+	for ( auto v: views ) {
+		euler = Euler(v);
 		x = euler.phi()*fabs(sin(euler.theta())) + M_PI;
 		y = euler.theta();
 		*fps << x << " " << y << " 0.5" << endl;
@@ -447,20 +273,18 @@ int 		ps_views(ofstream* fps, View* view)
 
 /**
 @brief 	Postscript plot of the distribution of sets of views.
-@param 	&filename		output postscript file name.
-@param 	&title 			title.
-@param 	nv				number of views.
-@param 	*views			list of views.
-@param 	ns				number of sets.
-@param 	*fom			FOM values (nv*ns values).
+@param 	filename		output postscript file name.
+@param 	title 			title.
+@param 	&views			list of views.
+@param 	&fom			FOM values (nv*ns values).
 @return int 				0, error if <0.
 **/
-int			ps_sets_of_views(Bstring& filename, Bstring& title, int nv, View* views, int ns, double* fom)
+int			ps_sets_of_views(string filename, string title, vector<View2<double>>& views, vector<double>& fom)
 {
 	int 			i, j, k, left(50), bottom(200), width(500), height(250);
+	long			ns(fom.size()/views.size());
 	float			x, y, vx, vy;
 	double			fmax;
-	View*			v;
 	Euler			euler;
 	
 	ofstream*		fps = ps_open_and_init(filename, title, ns, 600, 800);
@@ -470,8 +294,8 @@ int			ps_sets_of_views(Bstring& filename, Bstring& title, int nv, View* views, i
 		*fps << "/Helvetica findfont 12 scalefont setfont" << endl;
 		*fps << "50 755 moveto (" << title << ": " << i << ") show" << endl;
 		*fps << "/Data [" << endl << "%x y fom" << endl;
-		for ( j=0, v=views, fmax=0; j<nv && v; j++, k++, v = v->next ) {
-			euler = Euler(*v);
+		for ( j=0, fmax=0; j<views.size(); ++j, ++k ) {
+			euler = Euler(views[j]);
 			x = euler.phi()*fabs(sin(euler.theta())) + M_PI;
 			y = euler.theta();
 			*fps << x << " " << y << " " << fom[k] << endl;

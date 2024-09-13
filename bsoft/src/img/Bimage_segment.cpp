@@ -3,11 +3,10 @@
 @brief	Methods for segmentation.
 @author	Bernard Heymann and Samuel Payne
 @date	Created: 20010516
-@date	Modified: 20210118 (BH)
+@date	Modified: 20230510 (BH)
 **/
 
 #include "rwimg.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -268,7 +267,7 @@ long 		Bimage::region_flood(Bimage* pmask, double threshold_hi,
 	}
 
 	if ( verbose & VERB_LABEL )
-		cout << "Starting regions:                " << pmask->maximum() << endl;
+		cout << "Starting regions:               " << pmask->maximum() << endl;
 	
 	Bimage*			pt = pmask->copy();
 	
@@ -759,18 +758,21 @@ long		Bimage::replace_maxima(double threshold)
 		return 0;
 	}
 	
-	long   			i, j, k, m, nn, xx, yy, zz, iter, nvr(0);
-	long			kx, ky, kz, nval, tx, ty, tz;
-	long   			nr((long) (pmask->maximum() + 1.9)), rs;
+//	long   			i, j, k, m, nn, xx, yy, zz, iter, nvr(0);
+//	long			kx, ky, kz, nval, tx, ty, tz;
+//	long   			nr((long) (pmask->maximum() + 1.9)), rs;
+	long   			i, j, nn, xx, yy, zz, nvr(0);
+	long   			nr((long) (pmask->maximum() + 1.9));
 	double			val;
 	Vector3<long>	lo, hi, region_size;
 	
-	int*			num = new int[nr];
-	int*			nimg = new int[nr];
-	Vector3<float>*	region = new Vector3<float>[nr];
-	Vector3<int>*	rmin = new Vector3<int>[nr];
-	Vector3<int>*	rmax = new Vector3<int>[nr];
-	float*			temp;
+	vector<int>				num(nr,0);
+	vector<int>				nimg(nr,0);
+	vector<Vector3<float>>	region(nr);
+	vector<Vector3<int>>	rmin(nr);
+	vector<Vector3<int>>	rmax(nr);
+	vector<float>			a(nr,0);
+	vector<int>				na(nr,0);
 	
 	for ( j=1; j<nr; j++ ) rmin[j] = size();
 	
@@ -791,24 +793,46 @@ long		Bimage::replace_maxima(double threshold)
 						if ( rmax[j][0] < xx ) rmax[j][0] = xx;
 						if ( rmax[j][1] < yy ) rmax[j][1] = yy;
 						if ( rmax[j][2] < zz ) rmax[j][2] = zz;
+						val = kernel_average(i, 3, -1e30, threshold);
+						if ( val > min ) {
+							a[j] += val;
+							na[j]++;
+						}
 					}
 				}
 			}
 		}
 	}
-				
+
+	if ( verbose & VERB_STATS )
+		cout << "Regions:\n#\tImage\tx\ty\tz\tSize\tAvg" << endl;
+	for ( j=1; j<nr; j++ ) {
+		nn = nimg[j];
+		if ( num[j] ) region[j] /= num[j];
+		if ( na[j] ) a[j] /= na[j];
+		if ( verbose & VERB_STATS )
+			cout << j << tab << nn << tab << region[j] << tab << num[j] << tab << a[j] << endl;
+	}
+	
+	for ( i=0; i<datasize; ++i ) {
+		j = (long) (*pmask)[i];
+		if ( j ) set(i, a[j]);
+	}
+	
+/*
 	if ( verbose & VERB_STATS )
 		cout << "Regions:\n#\tImage\tx\ty\tz\tSize" << endl;
 	for ( j=1; j<nr; j++ ) {
 		nn = nimg[j];
 		if ( num[j] ) region[j] /= num[j];
+		if ( navg[j] ) avg[j] /= navg[j];
 		if ( verbose & VERB_STATS )
 			cout << j << tab << nn << tab << region[j] << tab << num[j] << endl;
 		rmin[j] = rmin[j].max(0);
 		rmax[j] = rmax[j].min(size()-1);
 		region_size = rmax[j] - rmin[j] + 1;
 		rs = (long) region_size.volume();
-		temp = new float[rs];
+		vector<float>	temp(rs,0);
 		nval = iter = 0;
 		val = 0;
 		while ( nval < num[j] ) {
@@ -818,6 +842,7 @@ long		Bimage::replace_maxima(double threshold)
 				for ( yy=rmin[j][1], ty=0; yy<=rmax[j][1]; ++yy, ty++ ) {
 					for ( xx=rmin[j][0], tx=0; xx<=rmax[j][0]; ++xx, tx++ ) {
 						i = index(0,xx,yy,zz,nn);
+						set(i, avg[j]);
 						lo = kernel_low(i);
 						hi = kernel_high(i);
 						if ( (*pmask)[i] == j ) {
@@ -858,18 +883,11 @@ long		Bimage::replace_maxima(double threshold)
 			if ( verbose & VERB_FULL )
 				cout << iter << ":\t" << nval << endl;
 		}
-		delete[] temp;
 		nvr += nval;
-	}
+	}*/
 	if ( verbose & ( VERB_STATS | VERB_FULL ) )
 		cout << endl;
-	
-	delete[] num;
-	delete[] nimg;
-	delete[] region;
-	delete[] rmin;
-	delete[] rmax;
-	
+
 	delete pmask;
 	
 	return nvr;
@@ -912,8 +930,8 @@ double 		Bimage::mass_threshold(long img_num, double mol_weight, double rho)
     }
     
     if ( volume > real_size().volume() ) {
-		cerr << "Error: The image volume is smaller than the molecular volume!" << endl << endl;
-		bexit(-1);
+		cerr << "Warning: The image volume is smaller than the molecular volume!" << endl << endl;
+		return 0;
     }
 	
 	if ( verbose )
@@ -1437,7 +1455,8 @@ GSgraph		Bimage::graph_segment(int type, int connect_type,
 	if ( verbose )
 		cout << "Number of regions:              " << nrc << endl << endl;
 
-	g.show_regions();
+	if ( verbose & VERB_FULL )
+		g.show_regions();
 	
 	return g;
 }
@@ -1491,6 +1510,40 @@ Bimage*		Bimage::graph_segments_to_mask(GSgraph& g)
 	pseg->statistics();
 
 	return pseg;
+}
+
+/**
+@brief 	List the locations, sizes and averages of segments.
+@param 	g				graph segmentation.
+@return long				number of segments.
+
+**/
+long		Bimage::graph_segments_list(GSgraph& g)
+{
+	long					i, j;
+	vector<GSvoxel>&		r = g.voxels();
+	vector<Vector3<double>>	coor(r.size());
+	
+	for ( i=0; i<image_size(); ++i ) {
+		j = r[i].joins();
+		coor[j] += coordinates(i);
+	}
+
+	cout << "Segments:" << endl;
+	cout << "Region\tx\ty\tz\tArea(A2)\tAverage" << endl;
+
+	for ( i=0; i<coor.size(); ++i ) {
+		if ( r[i].voxels() ) {
+			j = r[i].joins();
+			coor[j] /= r[i].voxels();
+			cout << setprecision(2) << j << tab << coor[j] << tab <<
+				r[i].voxels()*sampling(0).volume() << tab << setprecision(4) << r[i].average() << endl;
+		}
+	}
+	
+	cout << endl;
+
+	return r.size();
 }
 
 /*
@@ -1557,6 +1610,9 @@ int			Bimage::superpixels_update(Bimage* pmask, vector<long> vstep,
 				double colorweight, vector<Bsuperpixel>& seg)
 {
 	long				nseg(seg.size());
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG superpixels_update" << endl;
 
 #ifdef HAVE_GCD
 	dispatch_apply(nseg, dispatch_get_global_queue(0, 0), ^(size_t i){
@@ -1590,7 +1646,7 @@ int			img_assign_pixel(long i, Bimage* p, Bimage* pmask, double wd,
 
 	vector<double>	val = p->values(i);
 	
-//	cout << i << endl;
+//	cout << i << tab << j << tab << coor3 << endl;
 
 	for ( k=-1, m=j; k<NNEIGHBOR;  ) {
 		scoor = seg[m].coordinates() - coor3;
@@ -1612,6 +1668,9 @@ int			img_assign_segments(Bimage* p, Bimage* pmask, vector<long> vstep,
 {
 	long			i, nc(0);	
 	double			dr(volume(vstep)), wd(1.0L/dr);
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG: img_assign_segments" << endl;
 
 	Bimage*			pmc = pmask->copy();
 	
@@ -1733,6 +1792,9 @@ long		segments_setup_neighbors(vector<Bsuperpixel>& seg, long step)
 	long			i, j, nn(0);
 	double			dmax(1.9*step);
 
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG segments_setup_neighbors: step=" << step << endl;
+
 	for ( i=0; i<nseg; ++i ) seg[i].clear_neighbors();
 
 #ifdef HAVE_GCD
@@ -1819,7 +1881,7 @@ vector<Bsuperpixel>	Bimage::superpixels_from_mask(long cc, long step)
 vector<Bsuperpixel>	Bimage::superpixels(long step, double colorweight, long iterations, double stop)
 {
 	Bimage*			pmask = tile_mask(step);
-	
+
 	long			i, nc(image_size()), ncp(0), nstop(image_size()*stop/100);
 	
 	if ( verbose ) {
@@ -1839,7 +1901,7 @@ vector<Bsuperpixel>	Bimage::superpixels(long step, double colorweight, long iter
 
 	superpixels_update(pmask, vstep, colorweight, seg);
 
-//	write_img("t.tif", pmask);
+//	write_img("t.tif", pmask, 0);
 
 	time_t			t = time(NULL);
 	
@@ -1899,11 +1961,14 @@ vector<Bsuperpixel>	Bimage::superpixels(long step, double colorweight, long iter
 	vector<Bsuperpixel>	seg = pmask->superpixels_from_mask(c, step);
 
 	long			i, bin(1);
+	double			w = ( z > 1 )? 1.0/8.0: 1.0/4.0;
 	vector<long>	vstep = {step,step,step}, vbstep(3);
 	for ( i=0; i<3; ++i ) vstep[i] *= 2;
 	if ( vstep[2] > z ) vstep[2] = z;
 
 	superpixels_update(pmask, vstep, colorweight, seg);
+
+//	write_img("t.tif", pmask, 0);
 
 	time_t			t = time(NULL);
 
@@ -1916,10 +1981,13 @@ vector<Bsuperpixel>	Bimage::superpixels(long step, double colorweight, long iter
 		pm->next = pm->bin_copy(2);
 		pb = pb->next;
 		pm = pm->next;
+		pm->multiply(w);
 	}
 
+	write_img("t.tif", pm, 0);
+
 	long			nc, ncp(0), nstop(pb->image_size()*stop/100);
-	long			bstep = step/bin;
+	long			bstep(step/bin);
 	for ( i=0; i<3; ++i ) vbstep[i] = vstep[i]/bin;
 	if ( vbstep[2] < 1 ) vbstep[2] = 1;
 	for ( auto it = seg.begin(); it != seg.end(); ++it )

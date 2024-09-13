@@ -19,7 +19,6 @@
 #include "mg_select.h"
 #include "rwimg.h"
 #include "mg_processing.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -28,7 +27,7 @@ extern int 	verbose;		// Level of output to the screen
 // It creates two temporary images the size of the input image - usually a tomogram
 // A rotated template
 // The cross correlation map
-Bparticle*	img_search_view(Bimage* p, Bimage* ptemp, Bimage* pmask, View view,
+Bparticle*	img_search_view(Bimage* p, Bimage* ptemp, Bimage* pmask, View2<double> view,
 				double hires, double lores, double shiftlimit, double mindist,
 				double threshold, int maxhits, int refinepeaks,
 				fft_plan planf, fft_plan planb)
@@ -60,7 +59,7 @@ Bparticle*	img_search_view(Bimage* p, Bimage* ptemp, Bimage* pmask, View view,
 // A rotated template
 // The cross correlation map
 Bparticle*	img_refine_view(Bimage* pcrop, Bimage* ptemp, Bimage* pmask, Bimage* pmask2,
-				View view, double hires, double lores, double shiftlimit,
+				View2<double> view, double hires, double lores, double shiftlimit,
 				double shiftlimitz, double shiftlimitxy, double mindist, int refinepeaks,
 				fft_plan planf, fft_plan planb)
 {
@@ -95,7 +94,7 @@ Bparticle*	img_refine_view(Bimage* pcrop, Bimage* ptemp, Bimage* pmask, Bimage* 
 	// If no shift allowed, just return the CCC at the origin
 	if ( shiftlimit == 0 && shiftlimitz == 0 && shiftlimitxy == 0) {
 		peak = particle_add(&peak, 1);
-		peak->view = view;
+		peak->view2(view);
 		peak->fom[0] = (*pcc)[i];
 	}
 	// Shifts allowed so the hit is looked around origin, with the radius of shiftlimit, or within a cylinder
@@ -185,15 +184,15 @@ long	reconstruction_search_subtomo(Breconstruction* rec,
 	cout << endl;
 
 	// Views to consider in Search
-	View			refview;
-	View*			allviews = NULL; // all views for search/refinement
+	View2<double>			refview;
+	vector<View2<double>>	views; // all views for search/refinement
 	if ( sym.point() < 102 ) {
-		allviews = views_within_limits(refview, theta_step, phi_step, alpha_step, thetaphi_limit, alpha_limit);
+		views = views_within_limits(refview, theta_step, phi_step, alpha_step, thetaphi_limit, alpha_limit);
 	} else {
-		allviews = asymmetric_unit_views(sym, theta_step, phi_step, alpha_step, 1);
+		views = sym.asymmetric_unit_views(theta_step, phi_step, alpha_step, 1);
 	}
 	
-	long			nviews = count_list((char *)allviews);
+	long			nviews(views.size());
 
 //	if ( verbose & VERB_PROCESS ) {
 	if ( verbose ) {
@@ -228,9 +227,6 @@ long	reconstruction_search_subtomo(Breconstruction* rec,
 		pmask->mask_fspace_resize(p->size());
 
 	long 			i, ipart(0);
-	View*			v = NULL;
-	View*			view_arr = new View[nviews];
-	for ( i=0, v=allviews; v; v=v->next, i++ ) view_arr[i] = *v;
 
 	Bparticle* 		part = NULL;
 	Bparticle**		part_arr = new Bparticle*[nviews];
@@ -245,24 +241,24 @@ long	reconstruction_search_subtomo(Breconstruction* rec,
 #ifdef HAVE_GCD
 	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t i){
-		part_arr[i] = img_search_view(p, ptemp, pmask, view_arr[i], hires, lores,
+		part_arr[i] = img_search_view(p, ptemp, pmask, views[i], hires, lores,
 				shiftlimit, mindist, threshold, maxhits, refinepeaks, planf, planb);
-		long	np = count_list((char *) part_arr[i]);
+		long	np = part_arr[i]->count();
 		dispatch_sync(myq, ^{
 			if ( verbose & VERB_RESULT )
-				cout << i+1 << tab << view_arr[i] << tab << np << endl << flush;
+				cout << i+1 << tab << views[i] << tab << np << endl << flush;
 		});
 	});
 #else
 #pragma omp parallel for
 	for ( long i=0; i < nviews; i++ ) {
-		part_arr[i] = img_search_view(p, ptemp, pmask, view_arr[i], hires, lores,
+		part_arr[i] = img_search_view(p, ptemp, pmask, views[i], hires, lores,
 				shiftlimit, mindist, threshold, maxhits, refinepeaks, planf, planb);
-		long	np = count_list((char *) part_arr[i]);
+		long	np = part_arr[i]->count();
 	#pragma omp critical
 		{
 			if ( verbose & VERB_RESULT )
-				cout << i+1 << tab << view_arr[i] << tab << np << endl << flush;
+				cout << i+1 << tab << views[i] << tab << np << endl << flush;
 		}
 	}
 #endif
@@ -291,8 +287,6 @@ long	reconstruction_search_subtomo(Breconstruction* rec,
 				<< part->loc << tab << setprecision(4) << part->view << tab << part->fom[0] << endl;
 	}
 	
-	kill_list((char *) allviews, sizeof(View));
-	delete[] view_arr;
 	delete[] part_arr;
 
 	if ( rec->box_size.volume() < 1 )
@@ -381,7 +375,7 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 
 	Vector3<double>	scale(1,1,1);
 	Vector3<double>	translate = Vector3<double>(maxshift,maxshift,maxshift);
-	View			refview;
+	View2<double>		refview;
 	Matrix3			mat = refview.matrix();
 	Vector3<long>	ptempsize = ptemp->size() + Vector3<long>(2*(long)maxshift, 2*(long)maxshift, 2*(long)maxshift);
 	ptemp->resize(ptempsize, translate, FILL_BACKGROUND, 0);
@@ -429,9 +423,8 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 	double			alpha_limit, thetaphi_limit;
 	double			best_cc;
 	Vector3<double>	bestshift;
-	View			bestview;
-	View*			v = NULL;
-	View*			allviews = NULL;
+	View2<double>	bestview;
+	vector<View2<double>>	views; // all views for search/refinement
 	Bparticle* 		part = NULL;
 	Bimage*			pcrop = NULL;
 
@@ -460,18 +453,18 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 		shiftlimitz = shiftlimitz_orig;
 
 		// The initially best view is the given view
-		bestview = part->view;
+		bestview = part->view2();
 
 		for ( iter=1; iter <= iters; iter++) {
 
 			// Views around the current best view to consider in refinement
 			if ( sym.point() < 102 ) {
-				allviews = views_within_limits(bestview, theta_step, phi_step, alpha_step, thetaphi_limit, alpha_limit);
+				views = views_within_limits(bestview, theta_step, phi_step, alpha_step, thetaphi_limit, alpha_limit);
 			} else {
-				allviews = asymmetric_unit_views(sym, theta_step, phi_step, alpha_step, 1);
+				views = sym.asymmetric_unit_views(theta_step, phi_step, alpha_step, 1);
 			}
 
-			nviews = count_list((char *)allviews);
+			nviews = views.size();
 
 			if ( verbose & VERB_PROCESS ) {
 				cout << "Iteration:                      " << iter << " of " << iters << endl;
@@ -500,21 +493,18 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 			// Since we are contracting around the previous best point, the best orientation is always found from the current views
 			best_cc = -1;
 
-			View*				view_arr = new View[nviews];
-			for ( i=0, v=allviews; v; v=v->next, i++ ) view_arr[i] = *v;
-
 			Bparticle**			part_arr = new Bparticle*[nviews];
 
 #ifdef HAVE_GCD
 			dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t i){
-				part_arr[i] = img_refine_view(pcrop, ptemp, pmask, pmask2, view_arr[i],
+				part_arr[i] = img_refine_view(pcrop, ptemp, pmask, pmask2, views[i],
 								hires, lores, shiftlimit, shiftlimitz, shiftlimitxy,
 								mindist, refinepeaks, planf, planb);
 			});
 #else
 #pragma omp parallel for
 			for ( i=0; i < nviews; i++ ) {
-				part_arr[i] = img_refine_view(pcrop, ptemp, pmask, pmask2, view_arr[i],
+				part_arr[i] = img_refine_view(pcrop, ptemp, pmask, pmask2, views[i],
 								hires, lores, shiftlimit, shiftlimitz, shiftlimitxy,
 								mindist, refinepeaks, planf, planb);
 			}
@@ -524,13 +514,12 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 				if ( part_arr[i]->fom[0] > best_cc ) {
 					best_cc = part_arr[i]->fom[0];
 					ibest = i;
-					bestview = part_arr[i]->view;
+					bestview = part_arr[i]->view2();
 					bestshift = part_arr[i]->loc;
 				}
 				particle_kill(part_arr[i]);
 			}
 			
-			delete[] view_arr;
 			delete[] part_arr;
 			
 			translate = -bestshift;
@@ -548,13 +537,11 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 			shiftlimitz /= 2;
 			shiftlimitxy /= 2;
 			
-			kill_list((char *) allviews, sizeof(View));
-
 			// Take binning into account in the translation
 			if ( bin[0] ) { translate *= bin; }
 		
 			// Update refined orientation and origin + fom
-			part->view = bestview;
+			part->view2(bestview);
 			part->loc = part->loc + translate;
 			part->fom[0] = best_cc;
 
@@ -592,13 +579,13 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 @param 	threshold		threshold. if value is <0, only the global maximum is returned
 @param 	maxhits
 @param 	refinepeaks
-@return Bparticle*		list of peaks as particles.
+@return Bparticle*			list of peaks as particles.
 
 	After a maximum value is found, it is masked with a spherical mask and the next largest value
 	is found, until all the values are below the threshold .
 
 **/
-Bparticle*	img_find_refine_peaks(Bimage* pcc, View view, double shift_limit,
+Bparticle*	img_find_refine_peaks(Bimage* pcc, View2<double> view, double shift_limit,
 				double shift_along, double shift_orthogonal, double mindist,
 				double threshold, int maxhits, int refinepeaks)
 {
@@ -619,7 +606,7 @@ Bparticle*	img_find_refine_peaks(Bimage* pcc, View view, double shift_limit,
 			
 			peak = particle_add(&goodpeaks, hits);
 			peak->loc = pcc->image->origin();
-			peak->view = view;
+			peak->view2(view);
 			peak->fom[0] = peakcc;
 			
 			if ( verbose && maxhits > 1 )
@@ -665,14 +652,14 @@ Bparticle*	img_find_refine_peaks(Bimage* pcc, View view, double shift_limit,
 	The maximum is returned in the image FOM.
 
 **/
-double		img_find_peak_subtomo(Bimage* p, View view, double shift,
+double		img_find_peak_subtomo(Bimage* p, View2<double> view, double shift,
 				double shift_along, double shift_orthogonal)
 {
 	if ( !p->data_pointer() ) return 0;
 	
 	if ( shift < 0 ) shift = 1e30;
 	
-	long		i(0), x, y, z;
+	long				i(0), x, y, z;
 	long				xh = p->sizeX()/2, yh = p->sizeY()/2, zh = p->sizeZ()/2;
 	double				x2, y2, z2, r2;
 	double				value(0), max;
@@ -832,7 +819,7 @@ double closest_point_line_distance2( Vector3<double> p, Vector3<double> v, Vecto
 
 **/
 
-double closest_point_disc_distance2( Vector3<double> p, Vector3<double> q, View view, double radius )
+double closest_point_disc_distance2( Vector3<double> p, Vector3<double> q, View2<double> view, double radius )
 {
 	Vector3<double> pprime; // projection of p on to the plane
 
@@ -873,9 +860,9 @@ double closest_point_disc_distance2( Vector3<double> p, Vector3<double> q, View 
 @brief 	Least squares fit a sphere to 3D data (particle locations)
 @author	Juha Huiskonen
 @param 	*part		particle
-@param 	N				iterations
+@param 	N			iterations
 @param 	Nstop		stopping condition: tolerance in change of sphere center
-@return Sphere				fitted sphere struct
+@return Sphere		fitted sphere struct
 
 	Algorithm by ImaginaryZ
 	From http://imaginaryz.blogspot.co.uk/2011/04/least-squares-fit-sphere-to-3d-data.html
@@ -917,7 +904,7 @@ Sphere		locations_fit_sphere(Bparticle* part, int N, double Nstop)
 	double PXYsum=0, PXZsum=0, PYZsum=0;
 	double PX2Ysum=0, PX2Zsum=0, PY2Xsum=0, PY2Zsum=0, PZ2Xsum=0, PZ2Ysum=0;
 
-	Pnpoints = count_list((char *)part);
+	Pnpoints = part->count();
 	double x, y, z;
 
 	for ( p = part; p; p = p-> next ) {

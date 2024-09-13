@@ -7,7 +7,6 @@
 **/
 
 #include "rwimg.h"
-#include "linked_list.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -205,9 +204,9 @@ int 		main(int argc, char **argv)
 	
 	double			ti = timer_start();
 	
-	Bstring			symmetry_string("H");
+	string			symmetry_string("H");
 	Bsymmetry 		sym(symmetry_string);
-	View*			views = NULL;
+	vector<View2<double>>	views;
 	Bplot*			plot = NULL;
 	
 	FSI_Kernel*		kernel = NULL;
@@ -258,12 +257,11 @@ int 		main(int argc, char **argv)
 		else p->helix_symmetrize(helix_rise, helix_angle,
 				dyad_axis, zmin, zmax, radius, norm_flag);
 	} else if ( p->sizeZ() > 1 && project_angle ) {
-		views = asymmetric_unit_views(sym, TWOPI, project_angle, 0);	
+		views = sym.asymmetric_unit_views(TWOPI, project_angle, 0);
 		if ( kernel )
 			proj = p->project(views, hires, kernel);
 		else
 			proj = p->project(views, 1);
-		kill_list((char *) views, sizeof(View));
 		delete p;
 		p = proj;
 	}
@@ -294,7 +292,7 @@ int 		main(int argc, char **argv)
 	delete p;
 	if ( kernel ) delete kernel;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

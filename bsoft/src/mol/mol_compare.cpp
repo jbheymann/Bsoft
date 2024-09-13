@@ -138,14 +138,11 @@ Transform	molgroup_find_transformation(Bmolgroup* molgroup1, Bmolgroup* molgroup
 **/
 Transform	mol_find_transformation(Bmolecule* mol1, Bmolecule* mol2, int offset)
 {
-	long			i, j, n(0);
-//	double			bx[4], by[4], bz[4], v[4] = {0,0,0,1};
-	vector<double>	bx(4), by(4), bz(4), v(4,0);
+	long			i, j;
+	vector<double>	bx(4,0), by(4,0), bz(4,0), v(4,0);
 	Matrix			a(4,4);
 	
 	v[3] = 1;
-	
-	for ( i=0; i<4; i++ ) bx[i] = by[i] = bz[i] = 0;
 	
 	Batom			*atom1, *atom2;
 	Bresidue*		res1=mol1->res;
@@ -161,7 +158,7 @@ Transform	mol_find_transformation(Bmolecule* mol1, Bmolecule* mol2, int offset)
 	Vector3<double> 	com = mol_center_of_mass(mol1);
 	Vector3<double> 	c1, c2;
 	
-	for ( n=0; res1 && res2; res1=res1->next, res2=res2->next ) {
+	for ( ; res1 && res2; res1=res1->next, res2=res2->next ) {
 		for ( atom1=res1->atom, atom2=res2->atom; atom1 && atom2; atom1=atom1->next, atom2=atom2->next ) {
 			if ( strncmp(atom1->el, atom2->el, 2) == 0 ) {
 				c1 = atom1->coord - com;
@@ -175,7 +172,6 @@ Transform	mol_find_transformation(Bmolecule* mol1, Bmolecule* mol2, int offset)
 					bz[i] += v[i]*c2[2];
 					for ( j=0; j<=i; j++ ) a[i][j] += v[i]*v[j];
 				}
-				n++;
 			}
 		}
 	}

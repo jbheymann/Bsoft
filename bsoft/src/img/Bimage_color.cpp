@@ -486,17 +486,17 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
 	    cout << "Generating a red-white-blue image" << endl << endl;
 	
     long				i, j, k;
-    int					red, blu, grn;
+//    int					red, blu, grn;
 	double				v;
-    double				blue_scale(255.0/(blue_max - white_max));
-    double				red_scale(255.0/(white_min - red_min));
+//    double				blue_scale(255.0/(blue_max - white_max));
+//    double				red_scale(255.0/(white_min - red_min));
 	RGB<unsigned char>	rgb;
 
     RGB<unsigned char>* nudata = new RGB<unsigned char>[datasize];
 	
 	for ( i=0; i<datasize; i++ ) {
 		v = (*this)[i];
-		red = grn = blu = 255;						// White part
+/*		red = grn = blu = 255;						// White part
 		if ( v > blue_max ) {						// Blue part
 			red = grn = 0;
 		} else if ( v < red_min ) {					// Red part
@@ -514,7 +514,9 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
       	if ( grn > 255 ) grn = 255;
       	if ( blu < 0 ) blu = 0;
       	if ( blu > 255 ) blu = 255;
-		nudata[i] = RGB<unsigned char>(red, grn, blu);
+		nudata[i] = RGB<unsigned char>(red, grn, blu);*/
+		rgb.red_white_blue(v, red_min, white_min, white_max, blue_max);
+		nudata[i] = rgb;
 	}
 
     data_type(UCharacter);
@@ -533,8 +535,8 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
 //	cout << "min=" << min << tab << "max=" << max << tab << "scale=" << scale << endl;
 	
     for ( i=0; i<p->sizeX(); i++ ) {
-		red = grn = blu = 255;					// White part
 		v = scale*i + min;
+/*		red = grn = blu = 255;					// White part
 		if ( v > blue_max ) {					// Blue part
 			red = grn = 0;
 		} else if ( v < red_min ) { 			// Red part
@@ -552,7 +554,8 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
 		if ( grn > 255 ) grn = 255;
 		if ( blu < 0 ) blu = 0;
 		if ( blu > 255 ) blu = 255;
-		rgb = RGB<unsigned char>(red, grn, blu);
+		rgb = RGB<unsigned char>(red, grn, blu);*/
+		rgb.red_white_blue(v, red_min, white_min, white_max, blue_max);
 		for ( j=0, k=i; j<p->sizeY(); j++, k+=p->sizeX() ) p->set(k, rgb);
 	}
 	

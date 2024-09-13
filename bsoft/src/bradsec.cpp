@@ -132,7 +132,7 @@ int 		main(int argc, char **argv)
 	delete p;
 	delete prad;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

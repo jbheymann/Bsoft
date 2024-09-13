@@ -1,9 +1,9 @@
 /**
 @file	model_links.cpp
 @brief	Library routines used for model links processing
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20210830
+@date	Modified: 20230717
 **/
 
 #include "model_links.h"
@@ -11,11 +11,79 @@
 #include "model_compare.h"
 #include "model_util.h"
 #include "matrix_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
+
+/**
+@brief 	Generates a bond list for a model.
+@param 	*model			list of models.
+@param	distance_type	1=harmonic, 2=soft, 3=lennard-jones, 4=morse.
+@return long				number of links generated.
+**/
+long		model_generate_links(Bmodel* model, int distance_type)
+{
+	long			nlink(0);
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	Blink*			link;
+	
+	if ( verbose )
+		cout << "Generating missing links" << endl;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+//		if ( mp->link ) {
+//			if ( verbose )
+//				cerr << "Warning: Deleting original link list!" << endl;
+//			mp->clear_links();
+//		}
+		for ( comp = mp->comp; comp; comp = comp->next )
+			for ( auto& l: comp->link ) {
+				link = mp->add_link(comp, l);
+				link->select(distance_type);
+			}
+		nlink += mp->link_count();
+	}
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Number of links:                " << nlink << endl << endl;
+	
+	return nlink;
+}
+
+/**
+@brief 	Generates an angle list for a model.
+@param 	*model			list of models.
+@return long				number of angles generated.
+**/
+long		model_generate_angles(Bmodel* model)
+{
+	long			nangle(0);
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	
+	if ( verbose )
+		cout << "Generating angle lists" << endl;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		if ( mp->angle ) {
+			if ( verbose ) cerr << "Warning: Deleting original angle list!" << endl;
+			mp->clear_angles();
+		}
+		for ( comp = mp->comp; comp; comp = comp->next )
+			for ( auto& l1: comp->link )
+				for ( auto& l2: comp->link )
+					if ( l1->identifier() < l2->identifier() )
+						mp->add_angle(l1, comp, l2);
+		nangle += mp->angle_count();
+	}
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Number of angles generated:     " << nangle << endl << endl;
+	
+	return nangle;
+}
 
 /**
 @brief 	Set up the link list for each component.
@@ -121,7 +189,7 @@ long		model_link_list_generate(Bmodel* model, double maxlength)
 
 **/
 long		model_link_list_generate(Bmodel* model, double maxlength,
-				Bstring& type1, Bstring& type2, int flag)
+				string type1, string type2, int flag)
 {
 	if ( !model ) return 0;
 	if ( !model->comp ) return 0;
@@ -265,7 +333,7 @@ Bcomponent*	model_linked_submodel(Bcomponent* comp, Bmodel* model, long& n, Vect
 	n++;
 
 	int				i;
-	Bstring			id("1");
+	string			id("1");
 	Bcomponent*		comp_sub = NULL;
 	Bcomponent*		comp_link = NULL;
 	
@@ -298,10 +366,10 @@ Bcomponent*	model_linked_submodel(Bcomponent* comp, Bmodel* model, long& n, Vect
 	averaged model saved as a type.
 
 **/
-long		model_reduce_linked(Bmodel* model, Bstring& submodname, int flags)
+long		model_reduce_linked(Bmodel* model, string submodname, int flags)
 {
 	long			i, n, nn(0);
-	Bstring			id;
+	string			id;
 	Bmodel*			mp;
 	Bmodel*			model_sub = NULL;
 	Bmodel*			mpt = NULL;
@@ -323,7 +391,7 @@ long		model_reduce_linked(Bmodel* model, Bstring& submodname, int flags)
 		comp_list = comp_new = NULL;
 		for ( ct = mp->type; ct; ct = ct->next ) ct->component_count(0);
 		for ( i=0, comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
-//			id = Bstring(++i, "%d");
+//			id = string(++i, "%d");
 //			comp_new = component_add(&comp_new, id);
 //			if ( !comp_list ) comp_list = comp_new;
 //			component_copy(comp, comp_new);
@@ -353,8 +421,8 @@ long		model_reduce_linked(Bmodel* model, Bstring& submodname, int flags)
 					mps->next = mpt->copy();
 					mps = mps->next;
 				}
-				comp_new->type()->file_name(submodname.str());
-				comp_new->type()->image_number(id.integer());
+				comp_new->type()->file_name(submodname);
+				comp_new->type()->image_number(to_integer(id));
 				mps->add_type(comp_new->type()->identifier());
 				for ( comp_sub = mps->comp; comp_sub; comp_sub = comp_sub->next ) {
 					comp_sub->velocity(comp_sub->location());	// Keep sum in velocity vector
@@ -418,7 +486,9 @@ long		model_links_minimum_valency(Bmodel* model, long valency)
 	if ( verbose )
 		cout << "Generating links to ensure minimum valency of " << valency << endl;
 
-	Matrix			m = model_distance_matrix(model, 0);
+	Matrix			m;
+	
+	m = model_distance_matrix(model, 0);
 	
 	double			dcut = matrix_find_cutoff_for_number(m, valency);
 	

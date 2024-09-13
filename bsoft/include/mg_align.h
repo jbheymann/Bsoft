@@ -1,9 +1,9 @@
 /**
 @file	mg_align.h
 @brief	Header file for functions to align micrographs or coordinates from micrographs and apply the resultant transformation.
-@author Bernard Heymann and Samuel Payne
+@author 	Bernard Heymann and Samuel Payne
 @date	Created: 20000505
-@date	Modified: 20211004
+@date	Modified: 20240215
 **/
 
 #include "mg_processing.h"
@@ -31,6 +31,10 @@ double		project_align_frames(Bproject* project, int ref_img, long window, long s
 				long bin, Bstring& subset, int flag);
 double		project_align_series(Bproject* project, int ref_img, Bimage* pgr, 
 				Bimage* pmask, Vector3<double> origin, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag);
+double		project_align_focal_series(Bproject* project, int ref_img, Bimage* pgr,
+				Bimage* pmask, Vector3<double> origin, int norm, double hi_res, double lo_res,
 				double shift_limit, double edge_width, double gauss_width,
 				long bin, Bstring& subset, int flag);
 Bimage*		mg_tomo_reconstruct2D(Bproject* project, long dimg,

@@ -661,7 +661,7 @@ long		Bimage::mask_symmetrize(Bsymmetry& sym)
 {
 	long			i, j, nn, xx, yy, zz, cc;
 	
-	View			ref = view_symmetry_reference(sym);
+	View2<double>	ref = sym.reference_symmetry_view();
 	Vector3<double>	vr(ref.vector3());
 	Vector3<double>	v, vt, va;
 	double			da, minda;
@@ -2140,13 +2140,13 @@ long		Bimage::levelmask_colorize()
 	long				i, cc, nc((long) (max - min + 1));
 	vector<RGB<unsigned char>>	lut(nc);
 
-	for ( auto it = lut.begin(); it != lut.end(); ++it )
-		it->random_color();
-	
 	if ( verbose & VERB_LABEL ) {
 	    cout << "Coloring a multi-level mask:" << endl;
 	    cout << "Levels:                         " << nc << endl << endl;
 	}
+	
+	for ( auto it = lut.begin(); it != lut.end(); ++it )
+		it->random_color();
 	
     RGB<unsigned char>* nudata = new RGB<unsigned char>[datasize];
 	
@@ -2357,7 +2357,7 @@ Matrix		Bimage::mask_interface_matrix(int img_num)
 		cout << "Calculating an interface matrix of " << m << " x " << m << endl;
 	
 	vector<int>		tmp(m,0);
-	Matrix			ifmat = Matrix(m,m);
+	Matrix			ifmat(m,m);
 	
 	for ( nn=ns, i=nn*imgsize; nn<=ne; nn++ ) {
 		for ( zz=0; zz<z; zz++ ) {
@@ -2406,8 +2406,10 @@ Matrix		Bimage::mask_interface_matrix(int img_num)
 long		Bimage::mask_region_interfaces(int reg_num)
 {
 	long			i, j, m, nadj(0);
-	
-	Matrix			ifmat = mask_interface_matrix(0);
+
+	Matrix			ifmat;
+
+	ifmat = mask_interface_matrix(0);
 	m = ifmat.rows();
 	
 	if ( reg_num >= 0 ) {

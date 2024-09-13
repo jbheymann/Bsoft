@@ -3,7 +3,7 @@
 @brief	Nelder and Mead downhill simplex method for generalized parameter fitting
 @author Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210729
+@date	Modified: 20231003
 
 	Adapted from Numerical Recipes, 2nd edition, Press et al. 1992
 	The function "funk" is user-defined and references the "Bsimplex" structure.
@@ -35,23 +35,23 @@
 		c			nconstant.
 		x			npoint*nvar.
 		fx			npoint.
-	x or fx can be recast as a different pointer, as long as it is handled
-	by the user before calling kill_simplex.
 **/
 #ifndef _Bsimplex_
 class Bsimplex {
 private:
-	long			nvar;		// Number of variables
-	long			nparam;		// Number of parameters
-	long			nconstant;	// Number of constants
-	long			npoint; 	// Number of function values
-	double			yvar;		// Variance of dependent variable
-	vector<double>	param;		// Parameter values
-	vector<double>	lo;			// Lower limits on parameter values
-	vector<double>	hi;			// Upper limits on parameter values
-	vector<double>	c;			// Constant values
-	vector<double>	x;			// Independent variables: npoint*nvar array
-	vector<double>	fx;			// Function values
+	long				nvar;		// Number of variables
+	long				nparam;		// Number of parameters
+	long				nconstant;	// Number of constants
+	long				npoint; 	// Number of function values
+	double				yvar;		// Variance of dependent variable
+	vector<double>		param;		// Parameter values
+	vector<double>		lo;			// Lower limits on parameter values
+	vector<double>		hi;			// Upper limits on parameter values
+	vector<double>		c;			// Constant values
+	vector<double>		x;			// Independent variables: npoint*nvar array
+	vector<double>		fx;			// Function values
+	vector<double>		avg;		// Average of parameters
+	vector<vector<double>>	cov;	// Covariance matrix
 	double		calculate_dependent_variance() {
 		double		yavg(0);
 		yvar = 0;
@@ -78,12 +78,18 @@ public:
 	void		parameters(long n, vector<double>& p) {
 		for ( int i=0; i<nparam && i<n; i++ ) param[i] = p[i];
 	}
+	vector<double>	parameter_vector() { return param; }
 	void		parameter(long i, double p) { param[i] = p; }
 	double		parameter(long i) { return param[i]; }
 	void		limit_low(long i, double v) { lo[i] = v; }
 	double		limit_low(long i) { return lo[i]; }
 	void		limit_high(long i, double v) { hi[i] = v; }
 	double		limit_high(long i) { return hi[i]; }
+	void		limit_relative_offset(long i, double f) {
+		lo[i] = 0;
+		if ( f ) lo[i] = param[i]/f;
+		hi[i] = param[i]*f;
+	}
 	void		limits(long i, double vlo, double vhi) { lo[i] = vlo; hi[i] = vhi; }
 	void		limits_low(long n, vector<double>& p) {
 		for ( long i=0; i<nparam && i<n; i++ ) lo[i] = p[i];
@@ -97,7 +103,8 @@ public:
 		if ( yvar <= 0 ) calculate_dependent_variance();
 		return yvar;
 	}
-	double		run(long maxcycles, double tolerance, double (funk)(Bsimplex&));
+	double		R(double (funk)(Bsimplex&)) { return (funk)(*this); }
+	double		run(long maxcycles, double tolerance, double (funk)(Bsimplex&), long report=0);
 	double		amotry(vector<double>& mp, vector<double>& R,
 		long ihi, double fac, double (funk)(Bsimplex&));
 	void		show() {

@@ -8,7 +8,6 @@
 
 #include "mg_extract.h"
 #include "mg_select.h"
-#include "linked_list.h"
 #include "spline.h"
 #include "utilities.h"
 
@@ -866,17 +865,17 @@ long		project_extract_filaments(Bproject* project, int filament_width, int axis,
 
 /**
 @brief 	Extracts filament images from a micrograph.
-@param 	*mg		micrograph parameters.
+@param 	*mg			micrograph parameters.
 @param 	*p			micrograph image.
-@param 	width			width of box around filament to extract.
-@param 	axis				helical axis alignment: x=1, y=2, z=3.
-@return long				number of filaments.
+@param 	width		width of box around filament to extract.
+@param 	axis		helical axis alignment: x=1, y=2, z=3.
+@return long			number of filaments.
 **/
 long		micrograph_extract_filaments(Bmicrograph* mg, Bimage* p, double width, int axis)
 {
 	if ( width < 1 ) width = mg->filament_width;
 
-	long			nfil = count_list((char *) mg->fil);
+	long			nfil = mg->fil->count();
 
 	if ( mg->pixel_size[0] > 0 ) p->sampling(mg->pixel_size);
 	
@@ -892,17 +891,17 @@ long		micrograph_extract_filaments(Bmicrograph* mg, Bimage* p, double width, int
 
 /**
 @brief 	Extracts filament images from a micrograph.
-@param 	*rec	reconstruction parameters.
-@param 	*p				reconstruction image.
-@param 	width				width of box around filament to extract.
-@param 	axis				helical axis alignment: x=1, y=2, z=3.
-@return long					number of filaments.
+@param 	*rec		reconstruction parameters.
+@param 	*p			reconstruction image.
+@param 	width		width of box around filament to extract.
+@param 	axis		helical axis alignment: x=1, y=2, z=3.
+@return long			number of filaments.
 **/
 long		reconstruction_extract_filaments(Breconstruction* rec, Bimage* p, double width, int axis)
 {
 	if ( width < 1 ) width = rec->filament_width;
 	
-	long			nfil = count_list((char *) rec->fil);
+	long			nfil = rec->fil->count();
 
 	if ( rec->voxel_size[0] > 0 ) p->sampling(rec->voxel_size);
 	
@@ -1150,7 +1149,7 @@ Bparticle*	filaments_to_particles(Bfilament* filaments,
 				od = (t - it)*dr;
 				part->ori -= dir*od;
 			}
-			part->view = View(cos(phi)*st, sin(phi)*st, dir[2], angle_set_negPI_to_PI(phi - atan2(dir[1],dir[0])));
+			part->view = View2<double>(cos(phi)*st, sin(phi)*st, dir[2], angle_set_negPI_to_PI(phi - atan2(dir[1],dir[0])));
 //			if ( spline[i][2] < 1 ) part->ori[2] = 0;
 			part->sel = nfil;
 		}

@@ -205,15 +205,14 @@ int 		main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*		model = read_model(file_list, paramfile.str());		
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -284,7 +283,7 @@ int 		main(int argc, char **argv)
 		}
 	}
 	
-	model_check(model, map_path);
+	model_check(model, map_path.str());
 
 	model_selection_stats(model);
 
@@ -309,12 +308,12 @@ int 		main(int argc, char **argv)
 	if ( linkradius > 0 ) models_process(model, linkradius, model_set_link_radius);
 	
 	if ( outfile.length() ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

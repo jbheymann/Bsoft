@@ -1,9 +1,9 @@
 /**
 @file	mg_align.cpp
 @brief	Functions to align micrographs or coordinates from micrographs and apply the resultant transformation.
-@author Bernard Heymann and Samuel Payne
+@author 	Bernard Heymann and Samuel Payne
 @date	Created: 20000505
-@date	Modified: 20211004
+@date	Modified: 20240215
 **/
 
 #include "Bimage.h"
@@ -920,7 +920,7 @@ double		field_write_aligned_average(Bfield* field, Bimage* pgr,
 	micrograph_kill(mg->next);
 	mg->next = NULL;
 	
-	View			view = View(mg->matrix);
+	View2<double>	view = View2<double>(mg->matrix);
 	pavg->image->origin(ori);
 	pavg->image->view(view);
 	if ( mg->pixel_size[0] ) pavg->sampling(mg->pixel_size);
@@ -965,7 +965,7 @@ double		project_write_aligned_images(Bproject* project, Bimage* pgr,
 	Vector3<double> scale(1,1,1);
 	Matrix3 		mat(1);
 	Vector3<double>	nori;
-	View			view;
+	View2<double>	view;
 	
 	for ( field = project->field; field; field = field->next ) {
 		for ( nmg=0, mg = field->mg; mg; mg = mg->next ) nmg++;
@@ -985,7 +985,7 @@ double		project_write_aligned_images(Bproject* project, Bimage* pgr,
 		if ( project->field->next )
 			imgfile = mg->fmg.base() + "_aln." + mg->fmg.post_rev('.');
 		for ( i=0, mg = field->mg; mg; mg = mg->next, i++ ) {
-			view = View(mg->matrix);
+			view = View2<double>(mg->matrix);
 			if ( p ) pone = p->extract(i);
 			else pone = read_img(mg->fmg, 1, mg->img_num);
 			if ( datatype > pone->data_type() ) pone->change_type(datatype);
@@ -1197,6 +1197,8 @@ double		mg_align_frames(Bmicrograph* mg, long ref_num, long window, long step,
 {
 	if ( bin < 1 ) bin = 1;
 	
+	int				mode(flag&16);
+	
 	Bimage*			p = read_img(mg->fframe, bin, -1);
 	Bstring			ext(mg->fframe.extension());
 	if ( ext.contains("eer") ) bin = 1;
@@ -1240,7 +1242,7 @@ double		mg_align_frames(Bmicrograph* mg, long ref_num, long window, long step,
 	if ( hi_res > 3*p->image->sampling()[0] ) aln_bin = Vector3<long>(2,2,1);
 	
 	vector<Vector3<double>>	sh = p->align(ref_num, window, step, pmask, hi_res, lo_res, shift_limit,
-						edge_width, gauss_width, aln_bin);
+						edge_width, gauss_width, aln_bin, mode);
 
 	long			i;
 	double			d, cc_avg(0), shift_avg(0), shift_var(0);
@@ -1307,6 +1309,7 @@ double		mg_align_frames(Bmicrograph* mg, long ref_num, long window, long step,
 	2	weigh by accumulated dose.
 	4	write aligned frames with insert "_aln".
 	8	write aligned frame sum with insert "_sum".
+	16	initial alignment: local rather than progressive.
 
 **/
 double		project_align_frames(Bproject* project, int ref_img, long window, long step,
@@ -1336,6 +1339,10 @@ double		project_align_frames(Bproject* project, int ref_img, long window, long s
 			cout << "Gain reference file:            " << pgr->file_name() << endl;
 		if ( pmask )
 			cout << "Using mask file:                " << pmask->file_name() << endl;
+		if ( flag&16 )
+			cout << "Initial alignment mode:         local" << endl;
+		else
+			cout << "Initial alignment mode:         progressive" << endl;
 		cout << endl;
 	}
 
@@ -1414,11 +1421,14 @@ double		field_align_series(Bfield* field, int ref_img, Bimage* pgr, Bimage* pmas
 	}
 
 	for ( nmg=0, mg = field->mg; mg; mg = mg->next ) nmg++;
-//	int*			numsel = new int[nmg];
-//	select_numbers(subset, nmg, numsel);
 	vector<int>		numsel = select_numbers(subset, nmg);
 	
 	for ( i=nsel=0; i<nmg; i++ ) if ( numsel[i] ) nsel++;
+	
+	if ( nsel < 2 ) {
+		cerr << "Error: There are less than two micrographs in the field-of-view!" << endl;
+		return 0;
+	}
 	
 	Bmicrograph**	mg_arr = new Bmicrograph*[nsel];
 
@@ -1488,15 +1498,12 @@ double		field_align_series(Bfield* field, int ref_img, Bimage* pgr, Bimage* pmas
 	if ( verbose & VERB_RESULT )
 		cout << "Average shift per micrograph:    " << da << endl;
 
-//	delete[] numsel;
-	
 	field->fom = da;
 
-	Bstring			ext = mg->fmg.extension();
-	if ( ext.contains("dm") ) ext = "mrc";
-	if ( ext.contains("tif") ) ext = "mrc";
-
 	if ( flag & 4 ) {
+		Bstring			ext = mg->fmg.extension();
+		if ( ext.contains("dm") ) ext = "mrc";
+		if ( ext.contains("tif") ) ext = "mrc";
 		DataType		dt(Float);
 		Bstring			label("Written by bseries");
 		Bstring			favg = field->mg->fmg.base() + "_avg." + ext;
@@ -1563,6 +1570,388 @@ double		project_align_series(Bproject* project, int ref_img, Bimage* pgr,
 	for ( field = project->field; field; field = field->next ) {
 		field_align_series(field, ref_img, pgr, pmask, origin, hi_res, lo_res,
 			shift_limit, edge_width, gauss_width, bin, subset, flag);
+		d += field->fom;
+	}
+	
+	d /= nfield;
+
+	if ( verbose & VERB_RESULT )
+		cout << "Overall average shift per frame: " << d << endl << endl;
+	
+	return d;
+}
+
+double		mg_align_focal_pair(Bmicrograph* mg1, Bmicrograph* mg2,
+				Bimage* pgr, Bimage* pmask, int norm, double hi_res, double lo_res, double shift_limit,
+				double edge_width, double gauss_width,
+				long bin, fft_plan planf, fft_plan planb)
+{
+	if ( mg1 == mg2 ) return 0;
+	
+	double			cc(0);
+	Vector3<long>	obin(bin, bin, 1);
+	double			phi_fac(0);
+	
+	if ( mg1->ctf && mg2->ctf )
+		phi_fac = M_PI*mg1->ctf->lambda()*(mg1->ctf->defocus_average()-mg2->ctf->defocus_average());
+	
+	Bimage*			p1 = read_img(mg1->fmg, 1, mg1->img_num);
+	Bimage*			p2 = read_img(mg2->fmg, 1, mg2->img_num);
+
+	if ( pgr ) {
+		p1->multiply(pgr);
+		p2->multiply(pgr);
+	}
+	
+	if ( edge_width > 0 ) {
+		Vector3<double>	edge_origin(edge_width, edge_width, 0);
+		Vector3<long>	edge_size = p1->size() - (long) (2*edge_width);
+		edge_size = edge_size.max(1);
+		p1->calculate_background();
+		p2->calculate_background();
+		p1->shape(0, edge_size, edge_origin, gauss_width, FILL_BACKGROUND, 0);
+		p2->shape(0, edge_size, edge_origin, gauss_width, FILL_BACKGROUND, 0);
+	}
+	
+	if ( bin > 1 ) {
+		p1->bin(bin);
+		p2->bin(bin);
+	}
+	
+	Vector3<double>	shift = p1->find_shift(p2, pmask, norm, hi_res, lo_res, phi_fac, shift_limit, 0, 1, planf, planb, cc);
+	if ( bin > 1 ) shift *= obin;
+	
+	mg1->origin = mg2->origin + shift;
+	mg1->fom = cc;
+	
+	delete p1;
+	delete p2;
+	
+	mg1->scale = Vector3<float>(1,1,1);
+	mg1->matrix = Matrix3(1);
+	mg_apply_transform(mg2, mg1);
+
+	return mg1->fom;
+}
+
+double		field_align_focal_pairs(Bfield* field, int ref_img, Bimage* pgr, Bimage* pmask,
+				Vector3<double> origin, int norm, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag)
+{
+	long			i, j, nmg, nsel(0);
+	Bmicrograph*	mg, *mg_ref;
+	
+	for ( i=0, mg_ref = field->mg; mg_ref && ( i<ref_img ); mg_ref = mg_ref->next, i++ ) ;
+	if ( !mg_ref ) {
+		mg_ref = field->mg;
+		ref_img = 0;
+	}
+
+	for ( nmg=0, mg = field->mg; mg; mg = mg->next ) nmg++;
+	vector<int>		numsel = select_numbers(subset, nmg);
+	
+	for ( i=nsel=0; i<nmg; i++ ) if ( numsel[i] ) nsel++;
+	
+	if ( nsel < 2 ) {
+		cerr << "Error: There are less than two micrographs in the field-of-view!" << endl;
+		return 0;
+	}
+	
+	Bimage*			pref = read_img(mg_ref->fmg, 0, mg_ref->img_num);
+	if ( origin.length() < 1 ) origin = pref->size()/2;
+	if ( !mg_ref->pixel_size[0] ) mg_ref->pixel_size = pref->sampling(0);
+	pref->sampling(mg_ref->pixel_size);
+	
+	Bmicrograph**	mg_arr = new Bmicrograph*[nsel];
+
+	for ( i=j=0, mg = field->mg; mg; mg = mg->next, i++ ) {
+		if ( !mg->pixel_size[0] ) mg->pixel_size = pref->sampling(0);
+		if ( numsel[i] ) mg_arr[j++] = mg;
+		mg->origin = origin;
+	}
+
+	if ( shift_limit < 0 ) shift_limit = pref->sizeX()/10;
+	
+	fft_plan		planf = pref->fft_setup(FFTW_FORWARD, 0);
+	fft_plan		planb = pref->fft_setup(FFTW_BACKWARD, 0);
+	
+	delete pref;
+
+#ifdef HAVE_GCD
+	dispatch_apply(nsel-1, dispatch_get_global_queue(0, 0), ^(size_t i){
+		mg_align_focal_pair(mg_arr[i], mg_arr[i+1], pgr, pmask, norm, hi_res, lo_res,
+			shift_limit, edge_width, gauss_width, bin, planf, planb);
+	});
+#else
+#pragma omp parallel for
+	for ( long i=0; i<nsel-1; i++ )
+		mg_align_focal_pair(mg_arr[i], mg_arr[i+1], pgr, pmask, norm, hi_res, lo_res,
+			shift_limit, edge_width, gauss_width, bin, planf, planb);
+#endif
+
+    fft_destroy_plan(planf);
+    fft_destroy_plan(planb);
+
+	delete[] mg_arr;
+
+	double			d, da(0);
+
+	if ( verbose & VERB_RESULT )
+		cout << "Field " << field->id << endl << "Micrograph\tDef\tdx\tdy\tdz\tCC" << endl;
+
+	for ( nsel=i=0, mg = field->mg; mg; mg = mg->next, i++ ) if ( numsel[i] ) {
+		mg->origin -= mg_ref->origin - origin;
+		if ( verbose & VERB_RESULT )
+			cout << mg->id << tab << mg->ctf->defocus_average() << tab <<
+					mg->origin - mg_ref->origin << tab << mg->fom << endl;
+		if ( mg != mg_ref ) {
+			d = mg->origin.distance(mg_ref->origin)/(fabs(i-ref_img));
+			da += d;
+			nsel++;
+		}
+	}
+	
+	if ( nsel ) da /= nsel;
+	
+	if ( verbose & VERB_RESULT )
+		cout << "Average shift per micrograph:    " << da << endl;
+
+	field->fom = da;
+
+	if ( flag & 4 ) {
+		Bstring			ext = mg->fmg.extension();
+		if ( ext.contains("dm") ) ext = "mrc";
+		if ( ext.contains("tif") ) ext = "mrc";
+		DataType		dt(Float);
+		Bstring			label("Written by bseries");
+		Bstring			favg = field->mg->fmg.base() + "_avg." + ext;
+		field_write_aligned_average(field, pgr, mg->fmg, dt, subset);
+	}
+	
+	return da;
+}
+
+
+double		mg_align_focal_series(Bmicrograph* mg, Bmicrograph* mg_ref, Bimage* pref,
+				Bimage* pgr, Bimage* pmask, int norm, double hi_res, double lo_res, double shift_limit,
+				double edge_width, double gauss_width,
+				long bin, fft_plan planf, fft_plan planb)
+{
+	if ( mg == mg_ref ) return 0;
+	
+	double			cc(0);
+	Vector3<long>	obin(bin, bin, 1);
+	Vector3<double>	edge_origin(edge_width, edge_width, 0), shift;
+	Vector3<long>	edge_size = pref->size() - (long) (2*edge_width);
+	edge_size = edge_size.max(1);
+	
+	double			phi_fac(0);
+	if ( mg->ctf && mg_ref->ctf )
+		phi_fac = M_PI*mg->ctf->lambda()*(mg->ctf->defocus_average()-mg_ref->ctf->defocus_average());
+	
+	Bimage*			p = read_img(mg->fmg, 1, mg->img_num);
+
+	if ( pgr ) p->multiply(pgr);
+	
+	p->calculate_background();
+	
+	if ( edge_width > 0 )
+		p->shape(0, edge_size, edge_origin, gauss_width, FILL_BACKGROUND, 0);
+	
+	p->origin(mg_ref->origin);
+	mg->pixel_size = mg_ref->pixel_size;
+	p->sampling(pref->sampling(0));
+	
+	if ( bin > 1 ) p->bin(bin);
+	
+//	shift = p->find_shift(pref, pmask, hi_res, lo_res, shift_limit, 0, 1, planf, planb, cc);
+	shift = p->find_shift(pref, pmask, norm, hi_res, lo_res, phi_fac, shift_limit, 0, 1, planf, planb, cc);
+	if ( bin > 1 ) shift *= obin;
+	
+	mg->origin = mg_ref->origin + shift;
+	mg->fom = cc;
+	
+	delete p;
+	
+	mg->scale = Vector3<float>(1,1,1);
+	mg->matrix = Matrix3(1);
+	mg_apply_transform(mg_ref, mg);
+
+	return mg->fom;
+}
+
+double		field_align_focal_series(Bfield* field, int ref_img, Bimage* pgr, Bimage* pmask,
+				Vector3<double> origin, int norm, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag)
+{
+	long			i, j, nmg, nsel(0);
+	Bmicrograph*	mg, *mg_ref;
+	
+	for ( i=0, mg_ref = field->mg; mg_ref && ( i<ref_img ); mg_ref = mg_ref->next, i++ ) ;
+	if ( !mg_ref ) {
+		mg_ref = field->mg;
+		ref_img = 0;
+	}
+
+	for ( nmg=0, mg = field->mg; mg; mg = mg->next ) nmg++;
+	vector<int>		numsel = select_numbers(subset, nmg);
+	
+	for ( i=nsel=0; i<nmg; i++ ) if ( numsel[i] ) nsel++;
+	
+	if ( nsel < 2 ) {
+		cerr << "Error: There are less than two micrographs in the field-of-view!" << endl;
+		return 0;
+	}
+	
+	Bmicrograph**	mg_arr = new Bmicrograph*[nsel];
+
+	for ( i=j=0, mg = field->mg; mg; mg = mg->next, i++ )
+		if ( numsel[i] ) mg_arr[j++] = mg;
+	
+	Bimage*			pref = read_img(mg_ref->fmg, 1, mg_ref->img_num);
+	if ( origin.length() < 1 ) origin = pref->size()/2;
+	pref->origin(origin);
+	mg_ref->origin = origin;
+	if ( !mg_ref->pixel_size[0] ) mg_ref->pixel_size = pref->sampling(0);
+	pref->sampling(mg_ref->pixel_size);
+	
+	Vector3<double>	edge_origin(edge_width, edge_width, 0);
+	Vector3<long>	edge_size = pref->size() - (long) (2*edge_width);
+	edge_size = edge_size.max(1);
+	
+	pref->calculate_background();
+	
+	if ( edge_width > 0 )
+		pref->edge(0, edge_size, edge_origin, gauss_width, FILL_BACKGROUND);
+
+	if ( bin > 1 ) pref->bin(bin);
+	
+	if ( shift_limit < 0 ) shift_limit = pref->sizeX()/10;
+
+	fft_plan		planf = pref->fft_setup(FFTW_FORWARD, 0);
+	fft_plan		planb = pref->fft_setup(FFTW_BACKWARD, 0);
+	
+#ifdef HAVE_GCD
+	dispatch_apply(nsel, dispatch_get_global_queue(0, 0), ^(size_t i){
+		mg_align_focal_series(mg_arr[i], mg_ref, pref, pgr, pmask, norm, hi_res, lo_res,
+			shift_limit, edge_width, gauss_width, bin, planf, planb);
+	});
+#else
+#pragma omp parallel for
+	for ( long i=0; i<nsel; i++ )
+		mg_align_focal_series(mg_arr[i], mg_ref, pref, pgr, pmask, norm, hi_res, lo_res,
+			shift_limit, edge_width, gauss_width, bin, planf, planb);
+#endif
+
+    fft_destroy_plan(planf);
+    fft_destroy_plan(planb);
+
+	delete[] mg_arr;
+	delete pref;
+
+	double			d, da(0);
+
+	if ( verbose & VERB_RESULT )
+		cout << "Field " << field->id << endl << "Micrograph\tDef\tdx\tdy\tdz\tCC" << endl;
+
+	for ( nsel=i=0, mg = field->mg; mg; mg = mg->next, i++ ) if ( numsel[i] ) {
+		if ( verbose & VERB_RESULT )
+			cout << mg->id << tab << mg->ctf->defocus_average() << tab <<
+					mg->origin - mg_ref->origin << tab << mg->fom << endl;
+		if ( mg != mg_ref ) {
+			d = mg->origin.distance(mg_ref->origin)/(fabs(i-ref_img));
+			da += d;
+			nsel++;
+		}
+	}
+	
+	if ( nsel ) da /= nsel;
+	
+	if ( verbose & VERB_RESULT )
+		cout << "Average shift per micrograph:    " << da << endl;
+
+	field->fom = da;
+
+	if ( flag & 4 ) {
+		Bstring			ext = mg->fmg.extension();
+		if ( ext.contains("dm") ) ext = "mrc";
+		if ( ext.contains("tif") ) ext = "mrc";
+		DataType		dt(Float);
+		Bstring			label("Written by bseries");
+		Bstring			favg = field->mg->fmg.base() + "_avg." + ext;
+		field_write_aligned_average(field, pgr, mg->fmg, dt, subset);
+	}
+	
+	return da;
+}
+
+/**
+@brief 	Aligns a series of micrographs by cross-correlation.
+@param 	*project		project parameter structure.
+@param 	ref_img			reference micrograph number (starts from 0).
+@param 	*pgr			gain reference.
+@param 	*pmask			reciprocal space mask, 0's and 1's.
+@param 	origin			tilt origin.
+@param 	norm			normalization type: 0=power sum, 1=amplitude.
+@param 	hi_res			high resolution limit.
+@param 	lo_res			low resolution limit.
+@param 	shift_limit		maximum shift from nominal origin of image.
+@param 	edge_width		edge smoothing width (not done if 0).
+@param 	gauss_width		edge decay width.
+@param 	bin				3-value vector of integer bin factors.
+@param 	&subset			subset to average (all if empty)
+@param 	flag			options flag.
+@return double			root-mean-square of offsets.
+
+	Each micrograph in the series is phase compensated and phase-correlated
+	with the reference micrograph and the shift determined.
+	The CTF parameters must be available to specify focus differences.
+	Options encoded in the flag:
+	1	rescale image based on histogram.
+	2	weigh by accumulated dose.
+	4	write aligned frames with insert "_aln".
+	8	write aligned frame sum with insert "_avg".
+
+**/
+double		project_align_focal_series(Bproject* project, int ref_img, Bimage* pgr,
+				Bimage* pmask, Vector3<double> origin, int norm, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag)
+{
+	Bfield*			field = project->field;
+	long			nfield(0);
+	long			nmg = project_count_micrographs(project);
+
+	for ( field = project->field; field; field = field->next ) nfield++;
+	
+
+//	if ( verbose & ( VERB_LABEL | VERB_PROCESS ) ) {
+	if ( verbose ) {
+		cout << "Aligning micrographs in a focal series by cross-correlation:" << endl;
+		cout << "Number of images:               " << nmg << endl;
+		cout << "Reference image:                " << ref_img << endl;
+		cout << "Normalization:                  ";
+		if ( norm ) cout << "Product amplitude" << endl;
+		else cout << "Power sum" << endl;
+		cout << "Resolution limits:              " << hi_res << " - " << lo_res << " A" << endl;
+		cout << "Shift limit:                    " << shift_limit << endl;
+		cout << "Edge masking width & smoothing: " << edge_width << " " << gauss_width << endl;
+		cout << "Binning:                        " << bin << endl;
+		if ( pmask )
+			cout << "Using mask file:                " << pmask->file_name() << endl;
+		if ( subset.length() )
+			cout << "Subset:                         " << subset << endl;
+		cout << endl;
+	}
+
+	double			d(0);
+	for ( field = project->field; field; field = field->next ) {
+		field_align_focal_series(field, ref_img, pgr, pmask, origin, norm, hi_res, lo_res,
+			shift_limit, edge_width, gauss_width, bin, subset, flag);
+//		field_align_focal_pairs(field, ref_img, pgr, pmask, origin, norm, hi_res, lo_res,
+//			shift_limit, edge_width, gauss_width, bin, subset, flag);
 		d += field->fom;
 	}
 	
@@ -2145,7 +2534,7 @@ double		fit_dose_tolerance(vector<double>& s, vector<double>& c, double f);
 */
 
 #include <fstream>
-Bstring		progsnr_file;
+Bstring		progsnr_file, pssnr_curves;
 
 double		fit_individual_progressive_snr(Bplot* plot, vector<double>& minima, long nimg, double dose_per_subset)
 {
@@ -2157,9 +2546,15 @@ double		fit_individual_progressive_snr(Bplot* plot, vector<double>& minima, long
 
     ofstream		ftxt(progsnr_file.str());
     if ( ftxt.fail() ) return -1;
+    ofstream		fcurves(pssnr_curves.str());
+    if ( fcurves.fail() ) return -1;
+    
+    vector<vector<double>>	curves;
 
 	for ( i=0; i<nimg; ++i )
 		x[i] = dose_per_subset*(i+1);
+		
+	curves.push_back(x);
 
 	ftxt << "s\tResolution\tSNR0\tCd\t1/Cd\tR\t#" << setprecision(3) << endl;
 	if ( verbose )
@@ -2177,6 +2572,7 @@ double		fit_individual_progressive_snr(Bplot* plot, vector<double>& minima, long
 		if ( nv ) {
 			for ( j=0; j<v.size(); ++j ) v[j] /= nv;
 			R = fit_progressive_snr(x, v, snr, cd);
+			curves.push_back(v);
 //			for ( j=0; j<v.size(); ++j ) {
 //				snrc = snr*cd*(1-exp(-x[j]/cd));
 //				cout << x[j] << tab << v[j] << tab << snrc << endl;
@@ -2213,7 +2609,18 @@ double		fit_individual_progressive_snr(Bplot* plot, vector<double>& minima, long
 	}
 */
 
+	fcurves << "Dose (e/A2)";
+	for ( j=1; j<curves.size(); ++j ) fcurves << tab << j;
+	fcurves << endl;
+	for ( i=0; i<x.size(); ++i ) {
+		fcurves << curves[0][i];
+		for ( j=1; j<curves.size(); ++j )
+			fcurves << tab << curves[j][i];
+		fcurves << endl;
+	}
+
 	ftxt.close();
+	fcurves.close();
 	
 	return R;
 }
@@ -2286,23 +2693,23 @@ double		fit_full_progressive_snr(Bplot* plot, vector<double>& minima, long nimg,
 
 	R = fit_progressive_snr2(x, v, snr, cd);
 	
-	cout << "SNR0 = " << snr << endl;
-	cout << "c = " << cd << endl;
-	cout << "R = " << R << endl;
-
-	if ( verbose )
+	if ( verbose ) {
+		cout << "SNR0 = " << snr << endl;
+		cout << "c = " << cd << endl;
+		cout << "R = " << R << endl;
 		cout << "s\tResolution\tDose\tSNR]\tSNRcalc" << setprecision(3) << endl;
-	for ( i=k=0, k1=v.size(); i<minima.size(); ++i ) {
-		for ( j=0; j<nimg; ++j, ++k, ++k1 ) {
-			snrc = snr/(cd*x[k])*(1-exp(-cd*x[k]*x[k1]));
-			cout << x[k] << tab << 1/x[k] << tab << x[k1] << tab << v[k] << tab << snrc << endl;
+		for ( i=k=0, k1=v.size(); i<minima.size(); ++i ) {
+			for ( j=0; j<nimg; ++j, ++k, ++k1 ) {
+				snrc = snr/(cd*x[k])*(1-exp(-cd*x[k]*x[k1]));
+				cout << x[k] << tab << 1/x[k] << tab << x[k1] << tab << v[k] << tab << snrc << endl;
+			}
 		}
 	}
 
 	return R;
 }
 
-int		img_filter_spikes(Bimage* p)
+int		img_filter_spikes(Bimage* p, double ratio)
 {
 	long			i, ns(0), ds(p->image_size()*p->images());
 	double			v, va;
@@ -2314,7 +2721,7 @@ int		img_filter_spikes(Bimage* p)
 		if ( va <= 0 ) va = 1e-6;
 		cv = p->complex(i);
 		v = cv.power();
-		if ( v > 100*va ) {
+		if ( v > ratio*va ) {
 			p->set(i, cv*va/v);
 			ns++;
 		}
@@ -2357,7 +2764,7 @@ int			mg_frames_snr(Bmicrograph* mg, double res_hi, long window, Bstring& subset
 	for ( n=0, frame = mg->frame; frame; frame = frame->next, ++n )
 		p->image[n].origin(frame->shift + p->size()/2);
 
-	Bimage*			psum = p->fspace_subset_sums(window, 1|(flag&2));
+	Bimage*			psum = p->fspace_subset_sums(window, 1|(flag&2));	// Fourier transformed here
 	
 	delete p;
 	
@@ -2366,7 +2773,7 @@ int			mg_frames_snr(Bmicrograph* mg, double res_hi, long window, Bstring& subset
 	
 //	psum->sum_images();
 	
-	if ( flag & 4 ) img_filter_spikes(psum);
+	if ( flag & 4 ) img_filter_spikes(psum, 100);
 	
 //	write_img("tt.mrc", psum, 0);
 	
@@ -2416,6 +2823,7 @@ int			mg_frames_snr(Bmicrograph* mg, double res_hi, long window, Bstring& subset
 	}
 
 	progsnr_file = mg->fframe.base() + "_progssnr.txt";
+	pssnr_curves = mg->fframe.base() + "_pssnr_curves.txt";
 	fit_individual_progressive_snr(plot, minima, psum->images(), dose_per_subset);
 
 //	fit_full_progressive_snr(plot, minima, psum->images(), dose_per_subset);

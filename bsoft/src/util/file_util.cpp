@@ -1,9 +1,9 @@
 /**
 @file	file_util.cpp
 @brief	Library functions for file checking 
-@author Bernard Heymann 
+@author 	Bernard Heymann 
 @date	Created: 20070101
-@date	Modified: 20210413
+@date	Modified: 20240829
 **/
 
 #include "file_util.h"
@@ -70,7 +70,10 @@ Bstring		find_file(Bstring filename, Bstring path, int flag)
 	long		i;
 	Bstring		foundfile = test_access(filename);
 	Bstring		testfile, testpath;
-	
+
+	if ( foundfile.empty() && path.length() )
+		foundfile = test_access(path + filename);
+
 	if ( foundfile.length() ) {
 		return foundfile;
 	} else if ( filename.contains("://") ) {
@@ -101,9 +104,10 @@ Bstring		find_file(Bstring filename, Bstring path, int flag)
 		if ( verbose && ( flag & 8 ) )
 			cerr << "Warning: File " << filename << " not found!" << endl;
 		if ( flag & 16 ) {
-			foundfile = filename;
 			if ( verbose && ( flag & 8 ) )
 				cerr << tab << " deleting file name!" << endl;
+		} else {
+			foundfile = filename;
 		}
 	}
 	
@@ -253,6 +257,12 @@ FileType	file_type(const char* filename)
 	return file_type(name);
 }
 
+FileType	file_type(string filename)
+{
+	Bstring		name(filename);
+	return file_type(name);
+}
+
 FileType	file_type(Bstring& filename)
 {
 	FileType	type = Unknown_FileType;
@@ -260,8 +270,8 @@ FileType	file_type(Bstring& filename)
 	if ( filename.length() < 1 ) return type;
 	
 	ifstream	f;
-	char		aline[MAXLINELEN];
-	char*		aptr;
+//	char		aline[MAXLINELEN];
+//	char*		aptr;
 	string		sline;
 	int			i, check_flag(0);
 
@@ -289,7 +299,7 @@ FileType	file_type(Bstring& filename)
 		while ( !f.eof() && type == Unknown_FileType ) {
 			getline(f, sline);
 //			cout << "-" << sline << "-" << endl;
-			for ( aptr = (char *) sline.c_str(); isspace(aptr[0]); aptr++ ) ;
+/*			for ( aptr = (char *) sline.c_str(); isspace(aptr[0]); aptr++ ) ;
 			if ( strncmp(aptr, "data_", 5) == 0 ) check_flag = 1;
 //			cout << check_flag << ": " << aptr << endl;
 			if ( check_flag && aptr[0] != '#' ) {
@@ -300,6 +310,18 @@ FileType	file_type(Bstring& filename)
 				if ( strstr(aptr, "model.id") ) type = Model;
 				if ( strstr(aptr, "molecule.name") ) type = Molecule;
 				if ( strstr(aptr, "image.file_name") ) type = Image;
+			}
+		}*/
+			if ( sline.compare(0, 5, "data_") == 0 ) check_flag = 1;
+			if ( check_flag && sline[0] != '#' ) {
+				if ( sline.find("micrograph.id") != string::npos ) type = Micrograph;
+				if ( sline.find("map.3D_reconstruction.id") != string::npos ) type = Micrograph;
+				if ( sline.find("map.reference.file_name") != string::npos ) type = Micrograph;
+				if ( sline.find("_rln") != string::npos ) type = MgRelion;	// Relion STAR
+				if ( sline.find("model.id") != string::npos ) type = Model;
+				if ( sline.find("molecule.name") != string::npos ) type = Molecule;
+				if ( sline.find("material.name") != string::npos ) type = Material;
+				if ( sline.find("image.file_name") != string::npos ) type = Image;
 			}
 		}
 		f.close();
@@ -313,9 +335,11 @@ FileType	file_type(Bstring& filename)
 			cout << "DEBUG file_type: file " << cleanname << " opened" << endl;
 		while ( !f.eof() && type == Unknown_FileType ) {
 			getline(f, sline);
-			for ( aptr = (char *) sline.c_str(); isspace(aptr[0]); aptr++ ) ;
-			if ( strncmp(aptr, "<project", 8) == 0 ) type = Micrograph;
-			if ( strncmp(aptr, "<model", 6) == 0 ) type = Model;
+//			for ( aptr = (char *) sline.c_str(); isspace(aptr[0]); aptr++ ) ;
+//			if ( strncmp(aptr, "<project", 8) == 0 ) type = Micrograph;
+//			if ( strncmp(aptr, "<model", 6) == 0 ) type = Model;
+			if ( sline.find("<project") != string::npos ) type = Micrograph;
+			if ( sline.find("<model") != string::npos ) type = Model;
 		}
 		f.close();
 	} else if ( ext == "emx" ) {
@@ -325,7 +349,6 @@ FileType	file_type(Bstring& filename)
 	} else if ( ext == "mdoc" ) {
 		type = Micrograph;
 	} else if ( ext.contains("pdb") || ext.contains("ent") ) {
-		type = Molecule;
 		f.open(cleanname.c_str());
 		if ( f.fail() ) {
 			error_show(cleanname.c_str(), __FILE__, __LINE__);
@@ -333,10 +356,14 @@ FileType	file_type(Bstring& filename)
 		}
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG file_type: file " << cleanname << " opened" << endl;
-		while ( f.getline(aline, MAXLINELEN) && type == Unknown_FileType && strncmp(aline, "ATOM", 4) ) {
-			if ( strncmp(aline, "REMARK", 6) == 0 && strstr(aline, "Model") ) type = Model;
+//		while ( f.getline(aline, MAXLINELEN) && type == Unknown_FileType && strncmp(aline, "ATOM", 4) ) {
+		while ( !f.eof() && type == Unknown_FileType ) {
+			getline(f, sline);
+			if ( sline.compare(0, 6, "REMARK") == 0 ) type = Model;
+			if ( sline.compare(0, 4, "ATOM") == 0 ) type = Model;
 		}
 		f.close();
+		if ( type == Unknown_FileType ) type = Molecule;
 	} else if ( ext.contains("cmm") ) type = Model;
 	else if ( ext.contains("v3d") ) type = Model;
     else if ( ext.contains("cif") ) type = Molecule;
@@ -349,6 +376,7 @@ FileType	file_type(Bstring& filename)
 	else if ( ext.contains("phylip") ) type = Molecule;
 	else if ( ext.contains("pir") ) type = Molecule;
 	else if ( ext.contains("wh") || ext.contains("wah") ) type = Molecule;
+	else if ( ext.contains("xyz") ) type = Model;
 	else if ( ext.contains("raw") ) type = Image;
 	else if ( ext.contains("asc") || ext.contains( "txt") ) type = Image;
 	else if ( ext.contains("bcr") ) type = Image;
@@ -367,6 +395,7 @@ FileType	file_type(Bstring& filename)
 	else if ( ext.contains("hkl") ) type = Image;
 	else if ( ext.contains("img") || ext.contains("hed") ) type = Image;
 	else if ( ext.contains("ip") ) type = Image;
+	else if ( ext.contains("ibw") ) type = Image;
 	else if ( ext.contains("jpg") || ext.contains("jpeg") ) type = Image;
 	else if ( ext.contains("krn") ) type = Image;
 	else if ( ext.contains("mif") ) type = Image;
@@ -390,10 +419,12 @@ FileType	file_type(Bstring& filename)
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG file_type: file " << cleanname << " opened" << endl;
 		for ( i=0; i<5 && type == Unknown_FileType; i++ ) {
-			f.getline(aline, MAXLINELEN);
-			aptr = aline;
-			while ( aptr[0] && isspace(aptr[0]) ) aptr++;	// Remove leading spaces
-			if ( aptr[0] == ';' ) type = Micrograph;
+//			f.getline(aline, MAXLINELEN);
+//			aptr = aline;
+//			while ( aptr[0] && isspace(aptr[0]) ) aptr++;	// Remove leading spaces
+//			if ( aptr[0] == ';' ) type = Micrograph;
+			getline(f, sline);
+			if ( sline[0] == ';' ) type = Micrograph;
 		}
 		f.close();
 		if ( type == Unknown_FileType ) type = Image;

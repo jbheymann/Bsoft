@@ -3,7 +3,7 @@
 @brief	Simulation of AFM experiments
 @author Bernard Heymann
 @date	Created: 19990124
-@date	Modified: 20170612
+@date	Modified: 20230523
 **/
 
 #include "rwimg.h"
@@ -17,8 +17,9 @@ extern int 	verbose;		// Level of output to the screen
 // Function prototypes
 Bimage* 	afm_generate_tip(Vector3<long> size, Vector3<double> sampling,
 				double radius, double angle, double resolution);
-Bplot* 		afm_simulate(Bimage* ptip, Bimage* p, double spring,
-				double modulus, double thick);
+//Bplot* 		afm_simulate(Bimage* ptip, Bimage* p, double spring,
+//				double modulus, double thick);
+Bimage* 	afm_simulate(Bimage* ptip, Bimage* p, double spring, double modulus);
 Bimage* 	afm_force_to_height(Bimage* pf, double force_step);
 
 /* Usage assistance */
@@ -30,6 +31,8 @@ const char* use[] = {
 "An optional force map is produced (where every 2D slice is a force profile ",
 "		at a cantilever height).",
 "A set of height images is written.",
+"Typical contact mode spring constants: 1-50 pN/A.",
+"Typical tapping mode spring constants: 2000-5000 pN/A.",
 " ",
 "Actions:",
 "-invert                  Invert inside & outside (default not).",
@@ -44,8 +47,8 @@ const char* use[] = {
 "-tipangle 55.7           Tip side angle (degrees).",
 " ",
 "Simulation parameters:",
-"-spring 0.1              Spring constant (default 0.05 N/m).",
-"-modulus 2e8             Bulk modulus (default 1e9 N/m2).",
+"-spring 20               Spring constant (default 100 pN/A).",
+"-modulus 5               Bulk modulus (default 10 pN/A2).",
 "-thickness 55            Thickness (default 50 A).",
 "-forcestep 15            Force intervals for height maps (default 10 pN).",
 " ",
@@ -55,6 +58,7 @@ const char* use[] = {
 "Output:",
 "-Postscript file.ps      Postscript force curve.",
 "-Force force.map         Force map file name.",
+"-outtip tip.map          Output tip map file name.",
 " ",
 NULL
 };
@@ -66,15 +70,16 @@ int 	 	main(int argc, char **argv)
 	double			tipradius(0); 			// Tip radius also flag to generate tip
 	double			tipangle(45);			// Tip side angle
 	double			resmin(1 + sqrt(5.0));	// Resolution for tip generation
-    Vector3<double>	sam;			// Unit dimension scaling (Angstrom/pixel)
+    Vector3<double>	sam;					// Unit dimension scaling (Angstrom/pixel)
     int 			setinvert(0); 			// Don't invert inside-outside
-    double			spring(0.05); 			// Spring constant (typically 0.01-0.1 N/m)
-    double			modulus(1e9); 			// Bulk modulus (typically ~10 pN/A2 ???)
-	double			thick(50);	 			// Thickness of sample in Angstrom
+    double			spring(100); 			// Spring constant (typically 20-4000 pN/A)
+    double			modulus(10); 			// Bulk modulus (typically ~10 pN/A2)
+//	double			thick(50);	 			// Thickness of sample in Angstrom
 	double			forcestep(10);			// Force intervals for height maps
     Bstring			tipfile;				// Tip file name
 	Bstring			psfile;					// Postscript file name
 	Bstring			forcefile;				// Force map file name
+	Bstring			outtipfile;				// Ouput tip map file name
     
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -92,15 +97,23 @@ int 	 	main(int argc, char **argv)
 				cerr << "-tipangle: An angle must be specified!" << endl;
 		if ( curropt->tag == "invert" )
 			setinvert = 1;
-		if ( curropt->tag == "spring" )
+		if ( curropt->tag == "spring" ) {
 			if ( ( spring = curropt->value.real() ) < 0.00000001 )
 				cerr << "-spring: The spring constant must be specified!" << endl;
-		if ( curropt->tag == "modulus" )
+			else if ( spring < 10 )
+				// Conversion to Angstrom and pN
+				spring *= 100;			// 100 pN/A = N/m
+		}
+		if ( curropt->tag == "modulus" ) {
 			if ( ( modulus = curropt->value.real() ) < 0.001 )
 				cerr << "-modulus: The bulk modulus must be specified!" << endl;
-		if ( curropt->tag == "thickness" )
-			if ( ( thick = curropt->value.real() ) < 1 )
-				cerr << "-thickness: The thickness must be specified!" << endl;
+			else if ( modulus > 1e3 )
+				// Conversion to Angstrom and pN
+				modulus *= 1e-8;		// 10 pN/A2 = 1e9 N/m2
+		}
+//		if ( curropt->tag == "thickness" )
+//			if ( ( thick = curropt->value.real() ) < 1 )
+//				cerr << "-thickness: The thickness must be specified!" << endl;
 		if ( curropt->tag == "forcestep" )
 			if ( ( forcestep = curropt->value.real() ) < 0.001 )
 				cerr << "-forcestep: The force step must be specified!" << endl;
@@ -110,6 +123,8 @@ int 	 	main(int argc, char **argv)
 			psfile = curropt->filename();
 		if ( curropt->tag == "Force" )
 			forcefile = curropt->filename();
+		if ( curropt->tag == "outtip" )
+			outtipfile = curropt->filename();
     }
 	option_kill(option);
     
@@ -144,13 +159,18 @@ int 	 	main(int argc, char **argv)
 		}
 	}
 	
+	if ( ptip && outtipfile.length() )
+		write_img(outtipfile, ptip, 0);
+	
 	// Invert if requested
 	if ( setinvert ) p->invert();
 	
 	// Simulate an AFM scan if a tip is given
 	Bplot*		plot = NULL;
+	Bimage*		pdef = NULL;
 	if ( ptip )
-		plot = afm_simulate(ptip, p, spring, modulus, thick);
+//		plot = afm_simulate(ptip, p, spring, modulus, thick);
+		pdef = afm_simulate(ptip, p, spring, modulus);
 	
 	delete ptip;
 
@@ -165,17 +185,17 @@ int 	 	main(int argc, char **argv)
 		write_img(forcefile, p, 0);
 
 	// Calculate height images
-	Bimage* ph = afm_force_to_height(p, forcestep);
+//	Bimage* ph = afm_force_to_height(p, forcestep);
 	
-	delete p;
+//	delete p;
 	
     // Write an output file if a file name is given
 	if ( argc > optind && strspn(argv[optind],"-") != 1 )
-		write_img(argv[optind], ph, 0);
+		write_img(argv[optind], pdef, 0);
 
-	delete ph;
+//	delete ph;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -211,7 +231,7 @@ Bimage* 	afm_generate_tip(Vector3<long> size, Vector3<double> sampling,
 		cout << "Generating a 2D tip image" << endl;
     	cout << "Tip dimensions:                 " << size << endl;
     	cout << "Tip radius:                     " << radius << " A" << endl << endl;
-	} else if ( verbose & VERB_LABEL )
+	} else if ( verbose )
 		cout << "Generating a 2D tip image" << endl;
 	
 	// Generate a 2D tip height image to be converted to 3D later
@@ -262,49 +282,67 @@ Bimage* 	afm_generate_tip(Vector3<long> size, Vector3<double> sampling,
     return ptip;
 }
 
-int 	afm_simulate_at_xy(Bimage* ptip, Bimage* p, long ii,
-			float* force, double spring, double modulus, double thick)
+//int 	afm_simulate_at_xy(Bimage* ptip, Bimage* p, long ii,
+//			float* force, double spring, double modulus, double thick)	// old
+int 	afm_simulate_at_xy(Bimage* ptip, Bimage* p, Bimage* pdef, long ii,
+			double spring, double modulus, double volume, double threshold)
 {
-	long			i, ti, di, xx, yy, zz, tx, ty, tz, hiz;
-	long			dx, dy, dz, zshift;
+	long			i, j, ti, di, xx, yy, zz, tx, ty, tz, hiz;
+	long			dx, dy, dz;
+//	long			zshift;
 	long			ss(p->sizeX()*p->sizeY()), tss(ptip->sizeX()*ptip->sizeY());
-	double			fraction, overlap_volume(1);
-	double			scale(p->sampling(0).volume()/(p->maximum()*ptip->maximum()));	// Adjustment for correct units
+	double			overlap_volume(1), contact_area(0);
+	double			pix_size(p->sampling(0)[0]*p->sampling(0)[1]), vox_size(p->sampling(0).volume());
+//	double			fraction, scale(p->sampling(0).volume()/(p->maximum()*ptip->maximum()));	// Adjustment for correct units
 	
 	// Tip displacement = proportion * volume overlap
-	double			proportion(scale*modulus/(spring*thick));
+//	double			proportion(scale*modulus/(spring*thick));
 
-	double*			shift = new double[p->sizeZ()];
+	// Tip displacement = proportion * volume overlap
+	double			proportion(modulus/spring);
+	vector<bool>	area(ss,0);
+	vector<double>	shift(p->sizeZ());
 	
-	yy = ii/p->sizeX();
-	xx = ii - yy*p->sizeX();
-	for ( zz=0; zz<p->sizeZ(); zz++ ) {
+	yy = ii/p->sizeX() - ptip->image->origin()[1];
+	xx = ii - yy*p->sizeX() - ptip->image->origin()[0];
+	for ( zz=0, i=ii; zz<p->sizeZ(); zz++, i+=ss ) {
 		shift[zz] = 0;
-		if ( overlap_volume > 1e-30 ) {
+//		if ( overlap_volume > 1e-30 ) {
 			overlap_volume = 0;
-			i = zz*ss + ii;
+//			i = zz*ss + ii;
 			hiz = ptip->sizeZ();
 			if ( hiz > p->sizeZ() - zz ) hiz = p->sizeZ() - zz;
 			for ( ti=ty=0; ty<ptip->sizeY(); ty++ ) {	// Calculate overlap volume
-				dy = yy + ty - (long)ptip->image->origin()[1];
+				dy = yy + ty;
 				while ( dy < 0 ) dy += p->sizeY();		// Wrap y
 				while ( dy >= p->sizeY() ) dy -= p->sizeY();
 				for ( tx=0; tx<ptip->sizeX(); tx++, ti++ ) {
-					dx = xx + tx - (long)ptip->image->origin()[0];
+					dx = xx + tx;
 					while ( dx < 0 ) dx += p->sizeX();		// Wrap x
 					while ( dx >= p->sizeX() ) dx -= p->sizeX();
 					di = dy*p->sizeX()+dx;
 					for ( tz=0; tz<hiz; tz++ ) {
 						dz = zz + tz;
-						overlap_volume += (*p)[dz*ss+di]*(*ptip)[tz*tss+ti];
+//						overlap_volume += (*p)[dz*ss+di]*(*ptip)[tz*tss+ti]; // old
+						if ( (*p)[dz*ss+di]*(*ptip)[tz*tss+ti] > threshold ) {
+							overlap_volume += vox_size;
+							area[di] = 1;
+						}
 					}
 				}
 			}
-		}
-		shift[zz] = overlap_volume*proportion;
-//		cout << "%ld\t%g\n", z, shift[z]);
+//		}
+		for ( j=0, contact_area=0; j<ss; ++j )
+			if ( area[j] ) contact_area += pix_size;
+//		shift[zz] = overlap_volume*proportion;	// old
+		if ( overlap_volume < volume )
+			shift[zz] = proportion*contact_area*log(volume/(volume-overlap_volume));
+		else
+			cerr << "Overlap volume too large! (" << overlap_volume << " A3)" << endl;
+		pdef->set(i, shift[zz]);
+//		cout << zz << tab << shift[zz] << endl;
 	}
-	
+/*
 	for ( zz=0; zz<p->sizeZ(); zz++ ) {	// Calculate zshift where the forces are equal
 		zshift = 0;
 		while ( zshift*p->sampling(0)[2] < shift[zz+zshift] &&
@@ -321,20 +359,17 @@ int 	afm_simulate_at_xy(Bimage* ptip, Bimage* p, long ii,
 		force[i] = spring*(zshift + fraction)*p->sampling(0)[2];
 	}
 //	cout << "%ld\t%ld\t%ld\n", x, y, zshift);
-
-	delete[] shift;
-	
+*/
 	return 0;
 }
 
 /**
 @brief 	Simulates and AFM experiment.
-@param 	*ptip		AFM tip density map - converted to force map.
-@param 	*p			specimen density map.
+@param 	*ptip		AFM tip density map.
+@param 	*p			specimen density map - converted to a deflection map.
 @param 	spring		AFM cantilever spring constant (N/m).
 @param 	modulus		bulk modules (N/m2).
-@param 	thick 		sample thickness (angstrom).
-@return Bplot* 		force curve.
+@return Bimage* 		force curve.
 
 	The elastic force on an AFM tip is calculated as:
 		F = kt*dz = kb*dV/d
@@ -355,35 +390,151 @@ int 	afm_simulate_at_xy(Bimage* ptip, Bimage* p, long ii,
 	The origin of the tip density is taken as nx/2, ny/2, 0.
 
 **/
+Bimage*		afm_simulate(Bimage* ptip, Bimage* p, double spring, double modulus)
+{
+//	long			i, ii, zz;
+	long			ss(p->sizeX()*p->sizeY());
+//	double			avg_force;
+	
+	double			threshold(0.01);
+	double			volume = p->occupied_volume(threshold);
+	
+    if ( verbose & VERB_PROCESS ) {
+		cout << "Simulating an AFM experiment" << endl;
+//   	cout << "Spring constant:                " << spring << " N/m" << endl;
+//		cout << "Bulk modulus:                   " << modulus << " N/m2" << endl;
+//    	cout << "Specimen thickness:             " << thick << " A" << endl;
+    	cout << "Spring constant:                " << spring << " pN/A" << endl;
+		cout << "Bulk modulus:                   " << modulus << " pN/A2" << endl;
+    	cout << "Occupied volume:                " << volume << " A3" << endl;
+    	cout << "Density scale:                  " << p->sampling(0).volume()/(p->maximum()*ptip->maximum()) << " A/pixel" << endl << endl;
+	} else if ( verbose )
+		cout << "Simulating an AFM experiment" << endl << endl;
+	
+	Bimage*			pdef = p->copy();
+	pdef->clear();
+//	float*			force = new float[p->sizeX()*p->sizeY()*p->sizeZ()];
+	
+#ifdef HAVE_GCD
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
+	dispatch_apply(ss, dispatch_get_global_queue(0, 0), ^(size_t i){
+//	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, volume);
+	 	afm_simulate_at_xy(ptip, p, pdef, i, spring, modulus, volume, threshold);
+		dispatch_sync(myq, ^{
+			cout << "Complete: " << i << "/" << ss << "\r" << flush;
+		});
+	});
+#else
+#pragma omp parallel for
+	for ( long i=0; i<ss; i++ ) {
+//	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, volume);
+	 	afm_simulate_at_xy(ptip, p, pdef, i, spring, modulus, volume, threshold);
+#pragma omp critical
+		{
+			cout << "Complete: " << i << "/" << ss << "\r" << flush;
+		}
+	}
+#endif
+
+	return pdef;
+}
+
+/*
+	p->maximum(0);
+	for ( i=0; i<ss*p->sizeZ(); i++ )
+		if ( p->maximum() < force[i] ) p->maximum(force[i]);
+	
+	Bstring			title("AFM simulation");
+	int				ncol(3), nv(p->sizeZ());
+	Bplot*			plot = new Bplot(1, nv, ncol);
+	plot->title(title);
+	plot->page(0).title(title);
+	plot->page(0).columns(ncol);
+	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
+	plot->page(0).column(0).label("Distance");
+	plot->page(0).column(0).axis(1);
+	plot->page(0).column(1).type(2);
+	plot->page(0).column(1).label("Deflection");
+	plot->page(0).column(1).axis(4);
+	plot->page(0).column(2).type(2);
+	plot->page(0).column(2).label("Force");
+	plot->page(0).column(2).axis(3);
+//	plot->page(0).axis(1).min(0);
+//	plot->page(0).axis(1).max(360);
+//	plot->page(0).axis(1).inc(30);
+	
+	for ( zz=0; zz<nv; zz++ ) {
+		for ( i=0, ii=zz*ss, avg_force=0; i<ss; i++, ii++ )
+			avg_force += force[ii];
+		avg_force /= ss;
+		(*plot)[zz] = zz*p->sampling(0)[2];
+		(*plot)[zz+nv] = avg_force/spring;
+		(*plot)[zz+2*nv] = avg_force;
+	}
+
+	Bstring		txt;
+	txt = "Cantilever spring constant:   " + Bstring(spring/100, "%lg N/m");
+	plot->page(0).add_text(txt);
+	txt = "Bulk modulus:                 " + Bstring(modulus*1e8, "%lg N/m2");
+	plot->page(0).add_text(txt);
+//	txt = "Sample thickness:             " + Bstring(thick, "%lg A");
+	txt = "Sample volume:                " + Bstring(volume, "%lg A");
+	plot->page(0).add_text(txt);
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Distance(A)\tDeflection(A)\tForce(pN)" << endl;
+		for ( zz=0; zz<nv; zz++ )
+			cout << setw(12) << (*plot)[zz] << tab << setw(12)
+				<< (*plot)[zz+nv] << tab << (*plot)[zz+2*nv] << endl;
+		cout << endl;
+	}
+	
+	p->data_assign((unsigned char *) force);
+
+    return plot;
+}
+*/
+
+/*
 Bplot*		afm_simulate(Bimage* ptip, Bimage* p, double spring, double modulus, double thick)
 {
 	long			i, ii, zz;
 	long			ss(p->sizeX()*p->sizeY());
 	double			avg_force;
 	
+	double			threshold(0.01);
+	double			volume = p->occupied_volume(threshold);
+	
     if ( verbose & VERB_PROCESS ) {
 		cout << "Simulating an AFM experiment" << endl;
-    	cout << "Spring constant:                " << spring << " N/m" << endl;
-		cout << "Bulk modulus:                   " << modulus << " N/m2" << endl;
-    	cout << "Specimen thickness:             " << thick << " A" << endl;
+//   	cout << "Spring constant:                " << spring << " N/m" << endl;
+//		cout << "Bulk modulus:                   " << modulus << " N/m2" << endl;
+//    	cout << "Specimen thickness:             " << thick << " A" << endl;
+    	cout << "Spring constant:                " << spring << " pN/A" << endl;
+		cout << "Bulk modulus:                   " << modulus << " pN/A2" << endl;
+    	cout << "Occupied volume:                " << volume << " A3" << endl;
     	cout << "Density scale:                  " << p->sampling(0).volume()/(p->maximum()*ptip->maximum()) << " A/pixel" << endl << endl;
-	} else if ( verbose & VERB_LABEL )
+	} else if ( verbose )
 		cout << "Simulating an AFM experiment" << endl << endl;
 	
-	// Conversions to Angstrom and pN
-	spring *= 100;			// 100 pN/A = N/m
-	modulus *= 1e-8;		// 0.01 aN/A2 = N/m2
-
 	float*			force = new float[p->sizeX()*p->sizeY()*p->sizeZ()];
 	
 #ifdef HAVE_GCD
+	dispatch_queue_t 	myq = dispatch_queue_create(NULL, NULL);
 	dispatch_apply(ss, dispatch_get_global_queue(0, 0), ^(size_t i){
-	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, thick);
+	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, volume);
+		dispatch_sync(myq, ^{
+			cout << "Complete: " << i << "/" << ss << "\r" << flush;
+		});
 	});
 #else
 #pragma omp parallel for
 	for ( long i=0; i<ss; i++ )
-	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, thick);
+	 	afm_simulate_at_xy(ptip, p, i, force, spring, modulus, volume);
+#pragma omp critical
+		{
+			cout << "Complete: " << i << "/" << ss << "\r" << flush;
+		}
 #endif
 
 	p->maximum(0);
@@ -423,7 +574,8 @@ Bplot*		afm_simulate(Bimage* ptip, Bimage* p, double spring, double modulus, dou
 	plot->page(0).add_text(txt);
 	txt = "Bulk modulus:                 " + Bstring(modulus*1e8, "%lg N/m2");
 	plot->page(0).add_text(txt);
-	txt = "Sample thickness:             " + Bstring(thick, "%lg A");
+//	txt = "Sample thickness:             " + Bstring(thick, "%lg A");
+	txt = "Sample volume:                " + Bstring(volume, "%lg A");
 	plot->page(0).add_text(txt);
 	
 	if ( verbose & VERB_PROCESS ) {
@@ -438,7 +590,7 @@ Bplot*		afm_simulate(Bimage* ptip, Bimage* p, double spring, double modulus, dou
 
     return plot;
 }
-
+*/
 /**
 @brief 	Converts an AFM force map into a set of 2D height images at different constant force values.
 @param 	*pf			force map.
@@ -460,7 +612,7 @@ Bimage* 	afm_force_to_height(Bimage* pf, double force_step)
     if ( verbose & VERB_PROCESS ) {
 		cout << "Converting an AFM force map into " << ph->images() << " height images" << endl;
 		cout << "Force(pN)\tHeight_min(A)\tHeight_range(A)" << endl;
-	} else if ( verbose & VERB_LABEL )
+	} else if ( verbose )
 		cout << "Converting an AFM force map into " << ph->images() << " height images" << endl << endl;
 	
 	for ( nn=0; nn<ph->images(); nn++ ) {
@@ -495,7 +647,8 @@ Bimage* 	afm_force_to_height(Bimage* pf, double force_step)
 		for ( i=0, j=nn*ss; i<ss; i++, j++ )
 				ph->set(j, (*ph)[j] - min);
 	}
-	cout << endl;
+	if ( verbose )
+		cout << endl;
 	
 	ph->statistics();
 	

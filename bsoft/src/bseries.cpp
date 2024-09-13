@@ -3,12 +3,13 @@
 @brief	Program to align and analyze series of images
 @author	Bernard Heymann
 @date	Created: 20040407
-@date	Modified: 20210915
+@date	Modified: 20240215
 **/
 
 #include "mg_processing.h"
 #include "mg_align.h"
 #include "mg_extract.h"
+#include "mg_ctf.h"
 #include "rwmg.h"
 #include "utilities.h"
 #include "options.h"
@@ -40,12 +41,15 @@ const char* use[] = {
 " ",
 "Parameters for alignment:",
 "-frames                  Flag to align micrograph frames.",
+"-focalseries amp         Flag to align a focal series with amplitude or power normalization.",
 "-counts                  Flag to rescale images based on their counts histogram.",
+"-mode local              Flag for initial alignment: progressive or local.",
 "-resolution 900,300      High and low resolution limits for cross-correlation (default 0.1,1000 angstrom).",
 "-bin 3                   Binning by the given kernel size to speed up alignment.",
 "-shiftlimit 3.5          Limit on origin shift relative to nominal center (default 10% of box edge size).",
 "-edge 23,12              Smooth the edge to a given width, with gaussian decay of a given width.",
 "-subset 2-8,12           Subset of micrographs to align and average.",
+"-defocus 2300,55         Sets the defocus from a minimum and increments within each field.",
 " ",
 "Input:",
 "-Gainreference gr.tif    Gain reference to correct the input micrographs.",
@@ -68,7 +72,8 @@ int			main(int argc, char** argv)
 	int				ref_img(-1);				// Reference image for alignment, <0 means don't align
 	int				window(1), step(1);			// Moving sum window for alignment
 	int				frames(0);					// Flag to align micrograph frames
-	int				flags(0);					// Flags: 1=rescale based on histogram; 2=weigh by dose; 4=write aligned frames; 8=write frame sum
+	int				focal(0);					// Flag to align a focal series
+	int				flags(0);					// Flags: 1=rescale based on histogram; 2=weigh by dose; 4=write aligned frames; 8=write frame sum; 16=local
 	double			sampling_ratio(1);			// For SNR estimation
 	double			snr_window(0);				// Summing window for SNR estimation
 	int				snr_prog(0);				// Flag for progressive summing
@@ -79,10 +84,11 @@ int			main(int argc, char** argv)
 	double			shift_limit(-1);			// Maximum shift from nominal image origin
 	Vector3<double>	origin;						// Tilt axis origin
 	double			edge_width(0), gauss_width(0);	// Edge parameters
-	int 			fill_type(FILL_BACKGROUND);
-	double			fill(0);
+//	int 			fill_type(FILL_BACKGROUND);
+//	double			fill(0);
 	long		 	bin(1);						// Binning before alignment and analysis
 	Bstring			subset;						// Subset of micrographs to average
+	double			def_min(0), def_inc(0);		// Defocus start and increment
 	JSvalue			dose_frac(JSobject);		// Container for dose fractionation parameters
 	Bstring			paramfile;					// Output parameter file
     Bstring			grfile;						// Gain reference
@@ -111,8 +117,17 @@ int			main(int argc, char** argv)
  				cerr << "-envelope: A frame window size must be specified." << endl;
 		if ( curropt->tag == "frames" )
 			frames = 1;
+		if ( curropt->tag == "focalseries" ) {
+			if ( ( focal = curropt->value.integer() ) < 1 )
+ 				cerr << "-focalseries: A type of normalization must be specified." << endl;
+			if ( curropt->value[0] == 'p' ) focal = 1;
+			if ( curropt->value[0] == 'a' ) focal = 2;
+			if ( focal > 2 ) focal = 2;
+		}
 		if ( curropt->tag == "counts" )
 			flags |= 1;
+		if ( curropt->tag == "mode" )
+			if ( curropt->value[0] == 'l' ) flags |= 16;
 #include "dose.inc"
 		if ( curropt->tag == "resolution" ) {
     	    if ( curropt->values(hi_res, lo_res) < 1 )
@@ -131,13 +146,16 @@ int			main(int argc, char** argv)
 		if ( curropt->tag == "edge" )
     	    if ( curropt->values(edge_width, gauss_width) < 1 )
 				cerr << "-edge: An edge width must be specified." << endl;
-		if ( curropt->tag == "fill" )
-			fill = curropt->fill(fill_type);
+//		if ( curropt->tag == "fill" )
+//			fill = curropt->fill(fill_type);
 		if ( curropt->tag == "bin" )
 			if ( ( bin = curropt->value.integer() ) < 1 )
 				cerr << "-bin: An ineteger greater than zero must be specified!" << endl;
 		if ( curropt->tag == "subset" )
 			subset = curropt->value;
+		if ( curropt->tag == "defocus" )
+    	    if ( curropt->real_units(def_min, def_inc) < 2 )
+				cerr << "-defocus: A defocus minumum and increment must be specified." << endl;
 		if ( curropt->tag == "Gainreference" )
 			grfile = curropt->filename();
 		if ( curropt->tag == "Mask" )
@@ -181,6 +199,9 @@ int			main(int argc, char** argv)
 	if ( dose_frac.size() )
 		project_set_dose(project, dose_frac);
 
+	if ( def_min && def_inc )
+		project_set_defocus_series(project, def_min, def_inc);
+
 	Bimage*			pgr = NULL;
 	if ( grfile.length() )
 		pgr = read_img(grfile, 1, 0);
@@ -190,13 +211,17 @@ int			main(int argc, char** argv)
 		pmask = read_img(maskfile, 1, 0);
 		
 	if ( ref_img > -1 ) {
-		if ( frames )
+		if ( frames ) {
 			project_align_frames(project, ref_img, window, step, pgr, pmask, origin, hi_res, lo_res,
 				shift_limit, edge_width, gauss_width, bin, subset, flags);
-		else
+		} else if ( focal ) {
+			project_align_focal_series(project, ref_img, pgr, pmask, origin, focal-1, hi_res, lo_res,
+				shift_limit, edge_width, gauss_width, bin, subset, flags);
+		} else {
 			project_align_series(project, ref_img, pgr, pmask, origin, hi_res, lo_res,
 				shift_limit, edge_width, gauss_width, bin, subset, flags);
-		delete pgr;
+		}
+		if ( pgr ) delete pgr;
 		pgr = NULL;
 	}
 	
@@ -222,7 +247,7 @@ int			main(int argc, char** argv)
 	delete pgr;
 	delete pmask;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

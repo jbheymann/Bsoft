@@ -10,7 +10,6 @@
 **/
 
 #include "rwimg.h"
-#include "View.h"
 #include "symmetry.h"
 #include "mg_processing.h"
 
@@ -41,11 +40,11 @@ long	reconstruction_refine_subtomo(Breconstruction* rec,
 			double shiftlimitz, double shiftlimitxy, double mindist,
 			Vector3<long> bin, Bsymmetry& sym, int iters, int refinepeaks, Bstring ccmax_file);
 
-Bparticle*	img_find_refine_peaks(Bimage* pcc, View view, double shift_limit,
+Bparticle*	img_find_refine_peaks(Bimage* pcc, View2<double> view, double shift_limit,
 				double shift_along, double shift_orthogonal, double mindist,
 				double threshold, int maxhits, int refinepeaks);
 
-double		img_find_peak_subtomo(Bimage* p, View view, double shift,
+double		img_find_peak_subtomo(Bimage* p, View2<double> view, double shift,
 				double shift_along, double shift_orthogonal);
 
 
@@ -54,7 +53,7 @@ double		img_find_peak_subtomo(Bimage* p, View view, double shift,
 Vector3<double>  closest_point_line(Vector3<double> point, Vector3<double> endpoint1, Vector3<double> endpoint2);
 double  		closest_point_line_distance2(Vector3<double> point, Vector3<double> endpoint1, Vector3<double> endpoint2);
 //double  		closest_point_plane_distance2(Vector3<double> point, Vector3<double> point2, View view);
-double  		closest_point_disc_distance2(Vector3<double> point, Vector3<double> point2, View view, double radius);
+double  		closest_point_disc_distance2(Vector3<double> point, Vector3<double> point2, View2<double> view, double radius);
 
 //Vector3<double>	closest_point_plane(Vector3<double> point, Vector3<double> point2, View vieW);
 

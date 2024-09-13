@@ -58,8 +58,7 @@ int 		main(int argc, char **argv)
 	double			length(0), width(0);		// Length and width of new plane model
 	int				setviews(0);				// Flag to set the views based on a plane fit
 	int				fit(0);						// Generate a fitted plane model
-//	View			view;						// Orientation for plane
-	View2<float>	view;						// Orientation for plane
+	View2<double>	view;						// Orientation for plane
 	double			separation(10);				// New component separation
 	double			sigma(100);					// Smoothness of fit to guide
 //	int				normal(0);					// Move components only along view vector
@@ -79,10 +78,8 @@ int 		main(int argc, char **argv)
 				cerr << "-plane: Both length and width must be specified!" << endl;
 		if ( curropt->tag == "setviews" ) setviews = 1;
 		if ( curropt->tag == "fit" ) fit = 1;
-		if ( curropt->tag == "view" ) {
-			View 	tv = curropt->view();
-			view = View2<float>(tv[0],tv[1],tv[2],tv[3]);
-		}
+		if ( curropt->tag == "view" )
+			view = curropt->view();
 		if ( curropt->tag == "separation" )
 			if ( ( separation = curropt->value.real() ) < 0.01 )
 				cerr << "-separation: The component separation must be specified!" << endl;
@@ -107,8 +104,7 @@ int 		main(int argc, char **argv)
 	double			ti = timer_start();
 
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	Bmodel*			model = NULL;		
+	Bmodel*			model = NULL;
 	Bmodel*			guide = NULL;
 
 	if ( length > 0 && width > 0 ) {
@@ -120,15 +116,14 @@ int 		main(int argc, char **argv)
 		model_rotate(model, view);
 		model_set_views(model, view);
 	} else {
-		while ( optind < argc ) string_add(&file_list, argv[optind++]);
-		if ( file_list ) {
-			model = read_model(file_list, paramfile);
-			string_kill(file_list);
-		}
+		vector<string>	file_list;
+		while ( optind < argc ) file_list.push_back(argv[optind++]);
+		if ( file_list.size() )
+			model = read_model(file_list, paramfile.str());
 	}
 	
 	if ( guidefile.length() ) {
-		guide = read_model(guidefile, paramfile);
+		guide = read_model(guidefile.str(), paramfile.str());
 		if ( !model ) model = guide;
 	}
 
@@ -152,12 +147,12 @@ int 		main(int argc, char **argv)
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -3,7 +3,7 @@
 @brief	Header file for CTF (contrast transfer function) functions
 @author Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210531
+@date	Modified: 20231024
 **/
 
 #include <cmath>
@@ -27,34 +27,36 @@
 *************************************************************************/
 class CTFparam {
 private:
+	string			id;				// CTF group identifier
+	long			sel;			// Selection integer
 	double			av;				// Acceleration voltage (V)
 	double			fl;				// Focal length (angstrom)
-	double			cs;				// Spherical aberration coefficient (angstrom)
+	double			df;				// Focus step size (angstrom)
 	double			cc;				// Chromatic aberation (angstrom)
 	double			a;				// Illumination half-angle (radians)
 	double			de;				// Energy spread (eV)
 	double			oa;				// Objective aperture radius (angstrom)
 	double			sw;				// Energy filter slit width (eV), 0 if not used
-	double			ac;				// Amplitude contrast phase shift (radian)
-	double			def_avg;		// Defocus average (angstrom)
-	double			def_dev;		// Defocus deviation (angstrom)
-	double			ast_ang;		// Astigmatism angle (radian)
-	double			firstzero;		// CTF first zero (angstrom)
-	long			bt;				// Baseline type (1=poly, 2=double_gauss, 3=eman)
+//	double			tx, ty;			// Beam tilt (radian)
+	long			maxord;			// Maximum aberration order
+	map<pair<long,long>,double>	abw;	// Aberration weights
+	long			bt;				// Baseline type (1=poly, 2=double_gauss, 3=eman, 4=hyper, 5=near-hyper)
 	vector<double>	base;			// Baseline (up to 10 coefficients)
 	long			et;				// Envelope type (1=single_gauss, 2=c+single_gauss, 3=double_gauss, 4=c+double_gauss)
 	vector<double>	env;			// Envelope (up to 10 coefficients)
 	double			f;				// CTF fit figure-of-merit
 	double			wl;				// Wave length
-	long double		t1, t2;			// Terms in CTF
+	long double		t1;				// Term1: 0.5πl^3
+	long double		t2;				// Term2: -πl
 	void			initialize() {
-		a = de = sw = def_avg = def_dev = ast_ang = firstzero = f = 0;
+		id = "1";
+		sel = 1;
+		a = de = sw = f = 0;
 		av = 300000;
 		fl = 3.5e7;
 		oa = 2e6;
-		cs = 2e7;
 		cc = 2e7;
-		ac = 0.07;
+//		tx = ty = 0;
 		for ( int i=0; i<NCTFPARAM; i++ ) {
 			base.push_back(0);
 			env.push_back(0);
@@ -62,20 +64,33 @@ private:
 		bt = 1;
 		base[0] = 1;
 		et = 4;
-		env[0] = 0.2;
-		env[1] = -1000;
+		env[0] = 1.0;
+		env[1] = 0.2;
+		env[2] = -1000;
+		env[3] = 0.1;
+		env[4] = -100;
 		wl = t1 = t2 = 0;
+		aberration_init();
+	}
+	void	aberration_init() {
+		maxord = 4;		// default maximum aberration order
+		long			n(0), m;
+		for ( n=0; n<=maxord; n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw[{n,m}] = 0;
 	}
 	void			update_terms() {
 		wl = lambda();
-		t1 = M_PI_2*wl*wl*wl*cs;
-		t2 = M_PI*wl;
+		t1 = M_PI_2*wl*wl*wl;
+		t2 = -M_PI*wl;
 	}
 public:
 	CTFparam() { initialize(); update_terms(); }
+	CTFparam(string s) { initialize(); id=s; update_terms(); }
 	CTFparam(double v, double sa, double ac) {
 		initialize();
 		volt(v); Cs(sa); amp_shift(ac);
+		update_terms();
 	}
 	int		update(CTFparam* ctf) {
 		if ( !ctf ) return -1;
@@ -83,31 +98,115 @@ public:
 	}
 	int		update(CTFparam& ctf);
 	
+	void	identifier(string s) { id = s; }
+	void	identifier(int i) { id = to_string(i); }
+	string&	identifier() { return id; }
+	long	select() { return sel; }
+	void	select(long i) { sel = i; }
 	double	volt() { return av; }
 	void	volt(double v) { av = v; update_terms(); }
 	double	focal_length() { return fl; }
 	void	focal_length(double v) { fl = v; }
-	double	Cs() { return cs; }
-	void	Cs(double v) { cs = v; update_terms(); }
+	double	focus_step() { return df; }
+	void	focus_step(double v) { df = v; }
 	double	Cc() { return cc; }
 	void	Cc(double v) { cc = v; }
 	double	alpha() { return a; }
 	void	alpha(double v) { a = v; }
 	double	dE() { return de; }
 	void	dE(double v) { de = v; }
-	double	amp_shift() { return ac; }
-	void	amp_shift(double v) { ac = v; }
-//	double	phi_fac() { if ( pf <= 0 ) pf = sqrt(1-af*af); return pf; }
 	double	objective_aperture() { return oa; }
 	void	objective_aperture(double v) { oa = v; }
 	double	slit_width() { return sw; }
 	void	slit_width(double v) { sw = v; }
-	double	defocus_average() { return def_avg; }
-	void	defocus_average(double v) { def_avg = v; }
-	double	defocus_deviation() { return def_dev; }
-	void	defocus_deviation(double v) { def_dev = v; }
-	double	astigmatism_angle() { return ast_ang; }
-	void	astigmatism_angle(double v) { ast_ang = v; }
+	long	aberration_maxorder() { return maxord; }
+	void	aberration_maxorder(long n) { maxord = n; }
+	double	aberration_weight(long n, long m) { return abw[{n,m}]; }
+	void	aberration_weight(long n, long m, double v) { abw[{n,m}] = v; }
+	void	add_aberration_weight(long n, long m, double v) { abw[{n,m}] += v; }
+	map<pair<long,long>,double>&	aberration_weights() { return abw; }
+	void	aberration_weights(map<pair<long,long>,double>& wa) {
+		for ( auto w: wa ) abw[w.first] = w.second;
+	}
+	void	update_aberration_weights(map<pair<long,long>,double>& wa) {
+		for ( auto w: wa ) abw[w.first] += w.second;
+	}
+	double	aberration_coefficient(long n, long m) {
+		if ( n == 0 ) return wl*abw[{0,0}]/TWOPI;
+		if ( n == 1 ) return abw[{n,m}]/TWOPI;
+		double		wp(wl);
+		for ( int i=2; i<n; ++i ) wp *= wl;
+		return n*abw[{n,m}]/(TWOPI*wp);
+	}
+	double	aberration_coefficient(pair<long,long> a) {
+		return aberration_coefficient(a.first, a.second);
+	}
+	void	aberration_coefficient(long n, long m, double d) {
+		if ( n == 0 ) abw[{0,0}] = angle_set_negPI_to_PI(TWOPI*d/wl);
+		else if ( n == 1 ) abw[{n,m}] = TWOPI*d;
+		else {
+			double		wp(wl);
+			for ( int i=2; i<n; ++i ) wp *= wl;
+			abw[{n,m}] = TWOPI*wp*d/n;
+		}
+	}
+	void	aberration_coefficient(pair<long,long> a, double d) {
+		aberration_coefficient(a.first, a.second, d);
+	}
+	void	aberration_coefficient(string tag, double d) {
+		long		n(0), m(0);
+		parse_aberration_tag(tag, n, m);
+		aberration_coefficient(n, m, d);
+	}
+	string	aberration_tag(long n, long m) {
+		return "c" + to_string(n) + to_string(m);
+	}
+	vector<string> aberration_tags() {
+		vector<string>	ta;
+		for ( auto w: abw )
+			ta.push_back(aberration_tag(w.first.first, w.first.second));
+		return ta;
+	}
+	void	parse_aberration_tag(string tag, long& n, long& m) {
+		if ( tag[0] != 'c' ) return;
+		n = tag[1]-'0';
+		if ( tag[2] == '-' ) m = -(tag[3]-'0');
+		else m = tag[2]-'0';
+	}
+	map<pair<long,long>,double>	aberration_coefficients() {
+		map<pair<long,long>,double>	ca;
+		for ( auto w: abw )
+			ca[w.first] = aberration_coefficient(w.first);
+		return ca;
+	}
+	void	aberration_coefficients(map<pair<long,long>,double>& ca) {
+		for ( auto c: ca ) abw[c.first] = aberration_coefficient(c.first);
+	}
+	map<string, double> aberration_coefficients_with_tags() {
+		map<string, double>		ca;
+		for ( auto w: abw )
+			ca[aberration_tag(w.first.first,w.first.second)] = aberration_coefficient(w.first);
+//			ca["c" + to_string(w.first.first) + to_string(w.first.second)] = aberration_coefficient(w.first);
+		return ca;
+	}
+	double	amp_shift() { return -abw[{0,0}]; }
+	void	amp_shift(double v) { abw[{0,0}] = -v; }
+	double	beam_tiltX() { return abw[{1,1}]/TWOPI; }
+	double	beam_tiltY() { return abw[{1,-1}]/TWOPI; }
+	void	beam_tiltX(double v) { abw[{1,1}] = TWOPI*v; }
+	void	beam_tiltY(double v) { abw[{1,-1}] = TWOPI*v; }
+	void	beam_tilt(double x, double y) { abw[{1,1}] = TWOPI*x; abw[{1,-1}] = TWOPI*y; }
+	double	defocus_average() { return abw[{2,0}]/t2; }
+	void	defocus_average(double v) { abw[{2,0}] = t2*v; }
+	double	defocus_deviation() { return -sqrt(abw[{2,-2}]*abw[{2,-2}]+abw[{2,2}]*abw[{2,2}])/t2; }
+	double	astigmatism_angle() { return angle_set_negPI_to_PI(atan2(-abw[{2,-2}], -abw[{2,2}])/2); }
+	void	astigmatism(double dev, double ang) {
+		dev = fabs(dev);
+		abw[{2,2}] = t2*dev*cos(2*ang);
+		abw[{2,-2}] = t2*dev*sin(2*ang);
+	}
+	double	Cs() { return abw[{4,0}]/t1; }
+	void	Cs(double v) { abw[{4,0}] = t1*v; update_terms(); }
 	long	baseline_type() { return bt; }
 	void	baseline_type(long t) { bt = t; }
 	vector<double>&	baseline() { return base; }
@@ -115,6 +214,10 @@ public:
 	void	baseline(int i, double d) { if ( i>=0 && i < NCTFPARAM ) base[i] = d; }
 	void	baseline(double* b) { for ( int i=0; i<NCTFPARAM; i++ ) base[i] = b[i]; }
 	void	baseline(vector<double>& b) { for ( int i=0; i<NCTFPARAM; i++ ) base[i] = b[i]; }
+	void	baseline(long t, vector<double>& b) {
+		bt = t;
+		for ( int i=0; i<NCTFPARAM; i++ ) base[i] = b[i];
+	}
 	long	envelope_type() { return et; }
 	void	envelope_type(long t) { et = t; }
 	vector<double>&	envelope() { return env; }
@@ -122,10 +225,131 @@ public:
 	void	envelope(int i, double d) { if ( i>=0 && i < NCTFPARAM ) env[i] = d; }
 	void	envelope(double* v) { for ( int i=0; i<NCTFPARAM; i++ ) env[i] = v[i]; }
 	void	envelope(vector<double>& v) { for ( int i=0; i<NCTFPARAM; i++ ) env[i] = v[i]; }
+	void	envelope(long t, vector<double>& v) {
+		et = t;
+		for ( int i=0; i<NCTFPARAM; i++ ) env[i] = v[i];
+	}
 	double	fom() { return f; }
 	void	fom(double v) { f = v; }
-	
+	string	aberration_weight_string() {
+		string		ws;
+		for ( auto w: abw ) ws += "," + to_string(w.second);
+		ws[0] = '[';
+		ws += ']';
+		return ws;
+	}
+	vector<double>	aberration_even() {
+		vector<double>	we;
+		for ( auto w: abw ) if ( w.first.first%2 == 0 ) we.push_back(w.second);
+		return we;
+	}
+	vector<double>	aberration_even_difference() {
+		vector<double>	we(9,0);
+		we[4] = abw[{4,-4}];
+		we[5] = abw[{4,-2}];
+		we[7] = abw[{4,2}];
+		we[8] = abw[{4,4}];
+		return we;
+	}
+	void	aberration_even(vector<double>& v) {
+		long			i, n(0), m;
+		for ( i=0; n<=maxord && i<v.size(); n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw[{n,m}] = v[i++];
+	}
+	void	aberration_even_update(vector<double>& v) {
+		long			i, n(0), m;
+		for ( i=0; n<=maxord && i<v.size(); n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw[{n,m}] += v[i++];
+	}
+	vector<double>	aberration_odd() {
+		vector<double>	wo(6,0);
+		long			i, n(1), m;
+		for ( i=0; n<=maxord && i<wo.size(); n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				wo[i++] = abw[{n,m}] = 0;
+		return wo;
+	}
+	void	aberration_odd(vector<double>& v) {
+		long			i, n(1), m;
+		for ( i=0; n<=maxord && i<v.size(); n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw[{n,m}] = v[i++];
+	}
+	void	aberration_odd_update(vector<double>& v) {
+		long			i, n(1), m;
+		for ( i=0; n<=maxord && i<v.size(); n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw[{n,m}] += v[i++];
+	}
+	void	convert_zernike() {
+		abw[{0,0}] += -abw[{2,0}] + abw[{4,0}];
+		abw[{1,-1}] -= abw[{3,-1}];
+		abw[{1,1}] -= abw[{3,1}];
+		abw[{2,-2}] -= 3*abw[{4,-2}];
+		abw[{2,0}] = 2*abw[{2,0}] - 6*abw[{4,0}];
+		abw[{2,2}] -= 3*abw[{4,2}];
+		abw[{3,-1}] *= 3;
+		abw[{3,1}] *= 3;
+		abw[{4,-2}] *= 4;
+		abw[{4,0}] *= 6;
+		abw[{4,2}] *= 4;
+	}
+	void	add_zernike_even(vector<double>& v) {
+		abw[{0,0}] += v[0] - v[2] + v[6];
+		abw[{2,-2}] += v[1] - 3*v[5];
+		abw[{2,0}] += 2*v[2] - 6*v[6];
+		abw[{2,2}] += v[3] - 3*v[7];
+		abw[{4,-4}] += v[4];
+		abw[{4,-2}] += 4*v[5];
+		abw[{4,0}] += 6*v[6];
+		abw[{4,2}] += 4*v[7];
+		abw[{4,4}] += v[8];
+	}
+	void	add_zernike_odd(vector<double>& v) {
+		abw[{1,-1}] += v[0] - v[3];
+		abw[{1,1}] += v[1] - v[4];
+		abw[{3,-3}] += v[2];
+		abw[{3,-1}] += 3*v[3];
+		abw[{3,1}] += 3*v[4];
+		abw[{3,3}] += v[5];
+	}
+	vector<double>	zernike_even() {
+		vector<double>	ze(9,0);
+		ze[0] = abw[{0,0}] + abw[{2,0}]/2 + abw[{4,0}]/3;
+		ze[1] = abw[{2,-2}] + 0.75*abw[{4,-2}];
+		ze[2] = (abw[{2,0}] + abw[{4,0}])/2;
+		ze[3] = abw[{2,2}] + 0.75*abw[{4,2}];
+		ze[4] = abw[{4,-4}];
+		ze[5] = abw[{4,-2}]/4;
+		ze[6] = abw[{4,0}]/6;
+		ze[7] = abw[{4,2}]/4;
+		ze[8] = abw[{4,4}];
+		return ze;
+	}
+	vector<double>	zernike_odd() {
+		vector<double>	zo(6,0);
+		zo[0] = abw[{1,-1}] + abw[{3,-1}]/3;
+		zo[1] = abw[{1,1}] + abw[{3,1}]/3;
+		zo[2] = abw[{3,-3}];
+		zo[3] = abw[{3,-1}]/3;
+		zo[4] = abw[{3,1}]/3;
+		zo[5] = abw[{3,3}];
+		return zo;
+	}
+	void	delete_aberration(int which=3) {
+		if ( which > 2 ) {
+			abw.clear();
+			return;
+		}
+		long					n(which%2), m;
+		for ( ; n<=maxord; n+=2 )
+			for ( m=-n; m<=n; m+=2 )
+				abw.erase({n,m});
+	}
 	bool	check_defocus() {
+		double		def_avg(abw[{2,0}]/t2);
 		if ( def_avg < 1 || def_avg > 2e5 ) {
 			cerr << "Error: Defocus is out of range 0.0001 - 20 um! (" << def_avg*1e-4 << ")" << endl;
 			if ( def_avg < 1 ) def_avg = 1;
@@ -133,58 +357,106 @@ public:
 			return 1;
 		} else return 0;
 	}
-	bool	check_Cs() {
-		if ( cs < 1e3 || cs > 1e8 ) {
-			cerr << "Error: Cs is out of range 0.0001 - 10 mm! (" << cs*1e-7 << ")" << endl;
-			if ( cs < 1e3 ) cs = 1e3;
-			else if ( cs > 1e8 ) cs = 1e8;
-			return 1;
-		} else return 0;
-	}
 	double	lambda() {		// Electron wavelength
 //		if ( av ) wl = 12.2643/sqrt(av*(1+av*0.97845e-6));
  		if ( av ) wl = PLANCK*1e10L/sqrt(2.0*EMASS*ECHARGE*av*(1.0+ECHARGE*av/(2.0*EMASS*LIGHTSPEED*LIGHTSPEED)));
+ 		if ( wl < 1e-10 ) {
+ 			cerr << "Warning: Wavelength is zero!" << endl;
+ //			exit(-1);
+		}
 		return wl;
 	}
 	double	frequency_cutoff() {		// Aperture cutoff frequency
 		return oa/(2*fl*lambda());
 	}
-	double	term1() { return t1; }
-	double	term2() { return t2; }
-	long double	delta_phi(double s2, double angle) {
-		double		defocus = def_avg + def_dev*cos(2*(angle - ast_ang));
-//		long double	dphi = (t1*s2 - t2*defocus)*s2 - ac;
-//		while ( dphi < -M_PI) dphi += TWOPI;
-//		while ( dphi > M_PI) dphi -= TWOPI;
-//		return dphi;
-		return		(t1*s2 - t2*defocus)*s2 - ac;
+	long double	calculate_aberration(pair<long,long> nm, double s, double angle) {
+		return calculate_aberration(nm.first, nm.second, s, angle);
 	}
+	long double	calculate_aberration(long n, long m, double s, double angle) {
+		double		sn(s);
+		for ( long i=1; i<n; ++i ) sn *= s;
+		long double	dphi(abw[{n,m}]*sn);
+		if ( m<0 ) dphi *= sinl(-m*angle);
+		else if ( m>0 ) dphi *= cosl(m*angle);
+		return dphi;
+	}
+//	long double	calculate_aberration(double s2, double angle) {
+//		return calculate_aberration(sqrt(s2), angle);
+//	}
+	long double	calculate_aberration(double s, double angle) {
+		if (abw.size() < 5 ) return 0;	// At least the usual CTF parameters
+		long		i(0), n(0), m(0);
+		long double	dphi(abw[{0,0}]), sn(s);
+		for ( i=0, n=1; n<=maxord && i<abw.size(); ++n ) {
+			for ( m=-n; m<=n; m+=2, ++i ) {
+				if ( m==0 ) dphi += abw[{n,m}]*sn;
+				else if ( m<0 ) dphi += abw[{n,m}]*sn*sinl(-m*angle);
+				else dphi += abw[{n,m}]*sn*cosl(m*angle);
+			}
+			sn *= s;
+		}
+		return dphi;
+	}
+	long double	calculate_aberration_even(double s2, double angle) {
+		if (abw.size() < 5 ) return 0;	// At least the usual CTF parameters
+		long		i(0), n(0), m(0);
+		long double	dphi(abw[{0,0}]), s(s2);
+		for ( i=1, n=2; n<=maxord && i<abw.size(); n+=2 ) {
+			for ( m=-n; m<=n; m+=2, i++ ) {
+				if ( m==0 ) dphi += abw[{n,m}]*s;
+				else if ( m<0 ) dphi += abw[{n,m}]*s*sinl(-m*angle);
+				else dphi += abw[{n,m}]*s*cosl(m*angle);
+			}
+			s *= s2;
+		}
+		return dphi;
+	}
+	long double	calculate_aberration_odd(double s2, double angle) {
+		if (abw.size() < 2 ) return 0;	// At least beam tilt
+		long		i(0), n(0), m(0);
+		long double	dphi(0), s(sqrt(s2));
+		for ( i=0, n=1; n<=maxord && i<abw.size(); n+=2 ) {
+			for ( m=-n; m<=n; m+=2, i++ ) {
+				if ( m<0 ) dphi += abw[{n,m}]*s*sinl(-m*angle);
+				else dphi += abw[{n,m}]*s*cosl(m*angle);
+			}
+			s *= s2;
+		}
+		return dphi;
+	}
+	Complex<double>	aberration_odd_complex(double s2, double angle) {
+		long double dphi = calculate_aberration_odd(s2, angle);
+		return Complex<double>(cosl(dphi), sinl(dphi));
+	}
+//	long double	delta_phi(double s2, double angle) {
+//		return calculate_aberration_even(s2, angle);
+//	}
 	long double	calculate(double s2, double angle) {
-//		double		dphi = delta_phi(s2, angle);
-//		return		pf*sin(dphi) - af*cos(dphi);
-//		dphi -= asin(af);
-		return		sinl(delta_phi(s2, angle));
+		return		sinl(calculate_aberration_even(s2, angle));
 	}
 	vector<double>	calculate(int nrad, int npsi, double step_size);
-	Complex<double>	calculate_complex(double s2, double angle) {
+/*	Complex<double>	calculate_complex(double s2, double angle) {
 		double		dphi = delta_phi(s2, angle);
-//		return Complex<double>(af*cos(dphi),-pf*sin(dphi));
-		return Complex<double>(cos(dphi),sin(dphi));
+		return Complex<double>(cosl(dphi),sinl(dphi));
+	}*/
+	Complex<double>	calculate_complex(double s, double angle) {
+		double		dphi = -M_PI_2 + calculate_aberration(s, angle);
+		return Complex<double>(cosl(dphi),sinl(dphi));
 	}
 	double	calc_baseline(double s) {
-		double		s2(s*s), b(0), ds;		
+		double		s2(s*s), b(base[0]), ds;		
 		switch ( bt ) {
 			case 1:
 			case 4:
-				b = base[0] + base[1]*s + base[2]*s2 + base[3]*s*s2 + base[4]*s2*s2;
+				b += base[1]*s + base[2]*s2 + base[3]*s*s2 + base[4]*s2*s2;
 				break;
 			case 2:
 			case 5:
-				b = base[0] + base[1]*exp(base[2]*s2) + base[3]*exp(base[4]*s2);
+				b += base[1]*exp(base[2]*s2) + base[3]*exp(base[4]*s2);
 				break;
 			case 3:
 			case 6:
-				b = base[0] + base[1]*exp(base[2]*sqrt(s) + base[3]*s2);
+				b += base[1]*exp(base[2]*sqrt(s) + base[3]*s2);
 				break;
 			default: ;
 		}
@@ -214,6 +486,12 @@ public:
 			case 4:
 				e = env[0] + env[1]*exp(env[2]*s2) + env[3]*exp(env[4]*s2);
 				break;
+			case 5:
+				if ( s ) e = env[0] + env[1]/s;
+				break;
+			case 6:
+				e = env[0] + env[1]*pow(s, env[2]);
+				break;
 			default: ;
 		}
 		if ( !isfinite(e) )
@@ -225,12 +503,21 @@ public:
 	vector<double>	maxima(double max_s);
 	Bstring	baseline_equation();
 	Bstring	envelope_equation();
-	int		parse_baseline_equation(Bstring base_eq);
-	int		parse_envelope_equation(Bstring env_eq);
+	int				parse_baseline_equation(Bstring base_eq);
+	int				parse_envelope_equation(Bstring env_eq);
+	double			partial_coherence(double s);
 	vector<double>	envelope_partial_coherence(long n, double freq_step);
+	double			energy_spread(double s2);
 	vector<double>	envelope_energy_spread(long n, double freq_step);
-	double	zero(int i) {
+	double			partial_coherence_and_energy_spread(double s2);
+	double			coherence_envelope_phi(double s);
+	double			coherence_envelope(double s) {
+		return exp(-coherence_envelope_phi(s));
+	}
+	vector<double>	coherence_envelope(long n, double freq_step);
+/*	double	zero(int i) {
 		double		l = lambda();
+		double		cs(Cs());
 		double		t = i - ac/M_PI;
 		double		s = t/(l*def_avg);
 		if ( cs >= 1e3 ) {
@@ -242,32 +529,77 @@ public:
 		if ( !isfinite(s) ) s = -1;
 		if ( i == 1 ) firstzero = s;
 		return s;
+	}*/
+	double	zero(int i) {
+		double		s2;
+//		abw[{0,0}] = ac;
+//		abw[{2,0}] = t2*def_avg;
+		double		t = (M_PI*i - abw[{0,0}]);
+//		s2 = -t/abw[{2,0}];
+		if ( abw[{4,0}] < 1 ) s2 = -t/abw[{2,0}];
+		else s2 = (-abw[{2,0}] - sqrt(abw[{2,0}]*abw[{2,0}] - 4.0*abw[{4,0}]*t))/(2*abw[{4,0}]);
+		double		r = 1.0/sqrt(s2);
+		if ( !isfinite(r) ) r = -1;
+		return r;
 	}
-	double	defocus_for_first_zero(double s) {
+/*	double	defocus_for_first_zero(double s) {
 		if ( s < 1e-6 ) return -1;
 		double		l = lambda();
 		return		0.5*l*l*cs*s*s + 1/(l*s*s);
+	}*/
+	double	defocus_for_first_zero(double s) {
+		if ( s < 1e-6 ) return -1;
+		double		l = lambda();
+		s *= s;
+		return	(abw[{4,0}]*s + (abw[{0,0}] - M_PI)/s)/(M_PI*l);
 	}
 	void	show() {
-		cout << "Defocus average:                " << def_avg*1e-4 << " um" << endl;
-		cout << "Defocus deviation:              " << def_dev*1e-4 << " um" << endl;
-		cout << "Astigmatism angle:              " << ast_ang*180/M_PI << " degrees" << endl;
-		cout << "Amplitude phase shift:          " << ac*180/M_PI << " degrees" << endl;
+		cout << "Optics group:                   " << id << endl;
+		cout << "Number:                         " << sel << endl;
+		cout << "Figure-of-merit:                " << f << endl;
+		cout << "Defocus average:                " << defocus_average()*1e-4 << " um" << endl;
+		cout << "Defocus deviation:              " << defocus_deviation()*1e-4 << " um" << endl;
+		cout << "Astigmatism angle:              " << astigmatism_angle()*180/M_PI << " degrees" << endl;
+		cout << "Focus step:                     " << focus_step() << " A" << endl;
+		cout << "Amplitude phase shift:          " << -abw[{0,0}]*180/M_PI << " degrees" << endl;
 		cout << "Voltage:                        " << av*1e-3 << " kV" << endl;
 		cout << "Wavelength:                     " << lambda() << " A" << endl;
-		cout << "Spherical aberration (Cs):      " << cs*1e-7 << " mm" << endl;
+		cout << "Spherical aberration (Cs):      " << Cs()*1e-7 << " mm" << endl;
 		cout << "Chromatic aberration (Cc):      " << cc*1e-7 << " mm" << endl;
+		cout << "Image shift (beam tilt):        " << beam_tiltX() << tab << beam_tiltY() << " A" << endl;
+		cout << "Aberration parameters:\nn\tm\tw\tc" << endl;
+		for ( auto w: abw )
+			cout << w.first.first << tab << w.first.second << tab << w.second << tab << aberration_coefficient(w.first) << endl;
 		cout << "Illumination halfangle (alpha): " << a*1e3 << " mrad" << endl;
 		cout << "Energy spread:                  " << de << " eV" << endl;
 		cout << "Energy filter slit width:       " << sw << " eV" << endl;
 		cout << "Objective aperture:             " << oa*1e-4 << " µm" << endl;
 		cout << "Focal length:                   " << fl*1e-7 << " mm" << endl;
+		cout << "Frequency cutoff:               " << frequency_cutoff() << " (" << 1/frequency_cutoff() << " A)" << endl;
+		cout << endl;
+	}
+	void	show_aberration() {
+		cout << "Optics group:                   " << id << endl;
+		cout << "Number:                         " << sel << endl;
+		cout << "Aberration parameters:\nn\tm\tw\tc" << endl;
+		for ( auto w: abw )
+			cout << w.first.first << tab << w.first.second << tab << w.second << tab << aberration_coefficient(w.first) << endl;
+/*		cout << "Phase shift:                    " << -abw[{0,0}] << " radians" << endl;
+		cout << "Image shift (beam tilt):        " << beam_tiltX() << tab << beam_tiltY() << " A" << endl;
+		cout << "Defocus:                        " << defocus_average()*1e-4 << " um" << endl;
+		cout << "Astigmatism:                    " << -abw[{2,2}]*1e-4/(M_PI*lambda()) << tab << -abw[{2,-2}]*1e-4/(M_PI*lambda()) << " um" << endl;
+		cout << "Defocus deviation:              " << defocus_deviation()*1e-4 << " um" << endl;
+		cout << "Astigmatism angle:              " << astigmatism_angle() << " degrees" << endl;
+		cout << "Cs:                             " << Cs()*2e-7 << " mm" << endl;*/
 	}
 	void	show_baseline() {
 		cout << "Baseline coefficients:          " << 
 			baseline(0) << " " << baseline(1) << " " << 
 			baseline(2) << " " << baseline(3);
 		switch ( bt ) {
+			case 0:
+				cout << " (constant";
+				break;
 			case 1:		// Polynomial
 			case 4:		
 				cout << " " << baseline(4) << " (polynomial";
@@ -303,6 +635,12 @@ public:
 			case 4:
 				cout << " (double gaussian with constant)";
 				break;
+			case 5:
+				cout << " (hyperbolic with constant)";
+				break;
+			case 6:
+				cout << " (near-hyperbolic with constant)";
+				break;
 			default:
 				break;
 		}
@@ -314,10 +652,14 @@ public:
 
 // Function prototypes
 JSvalue			ctf_to_json(CTFparam& cp);
+JSvalue			ctf_array_to_json(vector<CTFparam>& cpa);
 CTFparam		ctf_from_json(JSvalue& js);
 CTFparam		ctf_from_json(string filename);
 int				ctf_update_from_json(CTFparam& cp, JSvalue& js);
+vector<CTFparam>	ctf_from_json_array(JSvalue &js);
+double			lorentz(double volt);
 double			electron_wavelength(double volt);
+double			electron_wavelength_relativistic(double volt);
 double			beta2(double volt);
 double			beta(double volt);
 vector<double>	C_curve(long n, double freq_step);

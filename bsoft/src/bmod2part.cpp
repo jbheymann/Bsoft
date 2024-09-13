@@ -3,7 +3,7 @@
 @brief	Converting from a pseudo-atomic model to particle parameters
 @author Bernard Heymann
 @date	Created: 20070423
-@date 	Modified: 20160616
+@date 	Modified: 20220223
 **/
 
 #include "rwmodel.h"
@@ -23,9 +23,9 @@ extern int 	verbose;		// Level of output to the screen
 // Function prototypes
 Bproject*	project_part_from_model(Bmodel* model, Vector3<double> origin, 
 				Vector3<double> sampling, Vector3<long> box_size);
-Bmodel*		models_from_particles(Bproject* project);
-Bmodel*		components_from_2D_particles(Bproject* project);
-Bmodel*		components_from_3D_particles(Bproject* project);
+Bmodel*		models_from_particles(Bproject* project, string modtype);
+Bmodel*		components_from_2D_particles(Bproject* project, string comptype);
+Bmodel*		components_from_3D_particles(Bproject* project, string comptype);
 
 /* Usage assistance */
 const char* use[] = {
@@ -38,6 +38,8 @@ const char* use[] = {
 "-reconstructions         Operate on reconstruction parameters rather than micrographs.",
 "-all                     Reset selection to all components before other selections.",
 "-type comp               Type of conversion: part->models or part->components.",
+"-settype VER             Set model or component types.",
+"-associate TRS,trs.pdb   Associate a component type with a file name.",
 " ",
 "Parameters:",
 "-verbose 7               Verbose output.",
@@ -61,6 +63,9 @@ int 	main(int argc, char **argv)
 	int				use_rec(0);					// Flag to process reconstructions
 	int 			reset(0);					// Keep selection as read from file
 	Bstring			type;						// Type of conversion
+	Bstring			set_type("PRT");			// Component type to set
+	Bstring			associate_type;				// Component type
+	Bstring			associate_file;				// Component type file name
 	Vector3<double>	origin;						// Coordinate origin placement
 	int				set_origin(0);				// Flag to set origin
 	Vector3<double>	sam;    					// Sampling in angstrom/voxel side
@@ -76,6 +81,12 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "reconstructions" ) use_rec = 1;
 		if ( curropt->tag == "all" ) reset = 1;
 		if ( curropt->tag == "type" ) type = curropt->value.lower();
+		if ( curropt->tag == "settype" )
+			set_type = curropt->value;
+		if ( curropt->tag == "associate" ) {
+			associate_type = curropt->value.pre(',');
+			associate_file = curropt->value.post(',');
+		}
 		if ( curropt->tag == "origin" ) {
 			if ( curropt->value[0] == 'c' ) {
 				set_origin = 2;
@@ -100,21 +111,18 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
-		cerr << "Error: No model files specified!" << endl;
-		bexit(-1);
-	}
+	Bstring			first_file(argv[optind]);
 
 	Bmodel*			model = NULL;
 	Bproject*		project = NULL;
 	Bimage*			p = NULL;
 
-	Vector3<double>		ori3, sam3;
+	Vector3<double>	ori3, sam3;
 	
-	if ( file_type(*file_list) == Model ) {
-		model = read_model(file_list, paramfile);
+	if ( file_type(first_file) == Model ) {
+		vector<string>	file_list;
+		while ( optind < argc ) file_list.push_back(argv[optind++]);
+		model = read_model(file_list, paramfile.str());
 		if ( !model ) {
 			cerr << "Error: Input file not read!" << endl;
 			bexit(-1);
@@ -137,7 +145,14 @@ int 	main(int argc, char **argv)
 				write_project(outfile, project, 0, 0);
 		}
 	} else {
+		Bstring*		file_list = NULL;
+		while ( optind < argc ) string_add(&file_list, argv[optind++]);
+		if ( !file_list ) {
+			cerr << "Error: No model files specified!" << endl;
+			bexit(-1);
+		}
 		project = read_project(file_list);
+		string_kill(file_list);
 		if ( use_rec ) project->select = 1;
 		Vector3<double>		ori3(origin[0], origin[1], origin[2]);
 		if ( project->select && project->rec ) {
@@ -154,24 +169,25 @@ int 	main(int argc, char **argv)
 			ori3 = Vector3<double>(origin[0], origin[1], origin[2]);
 			if ( origin.length() > 0 ) project->rec->origin = ori3;
 			if ( sam[0] > 0 ) project_set_mg_pixel_size(project, sam);
-			if ( type.length() && type[0] == 'm' ) model = models_from_particles(project);
-			else model = components_from_3D_particles(project);
+			if ( type.length() && type[0] == 'm' ) model = models_from_particles(project, set_type.str());
+			else model = components_from_3D_particles(project, set_type.str());
 		} else if ( project->field && project->field->mg ) {
 			ori3 = Vector3<double>(origin[0], origin[1], origin[2]);
 			if ( ori3.volume() > 0 ) project_set_micrograph_origins(project, ori3);
-			model = components_from_2D_particles(project);
+			model = components_from_2D_particles(project, set_type.str());
 			if ( mapfile.length() ) model->mapfile(mapfile.str());
 		}
+		if ( associate_file.length() )
+			model_associate(model, associate_type.str(), associate_file.str());
 		if ( outfile.length() && model ) {
-				write_model(outfile, model);
+				write_model(outfile.str(), model);
 		}
 	}
 	
-	string_kill(file_list);
 	model_kill(model);
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	return 0;
@@ -217,7 +233,7 @@ Bproject*	project_part_from_model(Bmodel* model, Vector3<double> origin,
 			part->ori = box_size/2;
 			part->loc = comp->location()/sampling + origin;
 			v = comp->view().backward();
-			part->view = View(v[0],v[1],v[2],v[3]);
+			part->view = View2<double>(v[0],v[1],v[2],v[3]);
 			part->sel = comp->select();
 			part->fom[0] = comp->FOM();
 		}
@@ -229,26 +245,24 @@ Bproject*	project_part_from_model(Bmodel* model, Vector3<double> origin,
 /**
 @brief 	Converts particle coordinates for a reconstruction into model component coordinates.  
 @param 	*project	project with reconstruction.
+@param	modtype		model type string.
 @return Bmodel*		new project.
 **/
-Bmodel*		models_from_particles(Bproject* project)
+Bmodel*		models_from_particles(Bproject* project, string modtype)
 {
 	long				nmod(0);
 	Breconstruction*	rec = project->rec;
 	Bparticle*			part = NULL;
 	Bmodel*				model = NULL;
 	Bmodel*				mp = NULL;
-	Bstring				id;
 	
 	if ( verbose )
 		cout << "Generating models from particles" << endl;
 	
 	for ( part = rec->part; part; part = part->next ) {
-		id = Bstring(part->id, "%d");
-//		mp = model_add(&mp, id);
-//		if ( !model ) model = mp;
 		if ( mp ) mp = mp->add(part->id);
 		else model = mp = new Bmodel(part->id);
+		mp->model_type(modtype);
 		if ( part->fpart.length() ) {
 			mp->mapfile(part->fpart.str());
 			mp->image_number(0);
@@ -272,18 +286,19 @@ Bmodel*		models_from_particles(Bproject* project)
 /**
 @brief 	Converts particle coordinates from micrographs into model component coordinates.  
 @param 	*project	project with micrographs.
+@param	comptype	component type string.
 @return Bmodel*		new project.
 **/
-Bmodel*		components_from_2D_particles(Bproject* project)
+Bmodel*		components_from_2D_particles(Bproject* project, string comptype)
 {
 	long				i;
+	Vector3<double>		ori;
 	Bfield*				field;
 	Bmicrograph*		mg;
 	Bparticle*			part = NULL;
-	Bstring				id("Particles");
+	string				id("Particles");
 	Bmodel*				model = new Bmodel(id);
 	Bcomponent*			comp = NULL;
-	Bstring				comptype = "PRT";
 	Bcomptype*			ct = model->add_type(comptype);
 
 	if ( verbose )
@@ -291,6 +306,9 @@ Bmodel*		components_from_2D_particles(Bproject* project)
 	
 	for ( i=0, field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) {
+			ori = mg->box_size/2.0;
+			cout << "box_size = " << mg->box_size << endl;
+			cout << "ori = " << ori << endl;
 			for ( part = mg->part; part; part = part->next ) {
 //				id = Bstring(++i, "%d");
 //				comp = component_add(&comp, id);
@@ -298,8 +316,11 @@ Bmodel*		components_from_2D_particles(Bproject* project)
 				if ( comp ) comp = comp->add(++i);
 				else model->comp = comp = new Bcomponent(++i);
 				comp->type(ct);
-				comp->location((part->loc - mg->origin)*mg->pixel_size);
-				View v(part->view.backward());
+				if ( part->loc.length() )
+					comp->location((part->loc - mg->origin)*mg->pixel_size);
+				else
+					comp->location((part->ori - ori)*part->pixel_size);
+				View2<double> v(part->view2().backward());
 				comp->view(View2<float>(v[0],v[1],v[2],v[3]));
 				comp->select(part->sel);
 				comp->FOM(part->fom[0]);
@@ -316,23 +337,26 @@ Bmodel*		components_from_2D_particles(Bproject* project)
 /**
 @brief 	Converts particle coordinates for a reconstruction into model component coordinates.  
 @param 	*project	project with reconstruction.
+@param	comptype	component type string.
 @return Bmodel*		new project.
 **/
-Bmodel*		components_from_3D_particles(Bproject* project)
+Bmodel*		components_from_3D_particles(Bproject* project, string comptype)
 {
 	long				ncomp(0);
+	Vector3<double>		ori;
 	Breconstruction*	rec = project->rec;
 	Bparticle*			part = NULL;
-	Bmodel*				model = new Bmodel(rec->id);
+	Bmodel*				model = new Bmodel(rec->id.str());
 	Bcomponent*			comp = NULL;
-	Bstring				id;
-	Bstring				comptype = "PRT";
+	string				id;
 	Bcomptype*			ct = model->add_type(comptype);
 
 	model->mapfile(rec->frec.str());
 	
 	if ( verbose )
 		cout << "Generating model components from 3D particles" << endl;
+	
+	ori = rec->box_size/2;
 	
 	for ( part = rec->part; part; part = part->next ) {
 //		id = Bstring(part->id, "%d");
@@ -341,8 +365,11 @@ Bmodel*		components_from_3D_particles(Bproject* project)
 		if ( comp ) comp = comp->add(part->id);
 		else model->comp = comp = new Bcomponent(part->id);
 		comp->type(ct);
-		comp->location((part->loc - rec->origin)*rec->voxel_size);
-		View v(part->view.backward());
+		if ( part->loc.length() )
+			comp->location((part->loc - rec->origin)*rec->voxel_size);
+		else
+			comp->location((part->ori - ori)*part->pixel_size);
+		View2<double> v(part->view2().backward());
 		comp->view(View2<float>(v[0],v[1],v[2],v[3]));
 		comp->select(part->sel);
 		comp->FOM(part->fom[0]);

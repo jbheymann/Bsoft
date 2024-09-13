@@ -240,13 +240,31 @@ int			rec_part_links(Breconstruction* rec)
 	return 0;
 }
 	
+/**
+@brief 	Finds the first micrograph in a project.
+@param 	*project	pointer to project.
+@return Bmicrograph* 	first micrograph.
+
+	The function searches for the first micrograph.
+
+**/
+Bmicrograph*	mg_find_first(Bproject* project)
+{
+	Bfield*				field;
+	Bmicrograph*		mg = NULL;
+	
+	for ( field = project->field; field; field = field->next )
+		if ( field->mg ) return field->mg;
+
+	return mg;
+}
 
 /**
 @brief 	Finds the first particle in a project.
 @param 	*project	pointer to project.
-@return Bparticle* 	first particle with a filename.
+@return Bparticle* 		first particle.
 
-	The function searches for the first particle with a filename.
+	The function searches for the first particle.
 
 **/
 Bparticle*	part_find_first(Bproject* project)
@@ -1222,13 +1240,13 @@ Bmicrograph**	project_micrograph_array(Bproject* project, long &nmg)
 	Bmicrograph*	mg;
 
 	for ( nmg=0, field=project->field; field; field=field->next )
-		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select)
+		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select )
 			nmg++;
 
 	Bmicrograph**	mgarr = new Bmicrograph*[nmg];
 	
 	for ( nmg=0, field=project->field; field; field=field->next )
-		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select)
+		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->select )
 			mgarr[nmg++] = mg;
 
 	return mgarr;
@@ -2440,7 +2458,7 @@ int			project_set_particle_origins(Bproject* project, Vector3<double> origin)
 	For each micrograph or reconstruction the particle view is set to within the asymmetric unit.
 
 **/
-int			project_set_particle_asu_views(Bproject* project, Bstring& symmetry_asu)
+int			project_set_particle_asu_views(Bproject* project, string& symmetry_asu)
 {
 	if ( !project ) return 0;
 	
@@ -2466,12 +2484,12 @@ int			project_set_particle_asu_views(Bproject* project, Bsymmetry& sym)
 	if ( project->select ) {
 		for ( rec = project->rec; rec; rec = rec->next )
 			for ( part = rec->part; part; part = part->next )
-				part->view = find_asymmetric_unit_view(sym, part->view);
+				part->view2(sym.find_asymmetric_unit_view(part->view2()));
 	} else {
 		for ( field = project->field; field; field = field->next )
 			for ( mg = field->mg; mg; mg = mg->next )
 				for ( part = mg->part; part; part = part->next )
-					part->view = find_asymmetric_unit_view(sym, part->view);
+					part->view2(sym.find_asymmetric_unit_view(part->view2()));
 	}
 
 	return 0;
@@ -2481,10 +2499,10 @@ int			project_set_particle_asu_views(Bproject* project, Bsymmetry& sym)
 @author Eduardo Sanz-Garcia
 @brief 	Rotates particle views with respect to a reference view.
 @param 	*project		project parameter structure.
-@param 	view				reference view.
-@return int						0.
+@param 	view			reference view.
+@return int				0.
 **/
-int			project_rotate_particle_views(Bproject* project, View view)
+int			project_rotate_particle_views(Bproject* project, View2<double> view)
 {
 	if ( !project ) return 0;
 	
@@ -2504,15 +2522,15 @@ int			project_rotate_particle_views(Bproject* project, View view)
 	if ( project->select ) {
 		for ( rec = project->rec; rec; rec = rec->next )
 			for ( part = rec->part; part; part = part->next ) {
-				q = view.quaternion() * part->view.quaternion();
-				part->view = View(q);
+				q = view.quaternion() * part->view2().quaternion();
+				part->view2(View2<double>(q));
 			}
 	} else {
 		for ( field=project->field; field; field=field->next )
 			for ( mg=field->mg; mg ; mg=mg->next )
 				for ( part=mg->part; part; part=part->next) {
-					q = view.quaternion() * part->view.quaternion();
-					part->view = View(q);
+					q = view.quaternion() * part->view2().quaternion();
+					part->view2(View2<double>(q));
 				}
 	}
 
@@ -2618,19 +2636,18 @@ long			project_reset(Bproject* project, Bstring& reset)
 /**
 @brief 	Retrieves the particle views from a project.
 @param 	*project	project parameter structure.
-@param 	selection		selection number (-1 selects positives, 0 selects all).
-@return View* 				linked list of views.
+@param 	selection	selection number (-1 selects positives, 0 selects all).
+@return vector<View2<double>>	list of views.
 **/
-View*		views_from_project(Bproject* project, int selection)
+vector<View2<double>>	views_from_project(Bproject* project, int selection)
 {
-	if ( !project ) return 0;
+	vector<View2<double>> view;
+	if ( !project ) return view;
 	
 	Bfield*				field;
 	Bmicrograph*		mg;
 	Breconstruction*	rec;
 	Bparticle*			part;
-	View*				view = NULL;
-	View*				v = NULL;
 	
 	if ( project->select < 1 ) {
 		if ( verbose & VERB_PROCESS )
@@ -2639,10 +2656,7 @@ View*		views_from_project(Bproject* project, int selection)
 			for ( mg = field->mg; mg; mg = mg->next )
 				for ( part = mg->part; part; part = part->next ) {
 					if ( selection==0 || ( selection==part->sel ) || ( selection<0 && part->sel>0 ) ) {
-						v = (View *) add_item((char **) &v, sizeof(View));
-						if ( !view ) view = v;
-						*v = part->view;
-						v->next = NULL;
+						view.push_back(part->view2());
 					}
 				}
 	} else {
@@ -2651,10 +2665,7 @@ View*		views_from_project(Bproject* project, int selection)
 		for ( rec = project->rec; rec; rec = rec->next )
 			for ( part = rec->part; part; part = part->next ) {
 				if ( selection==0 || ( selection==part->sel ) || ( selection<0 && part->sel>0 ) ) {
-					v = (View *) add_item((char **) &v, sizeof(View));
-					if ( !view ) view = v;
-					*v = part->view;
-					v->next = NULL;
+					view.push_back(part->view2());
 				}
 			}
 	}

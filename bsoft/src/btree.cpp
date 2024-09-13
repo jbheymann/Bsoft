@@ -67,7 +67,7 @@ int 		main(int argc, char** argv)
 	
 	tree_delete_node(root);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

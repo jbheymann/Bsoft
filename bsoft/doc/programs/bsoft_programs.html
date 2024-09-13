@@ -1,14 +1,30 @@
-<HTML>
-<HEAD>
-	<meta name="Author" content="Bernard Heymann">
-	<TITLE>Bsoft: Program listing </TITLE>
-	<link type="image/png" href="Bsoft_16x16.png" rel="icon">
-</HEAD>
-<BODY bgcolor="#FFFFFF">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
+<head>
+<meta name="Author" content="Bernard Heymann">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<!-- Author: Bernard Heymann -->
+<!-- Created: 20141222 -->
+<!-- Modified: 20180924 -->
+<title>Bsoft: Program listing </title>
+<link href="../bsoft.css" rel="stylesheet" type="text/css" />
+<link rel="icon" href="Bsoft_16x16.png" type="image/png" />
+<link rel="icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<script language="JavaScript" type="text/javascript" src="../bsoft.js"></script>
+</head>
+
+<body class="bsoft_layout">
+
+<div id="content">
+
 <center><h1><i><font color="#000099">Bsoft programs</font></i></h1></center>
 <table><tbody>
 <tr><td><a href="b3v.html">b3v</a></td>
 <td>Generates 3 orthogonal views of a map.</td></tr>
+<tr><td><a href="baberr.html">baberr</a></td>
+<td>Generates or analyzes aberration images.</td></tr>
 <tr><td><a href="badd.html">badd</a></td>
 <td>Adds multiple images to generate a new composite image.</td></tr>
 <tr><td><a href="baddmask.html">baddmask</a></td>
@@ -16,7 +32,7 @@
 <tr><td><a href="bafm.html">bafm</a></td>
 <td>Simulates AFM imaging.</td></tr>
 <tr><td><a href="balign.html">balign</a></td>
-<td>The second input image is aligned to the first, transformed and output.</td></tr>
+<td>Aligning images to each other.</td></tr>
 <tr><td><a href="balpha.html">balpha</a></td>
 <td>Creates and manipulates alpha helices.</td></tr>
 <tr><td><a href="bampweigh.html">bampweigh</a></td>
@@ -38,7 +54,7 @@
 <tr><td><a href="bcatseq.html">bcatseq</a></td>
 <td>Concatenates protein sequences from different files.</td></tr>
 <tr><td><a href="bcc.html">bcc</a></td>
-<td>Calculates cross-correlation using fast Fourier transforms.</td></tr>
+<td>Calculates various comparisons using fast Fourier transforms.</td></tr>
 <tr><td><a href="bclass.html">bclass</a></td>
 <td>Classifies raw single particle images with respect to multiple reference maps.</td></tr>
 <tr><td><a href="bcolour.html">bcolour</a></td>
@@ -67,6 +83,8 @@
 <td>Smooths the edge of an image to a uniform background.</td></tr>
 <tr><td><a href="beditimg.html">beditimg</a></td>
 <td>Creates a new image or modifies an input image by inserting or deleting regions.</td></tr>
+<tr><td><a href="bess.html">bess</a></td>
+<td>Simulates electron microscope imaging given a molecular structure.</td></tr>
 <tr><td><a href="bfcc.html">bfcc</a></td>
 <td>Fast cross-correlation for the best fit of a 3D map to a template.</td></tr>
 <tr><td><a href="bfft.html">bfft</a></td>
@@ -87,10 +105,14 @@
 <td>Does phase extension by solvent flattening.</td></tr>
 <tr><td><a href="bflood.html">bflood</a></td>
 <td>Segments images using the watershed or flooding algorithm.</td></tr>
+<tr><td><a href="bfocal.html">bfocal</a></td>
+<td>Processes micrographs taken as a focal series.</td></tr>
 <tr><td><a href="bftr.html">bftr</a></td>
 <td>Resizing an image using Fourier transformation.</td></tr>
 <tr><td><a href="bgex.html">bgex</a></td>
 <td>Calculates and compares atomic models and maps.</td></tr>
+<tr><td><a href="bgradient.html">bgradient</a></td>
+<td>Calculates image gradients.</td></tr>
 <tr><td><a href="bgraphseg.html">bgraphseg</a></td>
 <td>Segment images into density regions using a nondirected graph.</td></tr>
 <tr><td><a href="bhead.html">bhead</a></td>
@@ -107,6 +129,8 @@
 <td>Analyzes icosahedral subtomograms.</td></tr>
 <tr><td><a href="bimg.html">bimg</a></td>
 <td>Manipulates images in a few general ways.</td></tr>
+<tr><td><a href="bimport.html">bimport</a></td>
+<td>Generates a micrograph parameter file from directories of files.</td></tr>
 <tr><td><a href="bint.html">bint</a></td>
 <td>Applies geometric transformations requiring interpolation to 2D and 3D images.</td></tr>
 <tr><td><a href="bkernel.html">bkernel</a></td>
@@ -157,11 +181,14 @@
 <td>Creates models.</td></tr>
 <tr><td><a href="bmodel.html">bmodel</a></td>
 <td>Manipulates models.</td></tr>
+<tr><td><a href="bmodfit.html">bmodfit</a></td>
+<td>Calculate fits of model to a reference.</td></tr>
 <tr><td><a href="bmodmap.html">bmodmap</a></td>
 <td>Generates a map from a model.</td></tr>
 <tr><td><a href="bmodmask.html">bmodmask</a></td>
 <td>Generates a mask from a model if an output image is specified.</td></tr>
 <tr><td><a href="bmodsel.html">bmodsel</a></td>
+<td>Selects and manipulates models and components.</td></tr>
 <tr><td><a href="bmodsym.html">bmodsym</a></td>
 <td>Manipulates models.</td></tr>
 <tr><td><a href="bmodview.html">bmodview</a></td>
@@ -193,11 +220,13 @@
 <tr><td><a href="borient.html">borient</a></td>
 <td>Determines the orientations and origins of single particles with respect to a reference.</td></tr>
 <tr><td><a href="bparam.html">bparam</a></td>
-<td>Manipulate molecular parameter files.</td></tr>
+<td>Manipulate molecular model parameter files.</td></tr>
 <tr><td><a href="bpart.html">bpart</a></td>
 <td>Manipulates single particle images.</td></tr>
 <tr><td><a href="bpartmulti.html">bpartmulti</a></td>
+<td>Selection and analysis of single particles from multiple parameter files.</td></tr>
 <tr><td><a href="bpartsel.html">bpartsel</a></td>
+<td>Selects single particles for reconstruction and further processing.</td></tr>
 <tr><td><a href="bpatch.html">bpatch</a></td>
 <td>Patches a list of tiles together with overlap.</td></tr>
 <tr><td><a href="bpath.html">bpath</a></td>
@@ -210,8 +239,10 @@
 <td>Generates and manipulates plane models.</td></tr>
 <tr><td><a href="bpoly.html">bpoly</a></td>
 <td>Manipulate model polyhedral coordinate files.</td></tr>
+<tr><td><a href="bpot.html">bpot</a></td>
+<td>Calculates a potential map from atomic models.</td></tr>
 <tr><td><a href="bproject.html">bproject</a></td>
-<td>Projects a 3D map and calculating comparison statistics of the projections.</td></tr>
+<td>Projects a 3D map and calculates comparison statistics of the projections.</td></tr>
 <tr><td><a href="bradial.html">bradial</a></td>
 <td>Calculates radial profiles of 2D and 3D images.</td></tr>
 <tr><td><a href="bradsec.html">bradsec</a></td>
@@ -230,6 +261,8 @@
 <td>Determines the resolution (FSC and DPR) from two images.</td></tr>
 <tr><td><a href="bscale.html">bscale</a></td>
 <td>Scales a map with respect to a reference.</td></tr>
+<tr><td><a href="bscatter.html">bscatter</a></td>
+<td>Calculating properties from electron scattering cross sections.</td></tr>
 <tr><td><a href="bsegment.html">bsegment</a></td>
 <td>Analyzes images for segmentation.</td></tr>
 <tr><td><a href="bseq.html">bseq</a></td>
@@ -273,7 +306,7 @@
 <tr><td><a href="btomrec.html">btomrec</a></td>
 <td>Reconstructs a tomogram from an aligned tilt series in Fourier space.</td></tr>
 <tr><td><a href="btomres.html">btomres</a></td>
-<td>Program to determine the resolution of a tilt series.</td></tr>
+<td>Program to determine the resolution of micrographs in a tilt series.</td></tr>
 <tr><td><a href="btrack.html">btrack</a></td>
 <td>Track fiducial markers in a tomographic tilt series of micrographs.</td></tr>
 <tr><td><a href="btree.html">btree</a></td>
@@ -311,10 +344,12 @@
 <tr><td><a href="radonrecon.html">radonrecon</a></td>
 <td>Program to reconstruct a quarter (PI*PI) radon transform from projections.</td></tr>
 </tbody></table><br>
-<HR WIDTH="100%"><BR>
-Generated by bdoc.pl on Mon Oct 26 08:20:12 2020 <BR>
-<HR WIDTH="100%"><BR>
-<center><a href="bsoft.html">Back to the Bsoft home</a></center>
-<HR WIDTH="100%"><BR>
-</BODY>
-</HTML>
+</div>
+
+<br/>
+
+<div id="footer">
+Generated by bprog.pl on Thu Aug 31 05:36:00 2023
+</div>
+</body>
+</html>

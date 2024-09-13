@@ -3,12 +3,11 @@
 @brief	Functions for reading and writing ASCII files
 @author Bernard Heymann
 @date	Created: 20000318
-@date	Modified: 20120211
+@date	Modified: 20230526
 **/
 
 #include "rwASCII.h"
 #include "Complex.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include <fstream>
 
@@ -37,97 +36,88 @@ int 	readASCII(Bimage* p, int readdata)
     fimg.open(p->file_name());
     if ( fimg.fail() ) return -1;
 	
-	long 			i, j, k, l, m = 1;
-	double			v[16], min[16], max[16];
-	long			order[16];
-    char			aline[MAXLINELEN];
+	long 			i, j, k, l, m(1);
+	vector<long>	order(16,-1);
+	vector<double>	v(16,0), min(16,0), max(16,0);
+    string			s;
 	Vector3<double>	ori;
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG readASCII: Start reading text image" << endl;
 	
-	// Initialize order and extrema arrays
-	for ( i=0; i<16; i++ ) {
-		order[i] = -1;
-		min[i] = 1e30;
-		max[i] = -1e30;
-		v[i] = 0;
-	}
-	
 	// The first line contains the column labels
-	fimg.getline( aline, MAXLINELEN);
-    for ( size_t i=0; i<strlen(aline); i++ ) {
-    	if ( isspace(aline[i]) || ispunct(aline[i]) ) aline[i]=' ';
-    	aline[i] = toupper(aline[i]);
+	getline(fimg, s);
+    for ( size_t i=0; i<s.size(); i++ ) {
+    	if ( isspace(s[i]) || ispunct(s[i]) ) s[i]=' ';
+    	s[i] = toupper(s[i]);
     }
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG readASCII: Header line: " << aline << endl;
-	
-	Bstring			headerline(aline);
-	Bstring*		one;
-	Bstring*		label = headerline.split();
-	m = count_list((char *)label);
-	
+		cout << "DEBUG readASCII: Header line: " << s << endl;
+
+	vector<string>	label = split(s);
+	m = label.size();
+
 	if ( verbose & VERB_DEBUG ) {
 		cout << "DEBUG readASCII: " << m << " column labels:";
-		for ( one=label; one; one=one->next ) cout << *one << " ";
+		for ( auto s: label ) cout << s << " ";
 		cout << endl;
 	}
-	
+
 	if ( verbose & VERB_DEBUG ) {
 		if ( p->fourier_type() == NoTransform ) cout << "DEBUG readASCII: An image" << endl;
 		else cout << "DEBUG readASCII: A transform" << endl;
 	}
 	
 	// Associate each label with an index and a value variable
-	for ( one=label, i=0; one && i<m; one=one->next, i++ ) {
-		if ( order[0] < 0 && (*one)[0] == 'X' ) order[0] = i;
-		if ( order[0] < 0 && (*one)[0] == 'H' ) {
+	for ( i=0; i<m; ++i ) {
+		s = label[i];
+		if ( order[0] < 0 && s[0] == 'X' ) order[0] = i;
+		if ( order[0] < 0 && s[0] == 'H' ) {
 			order[0] = i;
 			p->compound_type(TComplex);
 			p->fourier_type(Standard);
 			p->channels(2);
 		}
-		if ( order[1] < 0 && (*one)[0] == 'Y' ) order[1] = i;
-		if ( order[1] < 0 && (*one)[0] == 'K' ) order[1] = i;
-		if ( order[2] < 0 && (*one)[0] == 'Z' ) order[2] = i;
-		if ( order[2] < 0 && (*one)[0] == 'L' ) order[2] = i;
-		if ( order[3] < 0 && (*one)[0] == 'N' ) order[3] = i;
-		if ( order[4] < 0 && (*one)[0] == 'R' ) order[4] = i;
-		if ( order[4] < 0 && (*one)[0] == 'A' ) order[4] = i;
-		if ( order[4] < 0 && *one == "VX" ) {
+		if ( order[1] < 0 && s[0] == 'Y' ) order[1] = i;
+		if ( order[1] < 0 && s[0] == 'K' ) order[1] = i;
+		if ( order[2] < 0 && s[0] == 'Z' ) order[2] = i;
+		if ( order[2] < 0 && s[0] == 'L' ) order[2] = i;
+		if ( order[3] < 0 && s[0] == 'N' ) order[3] = i;
+		if ( order[4] < 0 && s[0] == 'R' ) order[4] = i;
+		if ( order[4] < 0 && s[0] == 'A' ) order[4] = i;
+		if ( order[4] < 0 && s == "VX" ) {
 			order[4] = i;
 			p->compound_type(TVector3);
 			p->channels(3);
 		}
-		if ( order[4] < 0 && *one == "Red" ) {
+		if ( order[4] < 0 && s == "Red" ) {
 			order[4] = i;
 			p->compound_type(TRGB);
 			p->channels(3);
 		}
-		if ( order[4] < 0 && *one == "Cyn" ) {
+		if ( order[4] < 0 && s == "Cyn" ) {
 			order[4] = i;
 			p->compound_type(TCMYK);
 			p->channels(4);
 		}
-		if ( order[5] < 0 && (*one)[0] == 'I' ) order[5] = i;
-		if ( order[5] < 0 && (*one)[0] == 'P' ) order[5] = i;
-		if ( order[5] < 0 && *one == "VY" ) order[5] = i;
-		if ( order[5] < 0 && *one == "Grn" ) order[5] = i;
-		if ( order[5] < 0 && *one == "Mag" ) order[5] = i;
-		if ( order[6] < 0 && (*one)[0] == 'P' ) order[6] = i;
-		if ( order[6] < 0 && *one == "VZ" ) order[6] = i;
-		if ( order[6] < 0 && *one == "Blu" ) order[6] = i;
-		if ( order[6] < 0 && *one == "Yel" ) order[6] = i;
-		if ( order[7] < 0 && (*one)[0] == 'P' ) order[7] = i;
-		if ( order[7] < 0 && *one == "Alf" ) {
+		if ( order[5] < 0 && s[0] == 'I' ) order[5] = i;
+		if ( order[5] < 0 && s[0] == 'P' ) order[5] = i;
+		if ( order[5] < 0 && s == "VY" ) order[5] = i;
+		if ( order[5] < 0 && s == "Grn" ) order[5] = i;
+		if ( order[5] < 0 && s == "Mag" ) order[5] = i;
+		if ( order[6] < 0 && s[0] == 'P' ) order[6] = i;
+		if ( order[6] < 0 && s == "VZ" ) order[6] = i;
+		if ( order[6] < 0 && s == "Blu" ) order[6] = i;
+		if ( order[6] < 0 && s == "Yel" ) order[6] = i;
+		if ( order[7] < 0 && s[0] == 'P' ) order[7] = i;
+		if ( order[7] < 0 && s == "Alf" ) {
 			order[7] = i;
 			p->compound_type(TRGBA);
 			p->channels(4);
 		}
-		if ( order[7] < 0 && *one == "blK" ) order[7] = i;
-		if ( order[8] < 0 && (*one)[0] == 'F' ) order[8] = i;
+		if ( order[7] < 0 && s == "blK" ) order[7] = i;
+		if ( order[8] < 0 && s[0] == 'F' ) order[8] = i;
 	}
 	
 	if ( verbose & VERB_DEBUG )
@@ -135,22 +125,19 @@ int 	readASCII(Bimage* p, int readdata)
 			order[3] << " " << order[4] << " " << order[5] << " " << order[6] << " " << order[7] << " " << order[8] << " (m=" << m << ")" << endl;
 	
 	// Pass once through the file to get the number of data points and extrema
+	vector<string>	vs;
 	i = 0;
  	while ( !fimg.eof() ) {
-		fimg.getline(aline, MAXLINELEN);
-		if ( sscanf(aline, "%lf %lf %lf %lf %lf %lf %lf %lf %lf", &v[0], &v[1], &v[2], 
-				&v[3], &v[4], &v[5], &v[6], &v[7], &v[8]) < m ) {
+		getline(fimg, s);
+		vs = split(s);
+		if ( vs.size() < m ) {
 			cout << "Missing data at line " << i << endl;
 		} else {
-			for ( j=0; j<9; j++ ) {
+			for ( j=0; j<m; ++j ) {
+				v[j] = to_real(vs[j]);
 				if ( min[j] > v[j] ) min[j] = v[j];
 				if ( max[j] < v[j] ) max[j] = v[j];
 			}
-/*			if ( verbose & VERB_DEBUG ) {
-				cout << "DEBUG readASCII: " << i;
-				for ( j=0; j<m; j++ ) cout << " " << v[j];
-				cout << endl;
-			}*/
 			i++;
 		}
 	}
@@ -221,16 +208,17 @@ int 	readASCII(Bimage* p, int readdata)
     fimg.open(p->file_name());
     if ( fimg.fail() ) return -1;
 
-	fimg.getline( aline, MAXLINELEN);	// Header labels
+	getline(fimg, s);	// Header labels
 
 	long			c(0), x(0), y(0), z(0), n(0);
 	i = 0;
 	while ( !fimg.eof() ) {
-		fimg.getline(aline, MAXLINELEN);
-		if ( sscanf(aline, "%lf %lf %lf %lf %lf %lf %lf %lf %lf", &v[0], &v[1], &v[2], 
-				&v[3], &v[4], &v[5], &v[6], &v[7], &v[8]) < m ) {
+		getline(fimg, s);
+		vs = split(s);
+		if ( vs.size() < m ) {
 			cout << "Missing data at line " << i << endl;
 		} else {
+			for ( j=0; j<m; ++j ) v[j] = to_real(vs[j]);
 			if ( order[0] > -1 ) x = (long) v[order[0]];
 			if ( order[1] > -1 ) y = (long) v[order[1]];
 			if ( order[2] > -1 ) z = (long) v[order[2]];
@@ -244,7 +232,6 @@ int 	readASCII(Bimage* p, int readdata)
 			i++;
 			if ( verbose & VERB_DEBUG ) {
 				cout << "DEBUG readASCII: " << i;
-				for ( j=0; j<m; j++ ) cout << " " << v[j];
 				for ( c=0, k=j*p->channels(); c<p->channels(); c++, k++ ) cout << " " << (*p)[k];
 				cout << endl;
 			}
@@ -255,8 +242,6 @@ int 	readASCII(Bimage* p, int readdata)
 		cout << "Data points read:               " << i << endl << endl;
 	
 	fimg.close();
-	
-	string_kill(label);
 	
 	return 0;
 }
@@ -284,70 +269,69 @@ int 	writeASCII(Bimage* p)
 	
 	long 			i(0), nlab(128);
 	long 			order[10] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
-	char			label[nlab];
-	for ( i=0; i<nlab; ++i ) label[i] = ' ';
+
+	string			label(nlab, ' ');
 	
 	// Get the data order and labels
 	i = 0;
 	if ( p->sizeX() > 1 ) {
 		order[0] = i;
-		label[10*i] = 'X';
-		if ( p->fourier_type() ) label[10*i] = 'H';
+		label.replace(10*i, 1, "X");
+		if ( p->fourier_type() ) label.replace(10*i, 1, "H");
 		i++;
 	}
 	if ( p->sizeY() > 1 ) {
 		order[1] = i;
-		label[10*i] = 'Y';
-		if ( p->fourier_type() ) label[10*i] = 'K';
+		label.replace(10*i, 1, "Y");
+		if ( p->fourier_type() ) label.replace(10*i, 1, "K");
 		i++;
 	}
 	if ( p->sizeZ() > 1 ) {
 		order[2] = i;
-		label[10*i] = 'Z';
-		if ( p->fourier_type() ) label[10*i] = 'L';
+		label.replace(10*i, 1, "Z");
+		if ( p->fourier_type() ) label.replace(10*i, 1, "L");
 		i++;
 	}
 	if ( p->images() > 1 ) {
 		order[3] = i;
-		strncpy(label + 10*i, "Nimage", 6);
+		label.replace(10*i, 6, "Nimage");
 		i++;
 	}
 	
 	switch ( p->compound_type() ) {
-		case TSimple: strncpy(label + 10*i, "Real", 4); i++; break;
-		case TComplex: strncpy(label + 10*i, "Real", 4); i++;
-			strncpy(label + 10*i, "Imag", 4); i++; break;
-		case TVector2: strncpy(label + 10*i, "VX", 4); i++;
-			strncpy(label + 10*i, "VY", 4); i++; break;
-		case TVector3: strncpy(label + 10*i, "VX", 4); i++;
-			strncpy(label + 10*i, "VY", 4); i++;
-			strncpy(label + 10*i, "VX", 4); i++; break;
-		case TView: strncpy(label + 10*i, "VX", 4); i++;
-			strncpy(label + 10*i, "VY", 4); i++;
-			strncpy(label + 10*i, "VX", 4); i++;
-			strncpy(label + 10*i, "Ang", 4); i++; break;
-		case TRGB: strncpy(label + 10*i, "Red", 4); i++;
-			strncpy(label + 10*i, "Grn", 4); i++;
-			strncpy(label + 10*i, "Blu", 4); i++; break;
-		case TRGBA: strncpy(label + 10*i, "Red", 4); i++;
-			strncpy(label + 10*i, "Grn", 4); i++;
-			strncpy(label + 10*i, "Blu", 4); i++;
-			strncpy(label + 10*i, "Alf", 4); i++; break;
-		case TCMYK: strncpy(label + 10*i, "Cyn", 4); i++;
-			strncpy(label + 10*i, "Mag", 4); i++;
-			strncpy(label + 10*i, "Yel", 4); i++;
-			strncpy(label + 10*i, "blK", 4); i++; break;
-		default: strncpy(label + 10*i, "Real", 4); i++; break;
+		case TSimple: label.replace(10*i, 4, "Real"); i++; break;
+		case TComplex: label.replace(10*i, 4, "Real"); i++;
+			label.replace(10*i, 4, "Imag"); i++; break;
+		case TVector2: label.replace(10*i, 2, "VX"); i++;
+			label.replace(10*i, 2, "VY"); i++; break;
+		case TVector3: label.replace(10*i, 2, "VX"); i++;
+			label.replace(10*i, 2, "VY"); i++;
+			label.replace(10*i, 2, "VZ"); i++; break;
+		case TView: label.replace(10*i, 2, "VX"); i++;
+			label.replace(10*i, 2, "VY"); i++;
+			label.replace(10*i, 2, "VZ"); i++;
+			label.replace(10*i, 3, "Ang"); i++; break;
+		case TRGB: label.replace(10*i, 3, "Red"); i++;
+			label.replace(10*i, 3, "Grn"); i++;
+			label.replace(10*i, 3, "Blu"); i++; break;
+		case TRGBA: label.replace(10*i, 3, "Red"); i++;
+			label.replace(10*i, 3, "Grn"); i++;
+			label.replace(10*i, 3, "Blu"); i++;
+			label.replace(10*i, 3, "Alf"); i++; break;
+		case TCMYK: label.replace(10*i, 3, "Cyn"); i++;
+			label.replace(10*i, 3, "Mag"); i++;
+			label.replace(10*i, 3, "Yel"); i++;
+			label.replace(10*i, 3, "blK"); i++; break;
+		default: label.replace(10*i, 4, "Real"); i++; break;
 	}
 
 	if ( p->next ) {
 		order[7] = i;
-		memcpy(label + 10*i, "FOM", 3);
+		label.replace(10*i, 3, "FOM");
 		i++;
 	}
-//	strncpy(label + 10*i, "\0", 1);
-	label[10*i] = 0;
-	
+	label.replace(10*i, 1, "\0");
+
 	if ( verbose & VERB_DEBUG ) {
 		cout << "DEBUG writeASCII: label: " << label << endl;
 		cout << "DEBUG writeASCII: order: " << order[0] << " " << order[1] << " " << order[2] << " " << 

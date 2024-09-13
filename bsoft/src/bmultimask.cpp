@@ -263,7 +263,7 @@ int 		main(int argc, char **argv)
 		Bmodel*		model = model_from_multilevel_mask(p);
 		if ( comprad ) models_process(model, comprad, model_set_component_radius);
 		if ( linkrad ) models_process(model, linkrad, model_set_link_radius);
-		write_model(mod_file, model);
+		write_model(mod_file.str(), model);
 		model_kill(model);
 	}
 
@@ -274,7 +274,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

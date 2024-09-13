@@ -1,9 +1,9 @@
 /**
 @file	Bimage_correlate.cpp
 @brief	Cross correlation functions
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19980805
-@date	Modified: 20200218
+@date	Modified: 20240215
 
 		Implemented using the FFTW library
 **/
@@ -454,6 +454,67 @@ Bimage* 	Bimage::cross_correlate(Bimage* p, double hires, double lores, Bimage* 
 }
 
 /**
+@brief 	Calculates a phase correlation map by Fast Fourier transformation.
+@param 	*p			second image.
+@param 	norm		normalization type: 0=power sum, 1=amplitude.
+@param 	hires		high resolution limit.
+@param 	lores		low resolution limit.
+@param 	phi_fac		phase factor to compensate for phase differences.
+@param 	*pmask		binary mask (only 0 and 1), NULL if not desired.
+@return Bimage* 	cross-correlation image.
+
+	FFTW library (www.fftw.org).
+	Two equally sized multi-image 1D, 2D and 3D real space data sets are
+	packed into a complex data set and transformed forward. The transform
+	is unpacked before the first transform is multiplied with the complex
+	conjugate of the second transform. This is then back-transformed to
+	obtain the phase correlation map in real space.
+	The low resolution limit can be 0, in which case no limits are applied.
+	The resultant phase correlation image data type is floating point.
+
+**/
+Bimage* 	Bimage::cross_correlate(Bimage* p, int norm, double hires, double lores, double phi_fac, Bimage* pmask)
+{
+	if ( lores > 0 && hires > lores ) swap(hires, lores);
+	
+	Bimage* 	pc = pack_two_in_complex(p);
+	if ( !pc ) return NULL;
+	
+	if ( verbose & VERB_FULL ) {
+		cout << "Cross correlation:" << endl;
+		if ( lores > 0 || hires > 0 ) {
+			cout << "Resolution range:               " << hires << " - ";
+			if ( lores > 0 ) cout << lores << " A" << endl;
+			else cout << "inf A" << endl;
+		} else
+			cout << "No resolution limits" << endl;
+		if ( phi_fac )
+			cout << "Phase factor:                   " << phi_fac << " A2" << endl;
+		if ( pmask )
+			cout << "With a mask:                    " << pmask->file_name() << endl;
+		cout << endl;
+	}
+	
+	pc->fft(FFTW_FORWARD, 0);
+	
+//	pc->set(0, Complex<double>(0,0));
+	
+	pc->combined_complex_product(norm, hires, lores, phi_fac, pmask);
+	
+	pc->fft(FFTW_BACKWARD, 0);
+	
+	pc->complex_to_real();
+
+	long		nn;
+	for ( nn=0; nn<pc->images(); nn++ )
+		pc->image[nn].origin(p->image[nn].origin() - image[nn].origin());
+	
+//	write_img("pcc.mrc", pc, 0);
+	
+	return pc;
+}
+
+/**
 @brief 	Calculates a coefficient from a Fourier correlation transform given a shift.
 @param 	shift		real space shift.
 @return double	 	correlation coefficient.
@@ -628,10 +689,55 @@ Bimage* 	Bimage::cross_correlate(Bimage* p, double hires, double lores,
 	pc->complex_to_real();	
 	
 	if ( pc->image->maximum() > 1 ) {
-		cerr << "Error in cross_correlate: maximum > 1: " << image->maximum() << endl;
+		cerr << "Error in Bimage::cross_correlate: maximum > 1: " << pc->image->maximum() << endl;
 		bexit(-1);
 	}
 
+	long		nn;
+	for ( nn=0; nn<pc->images(); nn++ )
+		pc->image[nn].origin(p->image[nn].origin() - image[nn].origin());
+	
+///	write_img("pccp.mrc", pc, 0);
+	
+	return pc;
+}
+
+Bimage* 	Bimage::cross_correlate(Bimage* p, int norm, double hires, double lores, double phi_fac,
+				Bimage* pmask, fft_plan planf, fft_plan planb)
+{
+	if ( lores > 0 && hires > lores ) swap(hires, lores);
+	
+	Bimage* 	pc = pack_two_in_complex(p);
+	if ( !pc ) return NULL;
+	
+	if ( verbose & VERB_FULL ) {
+		cout << "Cross-correlation:" << endl;
+		if ( lores > 0 || hires > 0 ) {
+			cout << "Resolution range:               " << hires << " - ";
+			if ( lores > 0 ) cout << lores << " A" << endl;
+			else cout << "inf A" << endl;
+		} else
+			cout << "No resolution limits" << endl;
+		if ( pmask )
+			cout << "With a mask:                    " << pmask->file_name() << endl;
+		cout << endl;
+	}
+	
+	pc->fft(planf, 0);
+
+//	pc->set(0, Complex<double>(0,0));
+
+	pc->combined_complex_product(norm, hires, lores, phi_fac, pmask);
+	
+	pc->fft(planb, 0);
+	
+	pc->complex_to_real();	
+/*
+	if ( pc->image->maximum() > 1 ) {
+		cerr << "Error in Bimage::cross_correlate: maximum > 1: " << pc->image->maximum() << endl;
+		bexit(-1);
+	}
+*/
 	long		nn;
 	for ( nn=0; nn<pc->images(); nn++ )
 		pc->image[nn].origin(p->image[nn].origin() - image[nn].origin());
@@ -696,7 +802,7 @@ Bimage* 	Bimage::cross_correlate_two_way(Bimage* p, double hires,
 
 	Bimage* 	pc1 = pc->copy();
 
-	pc->complex_conjugate_product(pc2);
+	pc->complex_conjugate_product(pc2, 1);
 	pc1->complex_product(pc2);
 	
 //	write_img("pc.map", pc, 0);
@@ -800,7 +906,7 @@ Bimage* 	Bimage::cross_correlate_validate(Bimage* p, Bimage* pmask)
 	a set of high-scoring fits.
 	The views must be calculated externally to allow for custom sets.
 **/
-Vector3<double>	Bimage::rotate_cross_correlate(Bimage* pref, View view,
+Vector3<double>	Bimage::rotate_cross_correlate(Bimage* pref, View2<double>& view,
 				double hires, double lores, double search_radius, Bimage* pmask, 
 				double& cc, fft_plan planf, fft_plan planb)
 {
@@ -1128,6 +1234,76 @@ Vector3<double>	Bimage::find_shift(Bimage* pref, Bimage* pmask, double hires,
 }
 
 /**
+@brief 	Calculates a phase-correlation map to find the shift for the pair of images.
+@param 	*pref		reference image.
+@param 	*pmask		binary mask (only 0 and 1).
+@param 	norm		normalization type: 0=power sum, 1=amplitude.
+@param 	hires		high resolution limit.
+@param 	lores		low resolution limit.
+@param 	phi_fac		phase factor to compensate for phase differences.
+@param 	radius		search radius (if < 1, default 1e30).
+@param 	sigma		attenuation around radius.
+@param 	refine_flag set to refine shift to subpixel resolution.
+@param 	planf		forward Fourier transform plan.
+@param 	planb		backward Fourier transform plan.
+@param 	&cc			correlation coefficient
+@return Vector3<double>	shift.
+
+	FFTW library (www.fftw.org).
+	Two equally sized multi-image 1D, 2D and 3D data sets are transformed 
+	forward, the first transform multiplied by the complex conjugate of
+	the second transform, followed by backward transformation and 
+	rescaling by 1/(N*N). Data beyond the resolution set in the first 
+	image structure are not used. Therefore the correct setting 
+	of units and resolution in the image are required. Defaults for the 
+	units are usually 1 Angstrom/voxel and a zero resolution would
+	include the whole image (i.e., no resolution limitation).
+	A shift vector for each pair of images is calculated to
+	determine the cross-correlation peak to sub-pixel resolution.
+	Note: The first image is the reference and the shift returned is to
+		transform the second to fit the first.
+
+	Only the first sub-image shift is calculated.
+
+**/
+Vector3<double>	Bimage::find_shift(Bimage* pref, Bimage* pmask, int norm,
+				double hires, double lores, double phi_fac, double radius, double sigma, int refine_flag,
+				fft_plan planf, fft_plan planb, double& cc)
+{
+	if ( verbose & VERB_FULL ) {
+		if ( refine_flag )
+			cout << "Finding shift by phase-correlation and polynomial fitting" << endl << endl;
+		else
+			cout << "Finding shift by phase-correlation" << endl << endl;
+	}
+	
+	Vector3<double>	shift;
+	
+	Bimage* 		pc = cross_correlate(pref, norm, hires, lores, phi_fac, pmask, planf, planb);
+	if ( !pc ) return shift;
+	
+	if ( verbose & VERB_DEBUG )
+		write_img("cc.map", pc, 0);
+	
+	pc->find_peak(radius, sigma);
+
+	if ( refine_flag ) pc->refine_peak();
+	
+	shift = pc->image->origin();
+	
+	cc = pc->image->FOM();
+/*
+	if ( cc > 1 ) {
+		cerr << "Error in find_shift: cc > 1: " << cc << endl;
+		bexit(-1);
+	}
+*/
+	delete pc;
+	
+	return shift;
+}
+
+/**
 @brief 	Calculates a cross-correlation map to find the shift for the pair of images.
 @param 	nn			sub-image to align.
 @param 	*pref		reference image.
@@ -1409,10 +1585,10 @@ int			Bimage::find_peak(double radius, double sigma)
 			cout << "DEBUG Bimage::find_peak: peak=" << peak << endl;
 			cout << "DEBUG Bimage::find_peak: maxval=" << maxval << endl;
 		}
-		if ( maxval > 1 ) {
-			cerr << "Error in find_peak: maxval > 1: " << maxval << endl;
-			bexit(-1);
-		}
+//		if ( maxval > 1 ) {
+//			cerr << "Error in find_peak: maxval > 1: " << maxval << endl;
+//			bexit(-1);
+//		}
 		if ( verbose & VERB_FULL )
 			cout << nn+1 << tab << image[nn].origin() << tab << image[nn].FOM() << endl;
     }
@@ -1607,11 +1783,13 @@ int			Bimage::refine_peak_new()
 
 /**
 @brief 	Refines the position of a peak to sub-voxel resolution.
-@return int 		error code.
+@return int 				error code.
 
 	The sub-voxel resolution peak in the vicinity of a voxel is defined 
 	by fitting a 2D/3D second order function around the voxel.
 	(typically used to find the shift vector in a cross-correlation map).
+	
+	The image origin is modified to reflect the shift in pixels.
 
 **/
 int			Bimage::refine_peak()
@@ -1716,6 +1894,129 @@ int			Bimage::refine_peak()
 		if ( fabs(shift[1] - int_shift[1]) > 2 ) shift[1] = image[nn].origin()[1];
 		if ( fabs(shift[2] - int_shift[2]) > 2 ) shift[2] = image[nn].origin()[2];
 		shift = vector3_origin_to_shift(shift, size());
+		image[nn].origin(shift);
+		if ( verbose & VERB_FULL )
+			cout << n+1 << tab << shift << endl;
+	}
+	if ( verbose & VERB_FULL ) cout << endl;
+
+	return 0;
+}
+
+/**
+@brief 	Refines the position of a peak to sub-voxel resolution.
+@param	kernel_size		edge length of kernel.
+@return int 				error code.
+
+	The sub-voxel resolution peak in the vicinity of a voxel is defined
+	by fitting a 2D/3D second order function around the voxel.
+	(typically used to find the shift vector in a cross-correlation map).
+
+	The image origin is modified to reflect the peak position in pixels.
+
+**/
+int			Bimage::refine_peak(long kernel_size)
+{
+	if ( !d.uc ) return -1;
+	
+	change_type(Float);
+	
+	long			i, j, nn, nterm(7);
+	long			xx, yy, zz, xlo, xhi, ylo, yhi, zlo, zhi, ix, iy, iz;
+	Vector3<long>	int_shift;
+	Vector3<double>	shift;
+	Matrix			a(nterm,nterm);
+	vector<double>	b(nterm);
+	vector<double>	vec(nterm);
+
+	if ( verbose & VERB_FULL ) {
+	    cout << "Finding the shift in each image" << endl;
+		cout << "n\tx\ty\tz\tv" << endl;
+	}
+	
+	for ( nn=0; nn<n; nn++ ) {
+		shift = image[nn].origin();
+		int_shift[0] = (long) shift[0];
+		int_shift[1] = (long) shift[1];
+		int_shift[2] = (long) shift[2];
+		xlo = (long) (shift[0] - kernel_size);
+		xhi = (long) (shift[0] + kernel_size);
+		if ( xhi - xlo >= x ) {
+			xlo = 0;
+			xhi = x - 1;
+		}
+		ylo = (long) (shift[1] - kernel_size);
+		yhi = (long) (shift[1] + kernel_size);
+		if ( yhi - ylo >= y ) {
+			ylo = 0;
+			yhi = y - 1;
+		}
+		zlo = (long) (shift[2] - kernel_size);
+		zhi = (long) (shift[2] + kernel_size);
+		if ( zhi - zlo >= z ) {
+			zlo = 0;
+			zhi = z - 1;
+		}
+		if ( verbose & VERB_DEBUG )
+			cout << "DEBUG Bimage::refine_peak: kernel limits = " <<
+					xlo << tab << xhi << tab << ylo << tab << yhi << tab << zlo << tab << zhi << endl;
+		for ( i=0; i<nterm; i++ ) {	// Clear the matrix and vector
+			for ( j=0; j<nterm; j++ ) a[i][j] = 0;
+			b[i] = 0;
+		}
+		vec[0] = 1;
+		for ( zz=zlo; zz<=zhi; zz++ ) {
+			iz = zz;
+			if ( iz < 0 ) iz += z;
+			if ( iz >= (long)z ) iz -= z;
+			vec[3] = zz;
+			vec[6] = zz*zz;
+			for ( yy=ylo; yy<=yhi; yy++ ) {
+				iy = yy;
+				if ( iy < 0 ) iy += y;
+				if ( iy >= (long)y ) iy -= y;
+				vec[2] = yy;
+				vec[5] = yy*yy;
+				for ( xx=xlo; xx<=xhi; xx++ ) {
+					ix = xx;
+					if ( ix < 0 ) ix += x;
+					if ( ix >= (long)x ) ix -= x;
+					i = index(0,ix,iy,iz,nn);
+					vec[1] = xx;
+					vec[4] = xx*xx;
+					if ( !isfinite((*this)[i]) ) {
+						error_show("Error in Bimage::refine_peak", __FILE__, __LINE__);
+						cerr << ix << " " << iy << " " << iz << " " << (*this)[i] << endl;
+						return -9;
+					}
+					for ( j=0; j<nterm; j++ ) b[j] += vec[j]*(*this)[i];
+					for ( i=0; i<nterm; i++ )
+						for ( j=0; j<=i; j++ ) a[i][j] += vec[i]*vec[j];
+				}
+			}
+		}
+		for ( i=0; i<nterm-1; i++ )
+			for ( j=i+1; j<nterm; j++ ) a[i][j] = a[j][i];
+		for ( i=0; i<nterm; i++ )
+			if ( fabs(a[i][i]) < 1e-37 ) a[i][i] = 1;
+		if ( verbose & VERB_DEBUG ) {
+			cout << "DEBUG Bimage::refine_peak: Input matrix:" << endl;
+			cout << a;
+			cout << "DEBUG Bimage::refine_peak: Input vector:";
+			for ( i=0; i<nterm; i++ ) cout << tab << b[i];
+			cout << endl;
+		}
+		a.LU_decomposition(b);
+		if ( verbose & VERB_DEBUG )
+			cout << "DEBUG Bimage::refine_peak: Coefficients: " <<
+				b[0] << tab << b[1] << tab << b[2] << tab << b[3] << tab << b[4] << tab << b[5] << tab << b[6] << endl;
+		if ( b[4] ) shift[0] = -0.5*b[1]/b[4];
+		if ( b[5] ) shift[1] = -0.5*b[2]/b[5];
+		if ( b[6] ) shift[2] = -0.5*b[3]/b[6];
+		if ( fabs(shift[0] - int_shift[0]) > 2 ) shift[0] = image[nn].origin()[0];
+		if ( fabs(shift[1] - int_shift[1]) > 2 ) shift[1] = image[nn].origin()[1];
+		if ( fabs(shift[2] - int_shift[2]) > 2 ) shift[2] = image[nn].origin()[2];
+//		shift = vector3_origin_to_shift(shift, size());
 		image[nn].origin(shift);
 		if ( verbose & VERB_FULL )
 			cout << n+1 << tab << shift << endl;

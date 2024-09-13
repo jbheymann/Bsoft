@@ -9,7 +9,6 @@
 #include "ctf.h"
 #include "symmetry.h"
 #include "marker.h"
-#include "View.h"
 #include "Euler.h"
 #include "Bstring.h"
 

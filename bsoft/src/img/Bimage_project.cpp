@@ -1,14 +1,14 @@
 /**
 @file	Bimage_project.cpp
 @brief	Functions for projections
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20190207
+@date	Modified: 20240904
 **/
 
 #include "Bimage.h"
-#include "linked_list.h"
 #include "symmetry.h"
+#include "ctf.h"
 #include "Complex.h"
 #include "Matrix3.h"
 #include "utilities.h"
@@ -19,7 +19,7 @@ extern int 	verbose;		// Level of output to the screen
 /**
 @brief 	Projects a 3D image to a 2D image down one of the three major axes.
 @param 	axis		axis of projection.
-@param 	flags		1=scale projection, 2=minimum, 4=maximum.
+@param 	flags		0=scale, 1=sum, 2=minimum, 3=maximum.
 @return Bimage*		projection image (floating point).
 
 	The sums of the z-planes are accumulated into a new floating point data 
@@ -30,9 +30,6 @@ extern int 	verbose;		// Level of output to the screen
 **/
 Bimage*		Bimage::project(char axis, int flags)
 {
-	bool				scale_flag(flags & 1);
-	bool				mnproj(flags & 2);
-	bool				mxproj(flags & 4);
     long				i, j, xx, yy, zz, cc, nn;
 	double				v, scale;
 	Vector3<double>		u(image->sampling());
@@ -54,8 +51,8 @@ Bimage*		Bimage::project(char axis, int flags)
 	
     long			   ds(n*x*y*c);
     
-    if ( mxproj ) proj->fill(min);
-    else if ( mnproj ) proj->fill(max);
+    if ( flags==3 ) proj->fill(min);
+    else if ( flags==2 ) proj->fill(max);
 	
 	if ( verbose & VERB_LABEL )
     	cout << "Projecting along " << axis <<  " (" << flags << ")" << endl << endl;
@@ -80,9 +77,9 @@ Bimage*		Bimage::project(char axis, int flags)
 						else
 							j = ((nn*y + yy)*x + xx)*c + cc;
 						v = (*this)[i];
-						if ( mxproj ) {
+						if ( flags==3 ) {
 							if ( (*proj)[j] < v ) proj->set(j, v);
-						} else if ( mnproj ) {
+						} else if ( flags==2 ) {
 							if ( (*proj)[j] > v ) proj->set(j, v);
 						} else {
 							proj->add(j, v);
@@ -90,7 +87,7 @@ Bimage*		Bimage::project(char axis, int flags)
 					}
 	}
 	
-	if ( scale_flag ) for ( i=0; i<ds; i++ ) proj->set(i, (*proj)[i] * scale);
+	if ( flags==0 ) for ( i=0; i<ds; i++ ) proj->set(i, (*proj)[i] * scale);
 	
 	proj->statistics();
 	
@@ -116,7 +113,7 @@ Bimage*		Bimage::project(char axis, int flags)
 
 **/
 Bimage*		Bimage::rotate_project(Matrix3 mat, Vector3<double> translate,
-					double radial_cutoff, int norm_flag)
+					double radial_cutoff, bool norm_flag)
 {
 	long			i, j, xx, yy, zz;
 	long			xo, yo, xp, yp, yw;
@@ -197,33 +194,27 @@ Bimage*		Bimage::rotate_project(Matrix3 mat, Vector3<double> translate,
 
 /**
 @brief 	Calculates a set of projections from a 3D density map.
-@param 	*view			linked list of views.
+@param 	&views			linked list of views.
 @param	norm_flag		flag to normalize projection.
-@return Bimage* 		projections as sub-images.
+@return Bimage* 			projections as sub-images.
 
 	A set of projections is calculated according to a list of views.
 
 **/
-Bimage* 	Bimage::project(View* view, int norm_flag)
+Bimage* 	Bimage::project(vector<View2<double>>& views, bool norm_flag)
 {
-	if ( !view ) {
+	if ( views.size() < 1 ) {
 		error_show("Error in Bimage::project: No views defined for projection!", __FILE__, __LINE__);
 		return NULL;
 	}
 	
 	calculate_background();
 	
-	long			i;
 	Vector3<double>	translate;
 
-	long			nviews = count_list((char *)view);
+	long			nviews(views.size());
 	Vector3<double>	u(image->sampling());
 	u[2] = 1;
-	
-	View*			vlist = new View[nviews];
-	View*			v;
-	
-	for ( v=view, i=0; v; v = v->next, i++ ) vlist[i] = *v;
 	
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Calculating projections:" << endl;
@@ -238,13 +229,13 @@ Bimage* 	Bimage::project(View* view, int norm_flag)
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t i){
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
-		Bimage*	one_proj = rotate_project(mat, translate, x/2.0, norm_flag);
+		Matrix3		mat = views[i].matrix();
+		Bimage*		one_proj = rotate_project(mat, translate, x/2.0, norm_flag);
 		one_proj->shift_background(0);
 		proj->replace(i, one_proj);
 		proj->origin(i, one_proj->image->origin());
 		proj->sampling(i, u);
-		proj->image[i].view(vlist[i]);
+		proj->image[i].view(views[i]);
 		delete one_proj;
 	});
 #else
@@ -252,19 +243,17 @@ Bimage* 	Bimage::project(View* view, int norm_flag)
 	for ( long i=0; i<nviews; i++ ) {
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
-		Bimage*	one_proj = rotate_project(mat, translate, x/2.0, norm_flag);
+		Matrix3		mat = views[i].matrix();
+		Bimage*		one_proj = rotate_project(mat, translate, x/2.0, norm_flag);
 		one_proj->shift_background(0);
 		proj->replace(i, one_proj);
 		proj->origin(i, one_proj->image->origin());
 		proj->sampling(i, u);
-		proj->image[i].view(vlist[i]);
+		proj->image[i].view(views[i]);
 		delete one_proj;
 	}
 #endif
 
-	delete[] vlist;
-	
 	proj->statistics();
 	
 //	cout << proj->meta_data() < endl;
@@ -272,11 +261,13 @@ Bimage* 	Bimage::project(View* view, int norm_flag)
 	return proj;
 }
 
+
 /**
 @brief 	Calculates a central section of a 3D fourier transform.
 @param 	mat				3x3 rotation or skewing matrix.
 @param 	resolution		high resolution limit.
 @param 	*kernel			frequency space interpolation kernel.
+@param 	wavelength		for Ewald sphere projection, default zero, ± for front or back curvature.
 @return Bimage*			new 2D central section.
 
 	The orientation of the central section is defined by a rotation matrix
@@ -284,20 +275,24 @@ Bimage* 	Bimage::project(View* view, int norm_flag)
 	The rotation origin is obtained from the map origin.
 
 **/
-Bimage*		Bimage::central_section(Matrix3 mat, double resolution, FSI_Kernel* kernel)
+Bimage*		Bimage::central_section(Matrix3 mat, double resolution, FSI_Kernel* kernel, double wavelength)
 {
 	if ( image->sampling()[0] < 1e-10 ) sampling(1,1,1);
 	if ( resolution < 1e-10 ) resolution = image->sampling()[0];
 	
 	long		 	i, xx, yy;
 	long			hx((x - 1)/2), hy((y - 1)/2);
+	Vector3<double>	inv_scale(1.0/real_size());
 	Vector3<double>	m, iv;
-	double			maxrad(real_size()[0]/resolution), maxrad2(maxrad*maxrad), rx2, ry2;
-	double			zscale(z*1.0L/x);
+	double			maxs2(1.0/(resolution*resolution));
+	double			sx2, sy2, s2;
+	double			d2(wavelength/2.0);
 
 	if ( verbose & VERB_FULL ) {
 		cout << "Calculating a central section:" << endl;
-		cout << "Resolution limit:               " << resolution << " A (" << maxrad << ")" << endl;
+		cout << "Resolution limit:               " << resolution << " A "<< endl;
+		if ( wavelength )
+			cout << "Ewald sphere for wavelength: " << wavelength << " A" << endl;
 		cout << mat << endl << endl;
 	}
 
@@ -310,14 +305,18 @@ Bimage*		Bimage::central_section(Matrix3 mat, double resolution, FSI_Kernel* ker
 	for ( i=yy=0; yy<y; yy++ ) {
 		iv[1] = yy;
 		if ( iv[1] > hy ) iv[1] -= y;
-		ry2 = iv[1]*iv[1];
+		iv[1] *= inv_scale[1];
+		sy2 = iv[1]*iv[1];
 		for ( xx=0; xx<x; xx++, i++ ) {
 			iv[0] = xx;
 			if ( iv[0] > hx ) iv[0] -= x;
-			rx2 = iv[0]*iv[0];
-			if ( rx2 + ry2 <= maxrad2 ) {
+			iv[0] *= inv_scale[0];
+			sx2 = iv[0]*iv[0];
+			s2 = sx2 + sy2;
+			if ( s2 <= maxs2 ) {
+				if ( wavelength ) iv[2] = d2*s2;
 				m = mat * iv;
-				m[2] *= zscale;
+				m *= real_size();
 				proj->set(i, fspace_interpolate(0, m, kernel));
 			}
 		}
@@ -330,42 +329,61 @@ Bimage*		Bimage::central_section(Matrix3 mat, double resolution, FSI_Kernel* ker
 
 /**
 @brief 	Calculates a set of projections as central sections from a 3D fourier transform.
-@param 	*view			linked list of views.
+@param 	&views			linked list of views.
 @param 	resolution		high resolution limit.
 @param 	*kernel			frequency space interpolation kernel.
-@return Bimage* 		projections as sub-images.
+@param 	volt			acceleration voltage (V) for Ewald sphere projection, default zero, ± for front or back curvature.
+@param 	ewald_flag		0=central section, 1=upper, -1=lower, 2=combine.
+@param	back			flag to backtransform the projections.
+@param	conv			conversion type.
+@return Bimage* 			projections as sub-images.
 
 	The map is Fourier transformed and shifted to its phase origin.
-	For each view, a central section is calculated using reciprocal space interpolation.
-	All the projections are phase shifted to a central origin and back-transformed.
+	For each view, a central section or Ewald sphere projection is calculated using reciprocal space interpolation.
+	All the projections are phase shifted to a central origin.
+	The projections may be back-transformed to real space as specified by the back flag.
+	The image is converted as specified by the conversion flag:
+		0	no conversion.
+		1	real.
+		2	imaginary.
+		3	amplitude.
+		4	intensity.
 
 **/
-Bimage*     Bimage::project(View* view, double resolution, FSI_Kernel* kernel)
+Bimage*     Bimage::project(vector<View2<double>>& views, double resolution, FSI_Kernel* kernel,
+				double volt, int ewald_flag, bool back, ComplexConversion conv)
 {
-	if ( !view ) {
+	if ( views.size() < 1 ) {
 		error_show("Error in Bimage::project: No views defined for projection!", __FILE__, __LINE__);
 		return NULL;
 	}
-	
+
+	if ( resolution < 1e-10 ) resolution = image->sampling()[0];
+
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG Bimage::project: transforming and shifting origin" << endl;
 	
-	fft();
+	fft(FFTW_FORWARD, 1);
 
 	phase_shift_to_origin();
 
 //	friedel_check();
 	
-	long			i;
-	long			nviews = count_list((char *)view);
-	View*			vlist = new View[nviews];
-	View*			v;
-	
-	for ( v=view, i=0; v; v = v->next, i++ ) vlist[i] = *v;
+	long			nviews(views.size());
+	double			wavelength(0);
+	if ( ewald_flag ) {
+		wavelength = electron_wavelength(volt);
+		if ( ewald_flag < 0 ) wavelength = -wavelength;
+	}
 		
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Calculating projections:" << endl;
 		cout << "Number of projections:          " << nviews << endl;
+		cout << "Resolution:                     " << resolution << " A" << endl;
+		cout << "Wavelength:                     " << wavelength << " A" << endl;
+		if ( ewald_flag )
+			cout << "Ewald flag:                     " << ewald_flag << endl;
+		cout << "Back transform flag:            " << back << endl;
 	}
 
 	Bimage*			proj = new Bimage(Float, TComplex, x, y, 1, nviews);
@@ -379,11 +397,11 @@ Bimage*     Bimage::project(View* view, double resolution, FSI_Kernel* kernel)
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t i){
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
-		Bimage*	psec = central_section(mat, resolution, kernel);
+		Matrix3	mat = views[i].matrix();
+		Bimage*	psec = central_section(mat, resolution, kernel, wavelength);
 		psec->phase_shift_to_center();
 		proj->replace(i, psec);
-		proj->image[i].view(vlist[i]);
+		proj->image[i].view(views[i]);
 		delete psec;
 	});
 #else
@@ -391,23 +409,31 @@ Bimage*     Bimage::project(View* view, double resolution, FSI_Kernel* kernel)
 	for ( long i=0; i<nviews; i++ ) {
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
-		Bimage*	psec = central_section(mat, resolution, kernel);
+		Matrix3	mat = views[i].matrix();
+		Bimage*	psec = central_section(mat, resolution, kernel, wavelength);
 		psec->phase_shift_to_center();
 		proj->replace(i, psec);
-		proj->image[i].view(vlist[i]);
+		proj->image[i].view(views[i]);
 		delete psec;
 	}
 #endif
 
-	delete[] vlist;
-	
 //	for ( i=0; i<proj->images(); i++ ) cout << proj->image[i].origin() << endl;
+
+	if ( volt ) {
+		double		scale(1e-10*TWOPI*ECHARGE/(PLANCK*LIGHTSPEED*beta(fabs(volt))));
+//		scale /= proj->real_size().volume();
+		scale /= sqrt(proj->sizeX()*proj->sizeY());
+		proj->multiply(scale);
+	}
+	
+	if ( ewald_flag == 2 ) proj->combine_ewald();
+	if ( ewald_flag == 3 ) proj->append_opposite_ewald();
 
 	proj->friedel_check();
 	
-    proj->fft_back();
-	
+	if ( back ) proj->fft(FFTW_BACKWARD, 0, conv);
+
 	proj->statistics();
 	
 	return proj;
@@ -474,6 +500,204 @@ int 		Bimage::back_project(Bimage* p, double resolution, double axis,
 				add(i, p->interpolate(oldcoor, 0, fill));
 			}
 		}
+	}
+	
+	return 0;
+}
+
+
+/**
+@brief 	Imposes an Ewald sphere weighting on a 3D frequency space volume.
+@param	volt			acceleration voltage (angstrom).
+@param	t				thickness.
+@return int				0.
+
+	The map is Fourier transformed and shifted to its phase origin.
+	A propagation image is calculated from the propagation function
+	over the thickness and it is Fourier transformed in the z direction.
+	The input image is then multiplied with the transformed propagation image.
+
+**/
+int			Bimage::ewald_sphere(double volt, double t)
+{
+	double			wl = electron_wavelength(volt);
+	double			dz = image->sampling()[2];
+	
+	if ( t < 1 || t > dz*z ) t = dz*z;
+	
+	fft(FFTW_FORWARD, 1);
+
+	phase_shift_to_origin();
+
+	bool			use;
+	long			i, xx, yy, zz;
+	double			u, v, w, s2, fac, phi;
+	Vector3<long>	h(size()/2);
+	Vector3<double>	fscale(1.0/real_size());
+	
+	if ( verbose ) {
+		cout << "Imposing Ewald spheres:" << endl;
+		cout << "Acceleration voltage:           " << volt << " V" << endl;
+		cout << "Wavelength:                     " << wl << " A" << endl;
+		cout << "Thickness:                      " << t << " A" << endl << endl;
+	}
+	
+	Bimage*			prop = new Bimage(Float, TComplex, x, y, z, 1);
+	
+	for ( i=zz=0; zz<z; ++zz ) {
+		w = (zz < h[2])? zz: zz-z;
+		w *= dz;
+		if ( fabs(w) <= t/2 ) use = 1;
+		else use = 0;
+		fac = M_PI*wl*w;
+		for ( yy=0; yy<y; ++yy ) {
+			v = (yy < h[1])? yy: yy-y;
+			v *= fscale[1];
+			for ( xx=0; xx<x; ++xx, ++i ) {
+				u = (xx < h[0])? xx: xx-x;
+				u *= fscale[0];
+				s2 = u*u + v*v;
+				phi = fac*s2;
+				if ( use ) prop->set(i, Complex<float>(cosl(phi), sinl(phi)));
+			}
+		}
+	}
+
+	prop->fftz(FFTW_FORWARD, 2);
+	
+	complex_product(prop);
+
+	delete prop;
+
+	return 0;
+}
+
+
+
+/**
+@brief 	Converts to the opposite Ewald sphere encoded in a 2D complex image.
+@return int 		0.
+
+	The input is the Ewald sphere flattened into a 2D image.
+	F(k) = F'(-k)
+
+**/
+int			Bimage::opposite_ewald()
+{
+	if ( compoundtype != TComplex ) {
+		error_show("Error in Bimage::opposite_ewald: Image must be complex!", __FILE__, __LINE__);
+		return -1;
+	}
+	
+	if ( verbose )
+		cout << "Converting to the opposite Ewald sphere" << endl << endl;
+	
+	long			i, j, nn, xx, yy, zz(0), xf, yf;
+	Complex<double>	v1, v2;
+
+	for ( nn=0; nn<n; nn++ ) {
+			for ( yy=0; yy<y; ++yy ) {
+				yf = (yy)? y - yy: 0;
+				for ( xx=0; xx<(x+1)/2; ++xx ) {
+					if ( xx > 0 || yy<(y+1)/2 ) {
+						xf = (xx)? x - xx: 0;
+						i = index(xx, yy, zz, nn);
+						j = index(xf, yf, zz, nn);
+						v1 = complex(j).conj();
+						v2 = complex(i).conj();
+						set(i, v1);
+						set(j, v2);
+					}
+				}
+			}
+	}
+		
+	return 0;
+}
+
+/**
+@brief 	Converts to the opposite Ewald sphere encoded in a 2D complex image.
+@return Bimage*		Opposite Ewald sphere.
+
+	The input is the Ewald sphere flattened into a 2D image.
+	F(k) = F'(-k)
+	The opposite Ewald sphere is added to the image list and returned.
+
+**/
+Bimage*		Bimage::append_opposite_ewald()
+{
+	Bimage*		p2 = next = copy();
+	p2->opposite_ewald();
+	return p2;
+}
+
+/**
+@brief 	Combines the front and back Ewald spheres encoded in a 2D complex image.
+@return int 		0.
+
+	The input is the Ewald sphere flattened into a 2D image.
+	F(k) += F'(-k)
+
+**/
+int			Bimage::combine_ewald()
+{
+	if ( compoundtype != TComplex ) {
+		error_show("Error in Bimage::combine_ewald: Image must be complex!", __FILE__, __LINE__);
+		return -1;
+	}
+	
+	if ( verbose )
+		cout << "Combining Ewald spheres" << endl << endl;
+	
+	long			i, j, nn, xx, yy, zz(0), xf, yf;
+	Complex<double>	v;
+
+	for ( nn=0; nn<n; nn++ ) {
+			for ( yy=0; yy<y; ++yy ) {
+				yf = (yy)? y - yy: 0;
+				for ( xx=0; xx<(x+1)/2; ++xx ) {
+					if ( xx > 0 || yy<(y+1)/2 ) {
+						xf = (xx)? x - xx: 0;
+						i = index(xx, yy, zz, nn);
+						j = index(xf, yf, zz, nn);
+						v = complex(i) + complex(j).conj();
+						set(i, v);
+						set(j, v.conj());
+					}
+				}
+			}
+	}
+		
+	return 0;
+}
+
+/**
+@brief 	Calculates the phase grating approximation from the atomic potential.
+@param 	volt			acceleration voltage (volt).
+@return int 			0.
+
+	All calculations are complex.
+
+**/
+int			Bimage::phase_grating(double volt)
+{
+	simple_to_complex();
+	
+	long   			i, ds(x*y*z*n);
+	double			arg;
+
+	double			sigma = -1e-10*TWOPI*ECHARGE/(PLANCK*LIGHTSPEED*beta(volt));
+	
+//	if ( verbose & VERB_FULL )
+	if ( verbose ) {
+		cout << "Calculating a phase grating:" << endl;
+		cout << "Acceleration voltage:           " << volt << endl;
+		cout << "Sigma (interaction factor):     " << sigma << endl << endl;
+	}
+
+	for ( i=0; i<ds; ++i ) {
+		arg = sigma*(complex(i)).real();
+		set(i, Complex<double>(cos(arg), sin(arg)));
 	}
 	
 	return 0;

@@ -52,7 +52,7 @@ int 		main(int argc, char **argv)
 	double			helix_rise(0);			// Rise per asymmetric unit
 	double			helix_angle(0);			// Rotation angle per asymmetric unit
     Bstring    		atom_select("ALL");
-	View			ref_view;				// Reference view for symmetry application
+	View2<double>	ref_view;				// Reference view for symmetry application
 	Bstring			paramfile;				// Use default parameter file
 	
 	int				optind;
@@ -125,7 +125,7 @@ int 		main(int argc, char **argv)
 
 	molgroup_kill(molgroup);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

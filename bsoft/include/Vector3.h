@@ -226,6 +226,9 @@ public:
 	}
 	double	distance(const Vector3& v) { return (*this - v).length(); }
 	double	distance2(const Vector3& v) { return (*this - v).length2(); }
+	double	distance_along_vector(Vector3 v) {
+		return fabs(scalar(v)/v.length());
+	}
 	double	distance_from_line2(Vector3 v1, Vector3 v2) {
 		Vector3		v1d(*this - v1);
 		Vector3		v2d(*this - v2);
@@ -306,10 +309,11 @@ public:
 		for ( int i=0; i<3; i++ ) e += isfinite(data[i]);
 		return ( e != 3 );
 	}
-	bool within(Vector3& v1, Vector3& v2) {
+	template <typename T1, typename T2>
+	bool within(Vector3<T1>& v1, Vector3<T2>& v2) {
 		int			i, e(0);
-		for ( i=0; i<3; i++ ) e += (data[i] >= v1.data[i]);
-		for ( i=0; i<3; i++ ) e += (data[i] <= v2.data[i]);
+		for ( i=0; i<3; i++ ) e += (data[i] >= v1[i]);
+		for ( i=0; i<3; i++ ) e += (data[i] <= v2[i]);
 		return ( e == 6 );
 	}
 //	friend Vector3<float>	operator=(Vector3<double>& vd);
@@ -730,8 +734,8 @@ inline Vector3<T1>	vector3_set_PBC(Vector3<T1> coord, Vector3<T2> box)
 	return coord;
 }
 
-template <typename T1, typename T2>
-inline Vector3<T1>	vector3_difference_PBC(Vector3<T1>& v1, Vector3<T1>& v2, Vector3<T2>& box)
+template <typename T1, typename T2, typename T3>
+inline Vector3<T1>	vector3_difference_PBC(Vector3<T1> v1, Vector3<T2> v2, Vector3<T3> box)
 {
 	Vector3<T1>		d = v1 - v2;
 	

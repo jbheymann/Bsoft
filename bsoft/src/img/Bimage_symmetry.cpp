@@ -1,14 +1,13 @@
 /**
 @file	Bimage_symmetry.cpp
 @brief	Symmetry function library for crystallography
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19990509
-@date	Modified: 20191104
+@date	Modified: 20230524
 **/
 
 #include "Bimage.h"
 #include "rwsymop.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -28,7 +27,7 @@ extern int 	verbose;		// Level of output to the screen
 	symmetrization. 
 
 **/
-double 		Bimage::symmetrize(Bsymmetry sym, View ref_view, int flag)
+double 		Bimage::symmetrize(Bsymmetry sym, View2<double> ref_view, int flag)
 {
 	if ( sym.point() < 102 ) return 0;
 	
@@ -41,7 +40,7 @@ double 		Bimage::symmetrize(Bsymmetry sym, View ref_view, int flag)
 			error_show("Error in Bimage::symmetrize: Only cyclic point group symmetries can be applied to 2D images!", __FILE__, __LINE__);
 			return -1;
 		}
-		ref_view = View(0, 0, 1, ref_view.angle());
+		ref_view = View2<double>(0, 0, 1, ref_view.angle());
 	}
 
 	calculate_background();
@@ -121,7 +120,7 @@ double 		Bimage::check_point_group(Bstring& check_string)
 	double			angle, CC1, CC2, CC3, CCavg(0), CCbest(0);
 	Vector3<double>	axis;
 	
-	cout << "Group\tAxis1\tCC1\tAxis2\tCC2\tAxis3\tCC3\tCCavg" << endl;
+	cout << "Group\tAxis1\tCC1\tAxis2\tCC2\tAxis3\tCC3\tCCavg" << setprecision(4) << endl;
 	for ( sym = sym_list; sym; sym = sym->next ) {
 		cout << *sym << tab;
 		if ( (*sym)[0] == 'C' ) {
@@ -538,7 +537,7 @@ double 		Bimage::find_point_group(Bsymmetry& sym, double angle_step,
 	Matrix3		mat2 = Matrix3(sym[op0].axis(), -bestangle);
 	if ( sym.operations() > 1 ) mat = mat2 * mat;
 	transform(scale, bestorigin, translate, mat, FILL_BACKGROUND, 0);
-	view(View(mat));
+	view(View2<double>(mat));
 
 	if ( verbose ) {
 		cout << "Best view:                      " << image->view() << endl;
@@ -559,7 +558,7 @@ double 		Bimage::find_point_group(Bsymmetry& sym, double angle_step,
 **/
 long		Bimage::rotate_to_axis(Bsymmetry& sym, long axis, long axis_flag)
 {
-	Matrix3			mat = symmetry_rotate_to_axis(sym, axis, axis_flag);
+	Matrix3			mat = sym.rotate_to_axis(axis, axis_flag);
 		
 	rotate(mat);
 			
@@ -898,7 +897,7 @@ Matrix3		Bimage::symmetry_equivalent_cyclic(Bimage* pref, Bimage* pmask, Bsymmet
 **/
 Bimage*		Bimage::levelmask_asymmetric_units(Bsymmetry& sym, int index)
 {
-	View			ref = view_symmetry_reference(sym);
+	View2<double>	ref = sym.reference_symmetry_view();
 	
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Generating an asymmetric unit mask:" << endl;
@@ -922,8 +921,7 @@ Bimage*		Bimage::levelmask_asymmetric_units(Bsymmetry& sym, int index)
 	long			i, j, m, nn, xx, yy, zz;
 	double			dist, mindist;
 	Vector3<double>	testvec, symvec;
-	View*			v;
-	View*			symview = symmetry_get_all_views(sym, ref);
+	vector<View2<double>>	symview = sym.get_all_views(ref);
 
 	for ( i=nn=0; nn<n; nn++ ) {
 		for ( zz=0; zz<z; zz++ ) {
@@ -933,13 +931,15 @@ Bimage*		Bimage::levelmask_asymmetric_units(Bsymmetry& sym, int index)
 				for ( xx=0; xx<x; xx++, i++ ) {
 					testvec[0] = (double)xx - pmask->image[nn].origin()[0];
 					mindist = 1e30;
-					for ( j=m=1, v=symview; v; v=v->next, j++ ) {
-						symvec = v->vector3();
+					j=m=1;
+					for ( auto& v: symview ) {
+						symvec = v.vector3();
 						dist = testvec.distance(symvec);
 						if ( mindist > dist ) {
 							mindist = dist;
 							m = j;
 						}
+						j++;
 					}
 					if ( index < 1 ) pmask->set(i, m);
 					else if ( index == m ) pmask->set(i, 1);
@@ -947,8 +947,6 @@ Bimage*		Bimage::levelmask_asymmetric_units(Bsymmetry& sym, int index)
 			}
 		}
 	}
-	
-	kill_list((char *) symview, sizeof(View));
 	
 	pmask->statistics();
 	
@@ -973,21 +971,20 @@ int			Bimage::replicate_asymmetric_unit(Bsymmetry& sym)
 {
 	change_type(Float);
 	
-	View			ref = view_symmetry_reference(sym);
-	
+	View2<double>	ref = sym.reference_symmetry_view();
+	Vector3<double>	vr(ref.vector3());
+
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Replicating an asymmetric unit:" << endl;
 		cout << "Symmetry:                       " << sym.label() << endl;
-		cout << "Reference vector:               " << ref << endl << endl;
+		cout << "Reference vector:               " << vr << endl << endl;
 	}
 	
 	if ( sym.point() < 102 ) return 0;
 	
 	long			i, j, cc, nn, xx, yy, zz, nsym(0);
 	double			da, minda;
-	Vector3<double>	vr(ref.vector3());
 	Vector3<double>	v, vt, va;
-//	Matrix3*		m = symmetry_get_all_matrices(sym, nsym);
 	vector<Matrix3>	m = sym.matrices();
 	nsym = m.size();
 
@@ -1003,6 +1000,7 @@ int			Bimage::replicate_asymmetric_unit(Bsymmetry& sym)
 					minda = 1e30;
 					for ( j=0; j<nsym; j++ ) {
 						vt = m[j]*v;
+//						vt = m[j].transpose()*v;
 						da = vt.angle(vr);
 						if ( minda > da ) {
 							minda = da;
@@ -1016,8 +1014,6 @@ int			Bimage::replicate_asymmetric_unit(Bsymmetry& sym)
 			}
 		}
 	}
-	
-//	delete[] m;
 	
 	data_assign((unsigned char *) nudata);
 	
@@ -1055,32 +1051,31 @@ Bimage*		Bimage::find_symmetric_view(Bimage* ptemp, Bsymmetry& sym,
 	}
 	
 	Bsymmetry		symC1;
-	View*			views = asymmetric_unit_views(symC1, theta_step, phi_step, 1);
+	vector<View2<double>>	views = symC1.asymmetric_unit_views(theta_step, phi_step, 1);
 	
-	long			nv = (long) (TWOPI/alpha_step)*count_list((char *)views);
+	long			nv = (long) (TWOPI/alpha_step)*views.size();
 	
 	if ( verbose )
 		cout << "Number of views:                " << nv << endl;
 	
 	int				i(0);
-	View			best_view;
-	View*			v;
 	Vector3<double>	best_shift;
+	View2<double>	best_view;
 	double			a, CC, bestCC(0);
 	Bimage*			prot;
 	
 	if ( verbose )
 		cout << "#\tvx\tvy\tvz\tva\tCC" << endl;
-	for ( v = views; v; v = v->next ) {
+	for ( auto& v: views ) {
 		for ( a = 0; a < TWOPI; a += alpha_step ) {
 			i++;
-			(*v)[3] = a;
-			prot = rotate(size(), shift, *v);
+			v[3] = a;
+			prot = rotate(size(), shift, v);
 			prot->symmetrize(sym, 1);
 			CC = ptemp->correlate(prot);
 			if ( bestCC < CC ) {
 				bestCC = CC;
-				best_view = *v;
+				best_view = v;
 				best_shift = shift;
 			}
 			if ( verbose & VERB_LABEL )
@@ -1089,8 +1084,6 @@ Bimage*		Bimage::find_symmetric_view(Bimage* ptemp, Bsymmetry& sym,
 		}
 	}
 	
-	kill_list((char *) views, sizeof(View));
-
 	if ( verbose )
 		cout << "Best view:\t" << best_view << tab << CC << endl;
 

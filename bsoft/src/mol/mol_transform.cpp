@@ -1,7 +1,7 @@
 /**
 @file	mol_transform.cpp
 @brief	Library routines used for atomic coordinate transformations
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19980214
 @date	Modified: 20070614
 **/
@@ -9,7 +9,7 @@
 #include "rwmolecule.h"
 #include "mol_transform.h"
 #include "mol_util.h"
-#include "linked_list.h"
+//#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -172,12 +172,12 @@ int 		mol_coor_rotate(Bmolecule* mol, Transform t)
 	A new rotated and translated molecule group is generated.
 
 @param 	*molgroup		molecule group structure (unmodified).
-@param 	view				view to rotate to.
-@param 	origin	origin of rotation.
-@param 	trans	3-valued translation vector.
-@return Bmolgroup*				new molecule group.
+@param 	view			view to rotate to.
+@param 	origin			origin of rotation.
+@param 	trans			3-valued translation vector.
+@return Bmolgroup*		new molecule group.
 **/
-Bmolgroup*	molgroup_rotate_to_view(Bmolgroup* molgroup, View view, Vector3<double> origin, Vector3<double> trans)
+Bmolgroup*	molgroup_rotate_to_view(Bmolgroup* molgroup, View2<double> view, Vector3<double> origin, Vector3<double> trans)
 {
 	if ( verbose & VERB_FULL ) {
 		cout << "Rotating and translating coordinates:" << endl;
@@ -195,12 +195,12 @@ Bmolgroup*	molgroup_rotate_to_view(Bmolgroup* molgroup, View view, Vector3<doubl
 	A new rotated and translated molecule group is generated.
 
 @param 	*molgroup		molecule group structure (unmodified).
-@param 	view				view to rotate from.
-@param 	origin	origin of rotation.
-@param 	trans	3-valued translation vector.
-@return Bmolgroup*				new molecule group.
+@param 	view			view to rotate from.
+@param 	origin			origin of rotation.
+@param 	trans			3-valued translation vector.
+@return Bmolgroup*		new molecule group.
 **/
-Bmolgroup*	molgroup_rotate_from_view(Bmolgroup* molgroup, View view, Vector3<double> origin, Vector3<double> trans)
+Bmolgroup*	molgroup_rotate_from_view(Bmolgroup* molgroup, View2<double> view, Vector3<double> origin, Vector3<double> trans)
 {
 	if ( verbose & VERB_FULL ) {
 		cout << "Rotating and translating coordinates:" << endl;
@@ -250,12 +250,12 @@ Bmolgroup*	molgroup_rotate(Bmolgroup* molgroup, Matrix3 mat, Vector3<double> ori
 	A new rotated and translated molecule is generated.
 
 @param 	*mol			molecule structure (unmodified).
-@param 	view				view to rotate to.
-@param 	origin	origin of rotation.
-@param 	trans	3-valued translation vector.
-@return Bmolecule*				new molecule group.
+@param 	view			view to rotate to.
+@param 	origin			origin of rotation.
+@param 	trans			3-valued translation vector.
+@return Bmolecule*		new molecule group.
 **/
-Bmolecule*	mol_rotate_to_view(Bmolecule* mol, View view, Vector3<double> origin, Vector3<double> trans)
+Bmolecule*	mol_rotate_to_view(Bmolecule* mol, View2<double> view, Vector3<double> origin, Vector3<double> trans)
 {
 	if ( verbose & VERB_FULL ) {
 		cout << "Rotating and translating coordinates:" << endl;
@@ -273,12 +273,12 @@ Bmolecule*	mol_rotate_to_view(Bmolecule* mol, View view, Vector3<double> origin,
 	A new rotated and translated molecule is generated.
 
 @param 	*mol			molecule structure (unmodified).
-@param 	view				view to rotate from.
-@param 	origin	origin of rotation.
-@param 	trans	3-valued translation vector.
-@return Bmolecule*				new molecule group.
+@param 	view			view to rotate from.
+@param 	origin			origin of rotation.
+@param 	trans			3-valued translation vector.
+@return Bmolecule*		new molecule group.
 **/
-Bmolecule*	mol_rotate_from_view(Bmolecule* mol, View view, Vector3<double> origin, Vector3<double> trans)
+Bmolecule*	mol_rotate_from_view(Bmolecule* mol, View2<double> view, Vector3<double> origin, Vector3<double> trans)
 {
 	if ( verbose & VERB_FULL ) {
 		cout << "Rotating and translating coordinates:" << endl;
@@ -412,9 +412,9 @@ int 		mol_coor_transform(Bmolecule* mol, Transform t)
 
 /**
 @brief 	Inverts the coordinates of a molecule through a given point.
-@param 	*molgroup molecule group structure.
+@param 	*molgroup 	molecule group structure.
 @param 	point		3-valued inversion point.
-@return int 				0.
+@return int 			0.
 **/
 int 		molgroup_coor_invert(Bmolgroup* molgroup, Vector3<double> point)
 {

@@ -1,6 +1,7 @@
 var class_bfield =
 [
     [ "Bfield", "class_bfield.html#a531fb44acee95581ffa2ff1cb20e7a5b", null ],
+    [ "count", "class_bfield.html#a4412eed87bc71556ffe8f311ada36298", null ],
     [ "fom", "class_bfield.html#af3c0601315c2141a8d43b0a9f42c9969", null ],
     [ "id", "class_bfield.html#a55a335fe6baab468fd8794703a943c2f", null ],
     [ "matrix", "class_bfield.html#a63d1c419bcc483097e0dc46790d5b8f0", null ],

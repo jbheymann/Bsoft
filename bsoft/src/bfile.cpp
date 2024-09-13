@@ -438,7 +438,8 @@ int 		show_eer(size_t start, size_t size, unsigned char* buf)
 			n++;
 			ne++;
 		}
-//		cout << npx << tab << n << tab << rbits << tab << ne << endl;
+		if ( verbose & VERB_DEBUG )
+			cout << npx << tab << n << tab << rbits << tab << ne << endl;
 	}
 
 	return 0;
@@ -560,7 +561,7 @@ int 		replace(fstream* fin, char* rstring1, char* rstring2)
 char* 		string2byte(char* string)
 {
 	size_t 		i, j, setcntl(0);
-	char*				bytes = new char[strlen(string)+1];
+	char*		bytes = new char[strlen(string)+1];
 	
 	j = 0;
 	for ( i=0; i<strlen(string); i++ ) {
@@ -583,8 +584,6 @@ char* 		string2byte(char* string)
 			j++;
 		}
 	}
-	
-	delete[] bytes;
 	
 	return bytes;
 }

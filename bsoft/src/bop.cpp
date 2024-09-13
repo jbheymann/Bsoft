@@ -3,7 +3,7 @@
 @brief	A program to operate on image pairs
 @author Bernard Heymann
 @date	Created: 19990219
-@date	Modified: 20200108
+@date	Modified: 20240322
 **/
 
 #include "rwimg.h"
@@ -37,11 +37,14 @@ const char* use[] = {
 "-correlate corr.img      Correlate two images and generate a correlation image.",
 "-Histomatch 20           Match histogram of image 2 to image 1, output modified image 2.",
 "-blend 7                 Blend from image 1 to image 2, output a new multi-image file.",
+"-arctangent              Calculate the invers tangent of two images.",
+"-replace 2.1,-0.5,0      Replace part of first image with second image beyond plane specified by normal.",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
 "-datatype u              Force writing of a new data type.",
 "-sampling 1.5,1.5,1.5    Sampling (A/pixel; a single value can be given).",
+"-origin 0.8,-10,15.7     Set the origin (default from input image).",
 "-radius minr,maxr        Correlate or fit only between min. and max. radius (pixel).",
 " ",
 "Input:",
@@ -55,6 +58,8 @@ int			main(int argc, char* argv[])
 	// Initialize all settings
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
 	Vector3<double> sampling;					// Units for the three axes (A/pixel)
+	Vector3<double> origin;						// New image origin
+	int				set_origin(0);				// Flag to set origin
 	int				znswitch(0);				// 0=not, 1=n2z, 2=z2n
 	int 			setadd(0);
 	int 			setmultiply(0);
@@ -63,6 +68,7 @@ int			main(int argc, char* argv[])
 	int 			setsmallest(0);
 	int				setvar(0);
 	int 			setlinear(0);
+	int				setatan(0);
 	double 			excl_voxels(0);			// Percentage voxels to excl_voxels from linear fit
 	int				setcc(0);
 	int				radiusflag(0);
@@ -75,6 +81,8 @@ int			main(int argc, char* argv[])
 	double			min(0), max(0);
 	double			minr(0), maxr(0);
 	int 			blend_number(0);
+	bool			replace(0);			// Flag to replace part
+	Vector3<double> plane_normal;		// Plane normal for replacement part
 	Bstring			corrfile;
 	Bstring			maskfile;			// Mask file name
 	    
@@ -86,6 +94,14 @@ int			main(int argc, char* argv[])
 			nudatatype = curropt->datatype();
 		if ( curropt->tag == "sampling" )
 			sampling = curropt->scale();
+		if ( curropt->tag == "origin" ) {
+			if ( curropt->value[0] == 'c' ) {
+				set_origin = 2;
+			} else {
+				origin = curropt->origin();
+				set_origin = 1;
+			}
+		}
 		if ( curropt->tag == "slices" )
 			znswitch = 1;
 		if ( curropt->tag == "images" )
@@ -147,7 +163,12 @@ int			main(int argc, char* argv[])
 		if ( curropt->tag == "blend" )
         	if ( ( blend_number = curropt->value.integer() ) < 1 )
 				cerr << "-blend: A number of images must be specified!" << endl;
- 		if ( curropt->tag == "correlate" )
+ 		if ( curropt->tag == "arctangent" ) setatan = 1;
+		if ( curropt->tag == "replace" ) {
+		    plane_normal = curropt->vector3();
+		    replace = 1;
+		}
+		if ( curropt->tag == "correlate" )
 			corrfile = curropt->filename();
  		if ( curropt->tag == "Mask" )
 			maskfile = curropt->filename();
@@ -164,6 +185,10 @@ int			main(int argc, char* argv[])
 		cerr << "Error: No first input file read!" << endl;
 		bexit(-1);
 	}
+	if ( !p1->data_pointer() ) {
+		cerr << "Error: Data missing from image " << p1->file_name() << endl;
+		bexit(-1);
+	}
 
 	if ( znswitch == 1 )
 		if ( p1->images_to_slices() < 0 ) bexit(-1);
@@ -174,10 +199,18 @@ int			main(int argc, char* argv[])
     p1->change_type(Float);
 	if ( p1->standard_deviation() <= 0 ) p1->statistics();
 	if ( sampling.volume() > 0 ) p1->sampling(sampling);
+	if ( set_origin ) {
+		if ( set_origin == 2 ) p1->origin(p1->size()/2);
+		else p1->origin(origin);
+	}
 	
     Bimage* 	p2 = read_img(argv[optind++], dataflag, -1);
 	if ( p2 == NULL )  {
 		cerr << "Error: No second input file read!" << endl;
+		bexit(-1);
+	}
+	if ( !p2->data_pointer() ) {
+		cerr << "Error: Data missing from image " << p2->file_name() << endl;
 		bexit(-1);
 	}
 
@@ -190,15 +223,11 @@ int			main(int argc, char* argv[])
     p2->change_type(Float);
 	if ( p2->standard_deviation() <= 0 ) p2->statistics();
 	if ( sampling.volume() > 0 ) p2->sampling(sampling);
+	if ( set_origin ) {
+		if ( set_origin == 2 ) p2->origin(p1->size()/2);
+		else p2->origin(origin);
+	}
 	
-	if ( !p1->data_pointer() ) {
-		cerr << "Error: Data missing from image " << p1->file_name() << endl;
-		bexit(-1);
-	}
-	if ( !p2->data_pointer() ) {
-		cerr << "Error: Data missing from image " << p2->file_name() << endl;
-		bexit(-1);
-	}
 	
 	Bimage*		pmask = NULL;
 	if ( maskfile.length() )
@@ -222,8 +251,12 @@ int			main(int argc, char* argv[])
 	if ( setadd )	    		// Add two images
     	p1->add(p2);
     	
-	if ( setmultiply )	    	// Multiply two images
-    	p1->multiply(p2);
+	if ( setmultiply ) {    	// Multiply two images
+		if ( p1->compound_type() == TComplex )
+			p1->complex_multiply(p2);
+		else
+	    	p1->multiply(p2);
+	}
 	
 	if ( setdivide ) {	    	// Divide the first image by the second image
 		if ( p2->images() == 1 ) p1->divide_one(p2);
@@ -236,9 +269,14 @@ int			main(int argc, char* argv[])
 	if ( setsmallest )	    	// Smallest of two images
     	p1->smallest(p2);
 	
+	if ( setatan )
+		p1->arctangent(p2);
+		
+	if ( replace )
+		p1->replace_part(p2, plane_normal);
+		
 	int				n;
 	double			cc(0);
-	Vector3<double>	origin(p1->image->origin());
 	if ( setlinear ) {	    	// Do a linear fit
 		if ( !pmask && radiusflag ) {
 			pmask = new Bimage(UCharacter, p1->compound_type(), p1->size(), p1->images());
@@ -283,7 +321,7 @@ int			main(int argc, char* argv[])
 	delete p2;
 	delete pmask;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit((int)(1000*cc));

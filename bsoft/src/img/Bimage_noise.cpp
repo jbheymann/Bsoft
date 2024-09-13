@@ -3,7 +3,7 @@
 @brief	Functions for generating noise images
 @author Bernard Heymann
 @date	Created: 19990703
-@date	Modified: 20150725
+@date	Modified: 20220517
 **/
 
 #include "Bimage.h"
@@ -19,8 +19,7 @@ extern int 	verbose;		// Level of output to the screen
 @param 	rmax 	maximum density value.
 @return int		0.
 
-	An image with a given datatype, number of subimages, and size is
-	generated with densities distributed uniformly in the range of the
+	The image is populated with densities distributed uniformly in the range of the
 	given minimum and maximum:
 		density = random_value*(max - min) + min
 	where random_value is between 0 and 1.
@@ -59,8 +58,7 @@ int 		Bimage::noise_uniform(double rmin, double rmax)
 @param 	rstd 		standard deviation.
 @return int		0.
 
-	An image with a given datatype, number of subimages, and size is
-	generated with densities with a gaussian distribution with a given
+	The image is populated with densities with a gaussian distribution with a given
 	average and standard deviation:
 		density = average + std_dev*sqrt(-2*log(random_value))*
 						cos(2*PI*random_value);
@@ -142,8 +140,7 @@ int			Bimage::noise_poisson(double ravg)
 @param 	rstd 	standard deviation.
 @return int		0.
 
-	An image with a given datatype, number of subimages, and size is
-	generated with densities with a logistical differential distribution 
+	The image is populated with densities with a logistical differential distribution
 	with a given average and standard deviation:
 		density = average + (std_dev/golden)*ln(1/random_value - 1)
 	where random_value is between 0 and 1 and:
@@ -227,3 +224,156 @@ int			Bimage::noise_spectral(double alpha)
 	
 	return 0;
 }
+
+/**
+@brief 	Generates an image based on a uniform random distribution of distances.
+@param	number		number of hits to place
+@return int			0.
+
+	The image is populated with single hits at distances with a uniform random distrubution
+	within the image boundaries.
+	Statistics are calculated before returning.
+
+**/
+int 		Bimage::noise_uniform_distance(long number)
+{
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Generating a random image with a uniform distance distribution:" << endl;
+		cout << "Number of hits per image:       " << number << endl << endl;
+	}
+		
+	long			i, nn;
+	Vector3<double>	ori;
+	Vector3<long>	loc;
+	
+	random_seed();
+	
+	for ( nn=0; nn<n; ++nn ) {
+		for ( i=0; i<number; ++i ) {
+			loc = vector3_random(ori, size());
+			add(index(loc, nn), 1);
+		}
+	}
+	
+	statistics();
+
+	return 0;
+}
+
+/**
+@brief 	Generates an image based on a gaussian random distribution of distances.
+@param	number		number of hits to place
+@param	stdev		standard deviation.
+@return int			0.
+
+	The image is populated with single hits at distances with
+	a uniform random distrubution within the image boundaries.
+	Statistics are calculated before returning.
+
+**/
+int 		Bimage::noise_gaussian_distance(long number, double stdev)
+{
+	long			i(0), nn;
+	Vector3<double>	ori(image->origin());
+	Vector3<long>	loc;
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Generating a random image with a gaussian distance distribution:" << endl;
+		cout << "Number of hits:                 " << number << endl;
+		cout << "Origin:                         " << ori << endl;
+		cout << "Standard deviation:             " << stdev << endl << endl;
+	}
+		
+	random_seed();
+	
+	for ( nn=0; nn<n; ++nn ) {
+		for ( i=0; i<number; ) {
+			if ( z > 1 ) loc = vector3_random_gaussian(0, stdev) + ori;
+			else loc = vector3_xy_random_gaussian(0, stdev) + ori;
+			if ( within_boundaries(loc) ) {
+				add(index(loc, nn), 1);
+				i++;
+			}
+		}
+	}
+	
+	statistics();
+
+	return 0;
+}
+
+/**
+@brief 	Generates a complex image with uniform random phases.
+@return int			0.
+
+	The image is populated with complex values with
+	a uniform random distrubution in phases.
+
+**/
+int 		Bimage::uniform_random_phases()
+{
+	simple_to_complex();
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Generating a complex image with uniform random phases" << endl << endl;
+		
+	long			i;
+	double			phi;
+	double			range = TWOPI/get_rand_max();
+	
+	random_seed();
+	
+	for ( i=0; i<datasize; i++ ) {
+		phi = random()*range;
+		set(i, Complex<float>(cos(phi), sin(phi)));
+	}
+	
+	statistics();
+
+	return 0;
+}
+
+/**
+@brief 	Generates a complex image with a gaussian random distribution of phases.
+@param 	ravg 		average phase.
+@param 	rstd 		phase standard deviation.
+@return int			0.
+
+	The image is populated with phases with a gaussian distribution with a given
+	average and standard deviation:
+		phase = average + std_dev*sqrt(-2*log(random_value))*
+						cos(2*PI*random_value);
+	where random_value is between 0 and 1.
+	The output image is floating point.
+	Statistics are calculated before returning.
+
+**/
+int			Bimage::gaussian_random_phases(double ravg, double rstd)
+{
+	simple_to_complex();
+
+	if ( rstd <= 0 ) {
+		error_show("Error in Bimage::gaussian_random_phases: The standard deviation for a Gaussian distribution must be > 0!", __FILE__, __LINE__);
+		return -1;
+	}
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Generating a complex random image with a gaussian distribution of phases:" << endl;
+		cout << "Average and standard deviation: " << ravg << " " << rstd << endl << endl;
+	}
+		
+	long			i;
+	double			phi;
+
+	random_seed();
+	
+	for ( i=0; i<datasize; i++ ) {
+		phi = random_gaussian(ravg, rstd);
+		set(i, Complex<float>(cos(phi), sin(phi)));
+	}
+
+	statistics();
+	
+	return 0;
+}
+

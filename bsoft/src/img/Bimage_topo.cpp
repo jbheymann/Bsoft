@@ -1,13 +1,12 @@
 /**
 @file	Bimage_topo.cpp
 @brief	Functions to convert between 2D topology images to 3D surfaces.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19990124
-@date	Modified: 20170613
+@date	Modified: 20230524
 **/
 
 #include "Bimage.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -54,13 +53,13 @@ Bimage*		Bimage::topograph_to_surface(Bimage* psd, long nz, double density, doub
 		psd->show_maximum(resolution*0.5);
 		scale = 1;
 		psd->data_alloc();
-		for ( i=0; i<slice_size; i++ )
+		for ( i=0; i<slice_size; ++i )
 			psd->set(i, psd->show_minimum());
 	} else {
 		mn = psd->minimum();
 		mx = psd->maximum();
 		scale = (psd->show_maximum() - psd->show_minimum())/(mx - mn);
-		for ( i=0; i<slice_size; i++ )
+		for ( i=0; i<slice_size; ++i )
 			psd->set(i, scale*(*psd)[i] + psd->show_minimum());
 	}
 	
@@ -90,10 +89,10 @@ Bimage*		Bimage::topograph_to_surface(Bimage* psd, long nz, double density, doub
 	} else if ( verbose & VERB_LABEL )
 		cout << "Converting a 2D image into a 3D surface density" << endl << endl;
 
-	for ( i=yy=0; yy<y; yy++ ) {
-		for ( xx=0; xx<x; xx++, i++ ) {
+	for ( i=yy=0; yy<y; ++yy ) {
+		for ( xx=0; xx<x; ++xx, ++i ) {
        		zdis = loz + scale*((*this)[i]-min);
-    	    for ( j=i, zz=0; zz<psurf->z; zz++, j+=slice_size )
+    	    for ( j=i, zz=0; zz<psurf->z; ++zz, j+=slice_size )
     			psurf->set(j, voxel_density/(1+exp(factor*(zz-zdis)/(*psd)[i])));
    		}
 	}
@@ -108,7 +107,8 @@ Bimage*		Bimage::topograph_to_surface(Bimage* psd, long nz, double density, doub
 /**
 @brief 	Converts a 3D image to a 2D height image.
 @param 	threshold	threshold to define the surface (assuming positive density).
-@param	dir			direction: 0=bottom up, 1=top down.
+@param	offset		adjust height with an offset, default 0.
+@param	dir			direction: 0=bottom up, 1=top down (default).
 @return Bimage*		2D height image.
 
 	The threshold defines the surface of the positive density in the 3D image.
@@ -116,28 +116,31 @@ Bimage*		Bimage::topograph_to_surface(Bimage* psd, long nz, double density, doub
 	exceeding the threshold with the highest z-index.
 
 **/
-Bimage*		Bimage::surface_to_topograph(double threshold, int dir)
+Bimage*		Bimage::surface_to_topograph(double threshold, double offset, int dir)
 {
 	long   			i, j, xx, yy, zz, nn;
+	double			dz;
 	
 	Bimage*			p = new Bimage(Float, TSimple, x, y, 1, n);
+	p->sampling(sampling(0));
+	p->origin(image->origin()[0],image->origin()[1],0);
 	
     if ( verbose & VERB_PROCESS ) {
 		cout << "Converting a 3D image into a 2D height image" << endl;
-		cout << "Threshold:                      " << threshold << endl << endl;
+		cout << "Threshold:                      " << threshold << endl;
+		cout << "Offset:                         " << offset << " A" << endl;
+		cout << "Direction:                      " << dir << endl << endl;
 	}
 	
-	for ( i=nn=0; nn<n; nn++ ) {
-		for ( zz=0; zz<z; zz++ ) {
-			for ( yy=0; yy<y; yy++ ) {
-				for ( xx=0; xx<x; xx++, i++ ) {
-					j = (nn*y+yy)*x+xx;
-					if ( !(*p)[j] ) {
-						if ( dir ) {
-							if ( (*this)[i] >= threshold ) p->set(j, zz);
-						} else {
-							if ( (*this)[i] <= threshold ) p->set(j, zz);
-						}
+	for ( i=nn=0; nn<n; ++nn ) {
+		for ( zz=0; zz<z; ++zz ) {
+			if ( !dir ) dz = p->image[nn].sampling()[2] * zz - offset;
+			else dz = p->image[nn].sampling()[2] * (z - zz) - offset;
+			for ( j=nn*x*y, yy=0; yy<y; ++yy ) {
+				for ( xx=0; xx<x; ++xx, ++i, ++j ) {
+					if ( (*this)[i] >= threshold ) {
+						if ( !dir ) p->set(j, dz);
+						else if ( !(*p)[j] ) p->set(j, dz);
 					}
 				}
 			}
@@ -194,9 +197,9 @@ Bimage*		Bimage::rotate_height(Matrix3 mat, Vector3<double> translate, double th
 
 	double			d, dz, bottom(u[2]*z);
 	
-	for ( i=yy=0; yy<y; yy++ ) {
+	for ( i=yy=0; yy<y; ++yy ) {
 		nuvec[1] = yy - nuorigin[1];
-		for ( xx=0; xx<x; xx++, i++ ) {
+		for ( xx=0; xx<x; ++xx, ++i ) {
 			nuvec[0] = xx - nuorigin[0];
 			for ( zz=z-1; zz; zz-- ) {
 				nuvec[2] = zz - nuorigin[2];
@@ -220,33 +223,27 @@ Bimage*		Bimage::rotate_height(Matrix3 mat, Vector3<double> translate, double th
 
 /**
 @brief 	Calculates a set of height images from a 3D density map.
-@param 	*views			linked list of views.
+@param 	&views			linked list of views.
 @param 	threshold		density threshold to consider as object.
-@return Bimage* 		2D height images as sub-images.
+@return Bimage* 			2D height images as sub-images.
 
 	A set of height images is calculated according to a list of views.
 
 **/
-Bimage* 	Bimage::height(View* views, double threshold)
+Bimage* 	Bimage::height(vector<View2<double>>& views, double threshold)
 {
-	if ( !views ) {
+	if ( !views.size() ) {
 		error_show("Error in Bimage::height: No views defined!", __FILE__, __LINE__);
 		return NULL;
 	}
 	
 	calculate_background();
 	
-	long			i;
 	Vector3<double>	translate;
 	Vector3<double>	u(image->sampling());
 	u[2] = 1;
 
-	long			nviews = count_list((char *)views);
-	View*			vlist = new View[nviews];
-//	vector<View>	vlist(nviews);
-	View*			v;
-	
-	for ( v=views, i=0; v; v = v->next, i++ ) vlist[i] = *v;
+	long			nviews(views.size());
 	
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Calculating height images:" << endl;
@@ -262,33 +259,31 @@ Bimage* 	Bimage::height(View* views, double threshold)
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t i){
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
+		Matrix3	mat = views[i].matrix();
 		Bimage*	one_height = rotate_height(mat, translate, threshold);
 		one_height->shift_background(0);
 		pheight->replace(i, one_height);
 //		pheight->image[i].origin(one_height->image->origin());
 		pheight->origin(i, one_height->image->origin());
-		pheight->image[i].view(vlist[i]);
+		pheight->image[i].view(views[i]);
 		delete one_height;
 	});
 #else
 #pragma omp parallel for
-	for ( long i=0; i<nviews; i++ ) {
+	for ( long i=0; i<nviews; ++i ) {
 //		if ( verbose & VERB_LABEL )
 //			cout << "Projection " << i+1 << ":" << endl;
-		Matrix3	mat = vlist[i].matrix();
+		Matrix3	mat = views[i].matrix();
 		Bimage*	one_height = rotate_height(mat, translate, threshold);
 		one_height->shift_background(0);
 		pheight->replace(i, one_height);
 //		pheight->image[i].origin(one_height->image->origin());
 		pheight->origin(i, one_height->image->origin());
-		pheight->image[i].view(vlist[i]);
+		pheight->image[i].view(views[i]);
 		delete one_height;
 	}
 #endif
 
-	delete[] vlist;
-	
 	pheight->statistics();
 	
 	return pheight;

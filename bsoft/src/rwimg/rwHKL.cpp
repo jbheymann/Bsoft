@@ -3,12 +3,11 @@
 @brief	Routines to read and write HKL reflection files
 @author Bernard Heymann
 @date	Created: 19981229
-@date	Modified: 20120211
+@date	Modified: 20230526
 **/
 
 #include "rwHKL.h"
 #include "Complex.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include <fstream>
 
@@ -36,7 +35,7 @@ This function reads a HKL file typically produced with MTZDUMP from
 int 	readHKL(Bimage* p, int readdata)
 {
     ifstream		fhkl;
-    long			i, j, m(1), n(0);
+    long			i, j, m(1);
 
     fhkl.open(p->file_name());
     if ( fhkl.fail() ) return -1;
@@ -49,36 +48,37 @@ int 	readHKL(Bimage* p, int readdata)
     	aline[i] = toupper(aline[i]);
     }
 	
-	Bstring			headerline(aline);
-	Bstring*		one;
-	Bstring*		header = headerline.split();
-	m = count_list((char *)header);
+	string			headerline(aline);
+	vector<string>	header = split(headerline);
+	m = header.size();
 
     int		ih(0); 	    	    	// Find the H index header item
     int		ik(0); 	    	    	// Find the K index header item
     int		il(0); 	    	    	// Find the L index header item
     int		iamp(0);	    	    // Find AMP, PHI, FOM and FREE columns
- 	int 	isigamp(0);
+// 	int 	isigamp(0);
 	int		iphi(0);
-    int 	isigphi(0);
+//	int 	isigphi(0);
     int		ifom(0);
-	int		ifre(0);
+//	int		ifre(0);
 
-	for ( one=header, i=0; one && i<m; one=one->next, i++ ) {
-		if ( *one == "H" || *one == "IH" ) ih = i;
-		if ( *one == "K" || *one == "IK" ) ik = i;
-		if ( *one == "L" || *one == "IL" ) il = i;
-		if ( one->contains("AMP") ) iamp = i;
-		if ( one->contains("SIGAMP") ) isigamp = i;
-		if ( one->contains("PH") ) iphi = i;
-		if ( one->contains("SIGPH") ) isigphi = i;
-		if ( one->contains("FOM") ) ifom = i;
-		if ( one->contains("FRE") ) ifre = i;
+	i = 0;
+	for ( auto& one: header ) {
+		if ( one == "H" || one == "IH" ) ih = i;
+		if ( one == "K" || one == "IK" ) ik = i;
+		if ( one == "L" || one == "IL" ) il = i;
+		if ( one.find("AMP") != string::npos ) iamp = i;
+//		if ( one.find("SIGAMP") != string::npos ) isigamp = i;
+		if ( one.find("PH") != string::npos ) iphi = i;
+//		if ( one.find("SIGPH") != string::npos ) isigphi = i;
+		if ( one.find("FOM") != string::npos ) ifom = i;
+//		if ( one.find("FRE") != v ) ifre = i;
+		i++;
 	}
 
  	if ( verbose & VERB_PROCESS ) {
 	    cout << "Headers:                        ";
-		for ( one=header; one; one=one->next ) cout << " " << *one;
+		for ( auto& one: header ) cout << " " << one;
     	cout << endl;
 	}
 
@@ -107,7 +107,6 @@ int 	readHKL(Bimage* p, int readdata)
 				if ( ik < m && kmax < v[ik] ) kmax = (int) v[ik];
 				if ( il < m && lmax < v[il] ) lmax = (int) v[il];
 				if ( ifom < m && fommax < v[ifom] ) fommax = v[ifom];
-	    		n++;
 			}
     	}
 	}
@@ -196,8 +195,6 @@ int 	readHKL(Bimage* p, int readdata)
 	
     fhkl.close();
     
-	string_kill(header);
-	
     return 0;
 }
 

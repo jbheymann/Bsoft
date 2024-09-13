@@ -160,7 +160,7 @@ int 	writePIC(Bimage *p)
 	for ( int i=0; i<120; ++i ) title[i] = ' ';
 	
 	// Map the parameters
-	strncpy(title, p->label().c_str(), 120);
+	p->label().copy(title, 120);
 	titlen = strlen(title)/2 + 1;
 	nbc = p->sizeX();
 	nbr = p->sizeY();

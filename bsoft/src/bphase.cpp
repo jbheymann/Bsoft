@@ -3,7 +3,7 @@
 @brief	A program to examine phase differences between image pairs
 @author Bernard Heymann
 @date	Created: 20020217
-@date	Modified: 20151006
+@date	Modified: 20220803
 **/
 
 #include "rwimg.h"
@@ -22,9 +22,10 @@ const char* use[] = {
 "Calculates the phase difference between two images.",
 " ",
 "Actions:",
+"-sum                     Calculate the phase angle sum rather than the difference.",
 "-cosine                  Calculate the cosine of the phase angle difference.",
-"-amplitude               Weight the phase difference with the amplitude product.",
-"-center                  Center phase difference map and output it.",
+"-amplitude               Weigh the phase difference with the amplitude product.",
+"-center                  Center phase difference map.",
 "-flip                    Flip phases based on phase difference map and modify second image.",
 " ",
 "Parameters:",
@@ -39,7 +40,7 @@ NULL
 int			main(int argc, char* argv[])
 {
 	// Initialize all settings
-	int				pd_type(0);					// Phase difference result type
+	int				pd_type(0);					// Result type: 0=dif, 1=sum, 2=cos, 4=amp weighed
 	int 			center(0); 					// Flag to center phase difference map
 	int 			flip(0);					// Flag to flip phases of second image based on phase difference map
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
@@ -51,8 +52,9 @@ int			main(int argc, char* argv[])
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "cosine" ) pd_type |= 1;
-		if ( curropt->tag == "amplitude" ) pd_type |= 2;
+		if ( curropt->tag == "sum" ) pd_type |= 1;
+		if ( curropt->tag == "cosine" ) pd_type |= 2;
+		if ( curropt->tag == "amplitude" ) pd_type |= 4;
 		if ( curropt->tag == "center" ) center = 1;
 		if ( curropt->tag == "flip" ) flip = 1;
 		if ( curropt->tag == "datatype" )
@@ -126,10 +128,10 @@ int			main(int argc, char* argv[])
 	}
 	
 	delete p1;
-	delete p2;
+	if ( p2 != pd ) delete p2;
 	delete pd;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

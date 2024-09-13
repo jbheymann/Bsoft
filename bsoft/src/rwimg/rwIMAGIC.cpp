@@ -13,9 +13,9 @@
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
-View		view_from_imagic_euler(IMAGIChead* header)
+View2<double>	view_from_imagic_euler(IMAGIChead* header)
 {
-	View		view;
+	View2<double>	view;
 	
 	view[0] = cos(header->gamma)*sin(header->beta);
 	view[1] = sin(header->gamma)*sin(header->beta);
@@ -28,7 +28,7 @@ View		view_from_imagic_euler(IMAGIChead* header)
 	return view;
 }
 
-int			imagic_euler_from_view(IMAGIChead* header, View view)
+int			imagic_euler_from_view(IMAGIChead* header, View2<double> view)
 {
 	if ( acos(view[2]) >  1e-14 )
 		header->gamma = atan2(view[1], view[0]);
@@ -152,7 +152,7 @@ int 	readIMAGIC(Bimage* p, int readdata, int img_select)
 	
 	p->label(header->history);
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	t->tm_mday = header->ndate;
     t->tm_mon = header->nmonth - 1;
     t->tm_year = header->nyear - 1900;
@@ -294,7 +294,7 @@ int 	writeIMAGIC(Bimage* p)
 	header->resoly = p->sampling(0)[1];
 	header->resolz = p->sampling(0)[2];
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
     header->ndate = t->tm_mday;
     header->nmonth = t->tm_mon + 1;
     header->nyear = t->tm_year + 1900;
@@ -318,8 +318,8 @@ int 	writeIMAGIC(Bimage* p)
 	header->sigma = p->standard_deviation();
 	header->varian = p->standard_deviation()*p->standard_deviation();
 
-	strncpy(header->name, p->file_name().c_str(), 80);
-	strncpy(header->history, p->label().c_str(), 228);
+	p->file_name().copy(header->name, 80);
+	p->label().copy(header->history, 228);
 	
     // get the filename without extension to find the header file
 	string			filename(p->file_name());

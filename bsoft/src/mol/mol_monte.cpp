@@ -700,7 +700,7 @@ double		monte_atom_fit_energy(Bmolgroup* molgroup, Bimage* map, Bmd* md)
 	
 	md->Ebond = md_bond_forces(molgroup, md->Kbond, md->wrap);
 	
-	md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
+//	md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
 	
 	md_nonbonded_forces(molgroup, md);
 	
@@ -732,7 +732,7 @@ double		monte_bond_fit_energy(Bmolgroup* molgroup, Bimage* map, Bmd* md)
 	
 	md->Ebond = md_bond_forces(molgroup, md->Kbond, md->wrap);
 	
-	md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
+//	md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
 	
 	md_nonbonded_forces(molgroup, md);
 	

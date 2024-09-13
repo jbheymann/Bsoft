@@ -1,13 +1,12 @@
 /**
 @file	mg_random.cpp
 @brief	Functions for applying some randomization to parameters
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010206
 @date	Modified: 20140225
 **/
 
 #include "mg_random.h"
-#include "linked_list.h"
 #include "random_numbers.h"
 #include "utilities.h"
 
@@ -237,7 +236,7 @@ double		particle_random_view(Bparticle* part, double std)
 	Matrix3				mat = Matrix3(axis, angle);
 	
 	axis = mat * vec;
-	part->view = View(axis[0], axis[1], axis[2], part->view.angle());
+	part->view = View2<double>(axis[0], axis[1], axis[2], part->view.angle());
 	
 	return axis.angle(vec);
 }
@@ -367,10 +366,9 @@ int			project_random_symmetry_related_views(Bproject* project, Bsymmetry& sym)
 	Bmicrograph*		mg;
 	Breconstruction*	rec;
 	Bparticle*			part;
-	View*				v;
+	vector<View2<double>>	v;
 	double				r;			// Stores a random value in range [0,1) or [0,n)
 	int					y;			// Stores a random integer in range [0,n-1]
-	int					i;
 	double				irm = 1.0L/(get_rand_max() + 1.0L);
 	int			 		nviews(sym.order());	// Number of symmetry-related views
 
@@ -387,19 +385,15 @@ int			project_random_symmetry_related_views(Bproject* project, Bsymmetry& sym)
 				if ( verbose & VERB_FULL )
 					cout << "Original view vector: " << part->view << endl;
 
-				v = symmetry_get_all_views(sym, part->view); // Get symmetry-related views
+				v = sym.get_all_views(part->view2()); // Get symmetry-related views
 				
 				r = nviews*irm*random();
 				y = (int) r;	// y is a random integer in the range [0,n-1]
 
-				for ( i=0; i<y ; i++, v=v->next) ;
-				part->view = *v;
-				part->view.next = NULL;
-				
-				kill_list((char *) v, sizeof(View));
+				part->view2(v[y]);
 				
 				if ( verbose & VERB_FULL )
-					cout << "View chosen #" << i << ": " << part->view << endl;
+					cout << "View chosen #" << y << ": " << part->view << endl;
 			}
 		}
 	} else {
@@ -409,19 +403,15 @@ int			project_random_symmetry_related_views(Bproject* project, Bsymmetry& sym)
 					if ( verbose & VERB_FULL )
 						cout << "Original view vector: " << part->view << endl;
 
-					v = symmetry_get_all_views(sym, part->view); // Get symmetry-related views
+					v = sym.get_all_views(part->view2()); // Get symmetry-related views
 				
 					r = nviews*irm*random();
 					y = (int) r;	// y is a random integer in the range [0,n-1]
 
-					for ( i=0; i<y ; i++, v=v->next) ;
-					part->view = *v;
-					part->view.next = NULL;
-					
-					kill_list((char *) v, sizeof(View));
+					part->view2(v[y]);
 					
 					if ( verbose & VERB_FULL )
-						cout << "View chosen #" << i << ": " << part->view << endl;
+						cout << "View chosen #" << y << ": " << part->view << endl;
 				}
 			}
 		}

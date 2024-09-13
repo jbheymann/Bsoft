@@ -11,7 +11,6 @@
 #include "rwmg.h"
 #include "mg_ctf.h"
 #include "file_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -112,7 +111,7 @@ int			main(int argc, char** argv)
 	
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -42,7 +42,7 @@ const char* use[] = {
 "-Mask mask.tif           Mask to limit segmentation.",
 " ",
 "Output:",
-"-mask mask.tif           Multi-level mask with segemented regions.",
+"-mask mask.tif           Multi-level mask with segmented regions.",
 " ",
 NULL
 };
@@ -115,10 +115,9 @@ int 	main(int argc, char* argv[])
 	double			ti = timer_start();
 	
     // Read the input file
-    Bimage* 	p = read_img(argv[optind++], 1, 0);
+    Bimage* 		p = read_img(argv[optind++], 1, 0);
 
-	
-	Bimage*		pmask = NULL;
+	Bimage*			pmask = NULL;
 	if ( maskfile.length() ) {
 		pmask = read_img(maskfile, 1, 0);
 		p->mask(pmask, p->average());
@@ -144,15 +143,16 @@ int 	main(int argc, char* argv[])
 	if ( type ) {
 		GSgraph		g = p->graph_segment(type, connect_type, complexity, min_size);
 		pseg = p->graph_segments_to_image(g);
-		if ( segmask.length() ) pmm = p->graph_segments_to_mask(g);
+		pmm = p->graph_segments_to_mask(g);
+		p->graph_segments_list(g);
 	}
-	
+
 	if ( pmm && voxel[0] >= 0 ) {
 		pmm->levelmask_select(0, voxel);
 		if ( mask_invert ) pmm->mask_invert();
 	}
 	
-	if ( colorize ) pmm->levelmask_colorize();
+	if ( pmm && colorize ) pmm->levelmask_colorize();
 	
 	// Write an output file if a file name is given
     if ( optind < argc )
@@ -167,9 +167,10 @@ int 	main(int argc, char* argv[])
 	delete pmm;
 	if ( p != pseg ) delete pseg;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
 }
+
 

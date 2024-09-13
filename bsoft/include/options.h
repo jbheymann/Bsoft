@@ -3,16 +3,17 @@
 @brief	Header file for option handlers 
 @author Bernard Heymann 
 @date	Created: 20010613
-@date	Modified: 20210127
+@date	Modified: 20240320
 **/
 
 #include "Bstring.h"
-//#include "rwimg.h"
 #include "Vector3.h"
-#include "View.h"
+#include "View2.h"
 #include "Euler.h"
 #include "symmetry.h"
+#include "Bmaterial.h"
 #include "UnitCell.h"
+#include "Complex.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
@@ -110,6 +111,30 @@ public:
 			err++;
 		}
 		return value.real();
+	}
+	double		angle() {	// Returns an angle in radians
+		if ( value.length() < 1 ) {
+			cerr << "-" << tag << ": An angle must be specified!" << endl;
+			err++;
+		}
+		if ( value[0] == 'p' || value[0] == 'P' ) {
+			return M_PI;
+		} else if ( value.contains("°") ) {
+			return value.real() * M_PI/180.0;
+		} else if ( value[0] == 'p' ) {
+			double			d(1);
+			if ( value.contains("/") ) d = 1.0/value.post('/').real();
+			else if ( value.contains("*") ) d = value.post('*').real();
+			return d*M_PI;
+		}
+		return value.real();
+	}
+	double		angle_degrees() {	// Converts from degrees and returns an angle in radians
+		if ( value.length() < 1 ) {
+			cerr << "-" << tag << ": An angle must be specified!" << endl;
+			err++;
+		}
+		return value.real() * M_PI/180.0;
 	}
 	template <typename T1, typename T2>
 	long	values(T1& v1, T2& v2) {
@@ -253,12 +278,12 @@ public:
 		if ( volume(sz) < 1 ) sz = vecmax(sz, 1);
 		return n;
 	}
-	Bstring		symmetry_string() {
+	string		symmetry_string() {
 		if ( value.length() < 1 ) {
 			cerr << "-symmetry: A symmetry must be specified!" << endl;
 			err++;
 		}
-		Bsymmetry	sym(value);
+		Bsymmetry	sym(value.str());
 		return sym.label();
 	}
 	Bsymmetry	symmetry() {
@@ -266,10 +291,10 @@ public:
 			cerr << "-symmetry: A symmetry must be specified!" << endl;
 			err++;
 		}
-		return Bsymmetry(value);
+		return Bsymmetry(value.str());
 	}
-	View		view() {
-		View			v;
+	View2<double>	view() {
+		View2<double>	v;
 		vector<double>	d = value.split_into_doubles(",");
 		if ( d.size() < 3 ) {
 			cerr << "-View: At least 3 values for the vector must be specified!" << endl;
@@ -290,18 +315,68 @@ public:
 		for ( long i=0; i<3; i++ ) e[i] = d[i]*M_PI/180.0;
 		return e;
 	}
- 	double			mass() {
-		double			m = value.real();
-		if ( value.contains("k") || value.contains("K") )
+ 	double			real_unit(Bstring& s) {
+		double			m = s.real();
+		// Convert angles to radians
+		if ( s.contains("d") || s.contains("°") )	// degrees
+			m *= M_PI/180.0;
+		else if ( s.contains("mr") )	// milliradians
+			m *= 1e-3;
+		// Convert distances to angstrom
+		else if ( s.contains("m") )		// millimeter
+			m *= 1e7;
+		else if ( s.contains("u") )		// micrometer
+			m *= 1e4;
+		else if ( s.contains("n") )		// nanometer
+			m *= 10;
+		else if ( s.contains("p") )		// picometer
+			m *= 0.01;
+		// Convert masses to Dalton
+		else if ( s.contains("k") || value.contains("K") )	// kilo
 			m *= 1e3;
-		else if ( value.contains("m") || value.contains("M") )
+		else if ( s.contains("M") )		// Mega
 			m *= 1e6;
-		else if ( value.contains("g") || value.contains("G") )
+		else if ( s.contains("g") || value.contains("G") )	// Giga
 			m *= 1e9;
 		return m;
 	}
+	double			real_units() {
+		return real_unit(value);
+	}
+	template <typename T1, typename T2>
+ 	long			real_units(T1& v1, T2& v2) {
+ 		Bstring*	s = value.split(",");
+ 		v1 = real_unit(*s);
+ 		s = s->next;
+ 		if ( s ) v2 = real_unit(*s);
+ 		else return 1;
+ 		return 2;
+ 	}
+	template <typename T1, typename T2, typename T3>
+ 	long			real_units(T1& v1, T2& v2, T3& v3) {
+ 		Bstring*	s = value.split(",");
+ 		v1 = real_unit(*s);
+ 		s = s->next;
+ 		if ( s ) v2 = real_unit(*s);
+ 		else return 1;
+ 		s = s->next;
+ 		if ( s ) v3 = real_unit(*s);
+ 		else return 2;
+ 		return 3;
+ 	}
+ 	double			density(DensityUnit& units) {
+ 		double			d = value.real();
+		if ( d < 0.01 ) {
+			cerr << "-density: A density must be specified!" << endl;
+		} else {
+			if ( value.contains("g") ) units = G_CM3;
+			if ( value.contains("d") ) units = DA_A3;
+			if ( value.contains("n") ) units = NUM_A3;
+		}
+		return d;
+ 	}
 	UnitCell		unit_cell() {
-		UnitCell		uc(0,0,0,M_PI_2,M_PI_2,M_PI_2);
+		UnitCell		uc;
 		vector<double>	d = value.split_into_doubles(",");
 		if ( d.size() < 6 ) {
 			cerr << "-unitcell: All 6 values for the unit cell must be specified!" << endl;
@@ -311,6 +386,23 @@ public:
 		uc.degrees_to_radians();
 		uc.set_angle_range();
 		return uc;
+	}
+	ComplexConversion complex_conversion() {
+		ComplexConversion	conv(NoConversion);
+		if ( value[0] == 'r' || value[0] == 'R' ) {
+			conv = Real;
+		} else if ( value[0] == 'i' ) {
+			conv = Imaginary;
+			if ( value[1] == 'n' ) conv = Intensity;
+		} else if ( value[0] == 'a' || value[0] == 'A' ) {
+			conv = Amplitude;
+		} else if ( value[0] == 'I' ) {
+			conv = Intensity;
+			if ( value[1] == 'm' ) conv = Imaginary;
+		} else if ( value[0] == 'p' || value[0] == 'P' ) {
+			conv = Phase;
+		}
+		return conv;
 	}
 	int				ctf_action() {
 		int			action(0);
@@ -327,9 +419,10 @@ public:
 			if ( value.contains("baseline2") ) action = 6;
 			if ( value.contains("basef") ) action = 7;
 			if ( value.contains("basec") ) action = 8;
-			if ( value.contains("env") ) action = 9;
-			if ( value.contains("app") &&
-				value.contains("env") ) action = 10;
+//			if ( value.contains("env") ) action = 9;
+//			if ( value.contains("app") &&
+//				value.contains("env") ) action = 10;
+			if ( value.contains("ew") ) action = 9;
 			if ( value.contains("prep") ) action = 11;
 			if ( value.contains("fit") ) action = 12;
 			if ( value.contains("prep") &&
@@ -344,5 +437,4 @@ Boption*	get_option_list(const char* use[], int argc, char* argv[], int& optind)
 int			option_kill(Boption* option);
 int 		get_option_verbose(char* optarg);
 int 		get_option_verbose(Bstring& optarg);
-double		get_option_mass(Bstring& optarg);
 

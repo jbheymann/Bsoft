@@ -82,15 +82,14 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the model parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No parameter or image files specified!" << endl;
 		bexit(-1);
 	}
 
 	Bmodel*		model = read_model(file_list);
-	string_kill(file_list);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -115,29 +114,29 @@ int 	main(int argc, char **argv)
 		ext = outfile.extension();
 		if ( ext.contains("bild") || ext.contains("bld") ) {
 			if ( bild_type[0] == 'v' )	// Views
-				model_to_bild_orientations(outfile, model, 1, color_type);
+				model_to_bild_orientations(outfile.str(), model, 1, color_type);
 			else if ( bild_type[0] == 'f' )	// Force vectors
-				model_to_bild_orientations(outfile, model, 2, color_type);
+				model_to_bild_orientations(outfile.str(), model, 2, color_type);
 			else if ( bild_type[0] == 's' )	// Velocity vectors
-				model_to_bild_orientations(outfile, model, 3, color_type);
+				model_to_bild_orientations(outfile.str(), model, 3, color_type);
 			else if ( bild_type[0] == 'b' )	// View sphere
-				model_to_bild_view_sphere(outfile, model, color_type);
+				model_to_bild_view_sphere(outfile.str(), model, color_type);
 			else if ( bild_type[0] == 'c' )	
-				model_to_bild_view_polygons(outfile, model, order, color_type);
+				model_to_bild_view_polygons(outfile.str(), model, order, color_type);
 			else if ( bild_type[0] == 'p' )	// Polygons
-				model_to_bild_polygons(outfile, model, color_type);
+				model_to_bild_polygons(outfile.str(), model, color_type);
 			else if ( bild_type[0] == 'n' )	// Neighbor planes
-				model_to_bild_neighbor_planes(outfile, model, color_type);
+				model_to_bild_neighbor_planes(outfile.str(), model, color_type);
 			else
-				write_model_bild(outfile, model);
+				write_model_bild(outfile.str(), model, 0);
 		} else {
-				write_model(outfile, model);
+				write_model(outfile.str(), model);
 		}
 	}
 	
 	model_kill(model);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

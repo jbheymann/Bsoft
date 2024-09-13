@@ -111,6 +111,33 @@ public:
 		data[1] = (Type) grn;
 		data[2] = (Type) blu;
 	}
+	void	red_white_blue(double v, double red_min, double white_min,
+				double white_max, double blue_max) {
+		double		red, grn, blu;		
+    	double		blue_scale(255.0/(blue_max - white_max));
+    	double		red_scale(255.0/(white_min - red_min));
+		red = grn = blu = 255;						// White part
+		if ( v > blue_max ) {						// Blue part
+			red = grn = 0;
+		} else if ( v < red_min ) {					// Red part
+			blu = grn = 0;
+		} else if ( v > white_max ) {				// Blue gradient
+      		red = (int) (blue_scale*(blue_max - v));
+      		grn = (int) (blue_scale*(blue_max - v));
+		} else if ( v < white_min ) {				// Red gradient
+      		blu = (int) (red_scale*(v - red_min));
+      		grn = (int) (red_scale*(v - red_min));
+		}
+      	if ( red < 0 ) red = 0;
+      	if ( red > 255 ) red = 255;
+      	if ( grn < 0 ) grn = 0;
+      	if ( grn > 255 ) grn = 255;
+      	if ( blu < 0 ) blu = 0;
+      	if ( blu > 255 ) blu = 255;
+		data[0] = (Type) (red);
+		data[1] = (Type) (grn);
+		data[2] = (Type) (blu);
+	}
 	void	phase(double phi, double amp_ratio) {
 		if ( amp_ratio > 255 ) amp_ratio = 255;
 		if ( sizeof(Type) > 1 ) if ( amp_ratio > 1 ) amp_ratio = 1;		

@@ -76,14 +76,11 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "sampling" )
 			sam = curropt->scale();
 		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.1 )
+			if ( ( resolution = curropt->value.real() ) < 0.01 )
 				cerr << "-resolution: A positive resolution limit must be specified!" << endl;
 		if ( curropt->tag == "ratio" )
 			if ( ( sampling_ratio = curropt->value.real() ) < 1 )
 				cerr << "-ratio: A ratio must be specified!" << endl;
-		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.1 )
-				cerr << "-resolution: A positive resolution limit must be specified!" << endl;
 		if ( curropt->tag == "size" )
 			size = curropt->size();
 		if ( curropt->tag == "scale" )
@@ -195,7 +192,7 @@ int 		main(int argc, char **argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

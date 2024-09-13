@@ -3,7 +3,7 @@
 @brief	Functions for reading and writing TIFF files
 @author Bernard Heymann
 @date	Created: 19990509
-@date 	Modified: 20210615
+@date 	Modified: 20230320
 **/
 
 #include "rwTIFF.h"
@@ -19,30 +19,119 @@
 #include "rwxml.h"
 #endif
 
-// Tags for EER compression
-#define TIFF_COMPRESSION_EER_V0 			65000
-#define TIFF_COMPRESSION_EER_V1 			65001
-#define TIFFTAG_EER_ACQUISITION_METADATA	65001
-
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
 extern char* month[];
 
-// Initialize EER decodec
-int		TIFFInitEER(TIFF* tif, int scheme);
+// Tags for EER compression
+#define TIFF_COMPRESSION_EER_V0 			65000
+#define TIFF_COMPRESSION_EER_V1 			65001
+#define TIFFTAG_EER_ACQUISITION_METADATA	65001
+
+// Tags for Digital Micrograph
+#define TIFF_DM_X_UNITS						65003
+#define TIFF_DM_Y_UNITS						65004
+#define TIFF_DM_Z_UNITS						65005
+#define TIFF_DM_X_OFFSET					65006
+#define TIFF_DM_Y_OFFSET					65007
+#define TIFF_DM_Z_OFFSET					65008
+#define TIFF_DM_X_SCALE						65009
+#define TIFF_DM_Y_SCALE						65010
+#define TIFF_DM_Z_SCALE						65011
+#define TIFF_DM_X_UNIT_NAME					65012
+#define TIFF_DM_Y_UNIT_NAME					65013
+#define TIFF_DM_Z_UNIT_NAME					65014
+
+#define TIFF_DM_TAG15						65015
+#define TIFF_DM_TAG16						65016
+#define TIFF_DM_TAG17						65017
+#define TIFF_DM_TAG18						65018
+#define TIFF_DM_TAG19						65019
+#define TIFF_DM_TAG20						65020
+#define TIFF_DM_TAG21						65021
+
+#define TIFF_DM_INTENSITY_UNIT_X			65022
+#define TIFF_DM_INTENSITY_UNIT_Y			65023
+#define TIFF_DM_INTENSITY_OFFSET			65024
+#define TIFF_DM_INTENSITY_SCALE				65025
+
+#define TIFF_DM_TAG26						65026
+#define TIFF_DM_TAG27						65027
+
+#define     NELEM(a)    (sizeof (a) / sizeof (a[0]))
 
 // Custom tags
 static const TIFFFieldInfo xtiffFieldInfo[] = {
 	{ TIFF_COMPRESSION_EER_V0, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("EER compression v0") },
 	{ TIFF_COMPRESSION_EER_V1, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("EER compression v1") },
-	{ TIFFTAG_EER_ACQUISITION_METADATA, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Acquisition metadata") }
+	{ TIFFTAG_EER_ACQUISITION_METADATA, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Acquisition metadata") },
+	{ TIFF_DM_X_UNITS, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("X units") },
+	{ TIFF_DM_Y_UNITS, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Y units") },
+	{ TIFF_DM_Z_UNITS, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Z units") },
+	{ TIFF_DM_X_OFFSET, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("X offset") },
+	{ TIFF_DM_Y_OFFSET, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Y offset") },
+	{ TIFF_DM_Z_OFFSET, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Z offset") },
+	{ TIFF_DM_X_SCALE, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("X scale") },
+	{ TIFF_DM_Y_SCALE, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Y scale") },
+	{ TIFF_DM_Z_SCALE, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Z scale") },
+	{ TIFF_DM_X_UNIT_NAME, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("X units full name") },
+	{ TIFF_DM_Y_UNIT_NAME, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Y units full name") },
+	{ TIFF_DM_Z_UNIT_NAME, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Z units full name") },
+	{ TIFF_DM_TAG15, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 15") },
+	{ TIFF_DM_TAG16, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 16") },
+	{ TIFF_DM_TAG17, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 17") },
+	{ TIFF_DM_TAG18, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 18") },
+	{ TIFF_DM_TAG19, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 19") },
+	{ TIFF_DM_TAG20, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 20") },
+	{ TIFF_DM_TAG21, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 21") },
+	{ TIFF_DM_INTENSITY_UNIT_X, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Intensity unit x") },
+	{ TIFF_DM_INTENSITY_UNIT_Y, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_UNDEFINED, FIELD_CUSTOM, true, true, const_cast<char*>("Intensity unit y") },
+	{ TIFF_DM_INTENSITY_OFFSET, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Intensity offset") },
+	{ TIFF_DM_INTENSITY_SCALE, 1, 1, TIFF_DOUBLE, FIELD_CUSTOM, true, false, const_cast<char*>("Intensity scale") },
+	{ TIFF_DM_TAG26, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 26") },
+	{ TIFF_DM_TAG27, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, true, true, const_cast<char*>("Tag 27") }
 };
+
+// Initialize EER decodec
+int		TIFFInitEER(TIFF* tif, int scheme);
 
 static void registerTIFFTags(TIFF *tif)
 {
 //    int error = TIFFMergeFieldInfo(tif, xtiffFieldInfo, 3);
-    TIFFMergeFieldInfo(tif, xtiffFieldInfo, 3);
+    TIFFMergeFieldInfo(tif, xtiffFieldInfo, NELEM(xtiffFieldInfo));
+}
+
+int		tiff_show_tag_values(TIFF* tif)
+{
+	int					i, t;
+	double				d;
+	uint32_t  			count;
+	void    			*data;
+	const TIFFField*	tf;
+//	TIFFDataType		dt;
+	
+	int					n = TIFFGetTagListCount(tif);
+	
+	if ( verbose )
+		cout << "Number of custom tags: " << n << endl;
+	
+	for ( i=1; i<n; ++i ) {
+		t = TIFFGetTagListEntry(tif, i);
+		tf = TIFFFieldWithTag(tif, t);
+//		dt = TIFFFieldDataType(tf);
+		if ( TIFFFieldPassCount(tf) ) {
+			TIFFGetField(tif, t, &count, &data);
+			if ( verbose )
+				cout << t << tab << count << tab << *(double *)data << endl;
+		} else {
+			TIFFGetField(tif, t, &d);
+			if ( verbose )
+				cout << t << tab << count << tab << d << endl;
+		}
+	}
+	
+	return n;
 }
 
 /**
@@ -72,7 +161,7 @@ int 	readTIFF(Bimage* p, int readdata, int img_select)
 	int 			flags(0);
 	if ( verbose & VERB_DEBUG ) {
 //		cout << "Magic number:" << fimg->tif_header.tiff_magic << endl;
-		flags = TIFFPRINT_STRIPS | TIFFPRINT_CURVES | TIFFPRINT_COLORMAP;
+//		flags = TIFFPRINT_STRIPS | TIFFPRINT_CURVES | TIFFPRINT_COLORMAP;
 		TIFFPrintDirectory(fimg, stdout, flags);
 	}
 	
@@ -89,6 +178,8 @@ int 	readTIFF(Bimage* p, int readdata, int img_select)
 	unsigned short* red = NULL;
 	unsigned short*	green = NULL;
 	unsigned short*	blue = NULL;
+
+//	tiff_show_tag_values(fimg);
 
 	TIFFGetField(fimg, TIFFTAG_COMPRESSION, &compression);
 	(*p)["compression"] = compression;
@@ -134,7 +225,7 @@ int 	readTIFF(Bimage* p, int readdata, int img_select)
 		TIFFSetDirectory(fimg, 0);
 	}
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	char*		timestring = NULL, mon[4];
 	TIFFGetField(fimg, TIFFTAG_DATETIME, &timestring);
 	if ( timestring ) {
@@ -509,11 +600,11 @@ int 	writeTIFF(Bimage* p, int flags)
 	
 	if ( compression ) (*p)["compression"] = compression;
 	
-	tm*		t = p->get_localtime();
+	tm*		t = p->get_local_time();
 	char	timestring[20];
-	snprintf(timestring, 20, "%4d:%02d:%02d %02d:%02d:%02d",
-			t->tm_year+1900, t->tm_mon+1, t->tm_mday, 
-			t->tm_hour, t->tm_min, t->tm_sec);
+  	strftime (timestring, 20, "%Y:%m:%d %H:%M:%S", t);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG writeTIFF: timestring=" << timestring << endl;
 	
 	for ( n=0; n<p->images(); n++ ) {
 		TIFFSetDirectory(fimg, n);

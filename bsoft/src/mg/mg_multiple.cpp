@@ -1,9 +1,9 @@
 /**
 @file	mg_multiple.cpp
 @brief	Selection of single particle parameters from multiple files for classification
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010319
-@date	Modified: 20210516
+@date	Modified: 20220831
 **/
 
 #include "mg_processing.h"
@@ -12,7 +12,6 @@
 #include "mg_particle_select.h"
 #include "rwmg.h"
 #include "Matrix.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -318,6 +317,145 @@ long		project_multi_add(Bproject* project, Bstring* file_list, int fom_index)
 }
 
 /**
+@brief 	Adds particles from a list of projects to the first one.
+@param 	*file_list			linked list of parameter file names.
+@return Bproject*				project with renumbered particles.
+
+	The particles from other files are added to existing ones in the first file.
+	Where project component ID's correspond the particles are added,
+	otherwise new components are added.
+	Particles are renumbered and the references to old particle files removed.
+
+**/
+Bproject*	project_multi_add_particles(Bstring* file_list)
+{
+	long				nmg(0), nrec(0);
+	Bproject*			project = NULL;
+	Bstring*			filename;
+	Bfield*				field = NULL;
+	Bmicrograph*		mg = NULL;
+	Breconstruction*	rec = NULL;
+	Bparticle*			part = NULL;
+	Bproject*			project2 = NULL;
+	Bfield*				field2 = NULL;
+	Bmicrograph*		mg2 = NULL;
+	Breconstruction*	rec2 = NULL;
+	
+	if ( verbose ) {
+		cout << "Adding particles from other parameter files" << endl;
+		cout << endl;
+	}
+
+	for ( filename = file_list; filename; filename = filename->next ) {
+		project2 = read_project(*filename);
+		if ( !project ) {
+			project = project2;
+		} else {
+			for ( field2 = project2->field; field2;  ) {	// Field to be merged
+				// Find the same field
+				for ( field = project->field; field && field->id != field2->id; field = field->next ) ;
+				if ( !field ) {
+					if ( project->field ) {
+						for ( field = project->field; field->next; field = field->next ) ;
+						field->next = field2;
+					} else {
+						project->field = field2;
+					}
+					field = field2;
+					field2 = field2->next;
+					field->next = NULL;
+				} else {
+					for ( mg2 = field2->mg; mg2;  ) {
+						// Find the same micrograph
+						for ( mg = field->mg; mg && mg->id != mg2->id; mg = mg->next ) ;
+						if ( !mg ) {
+							mg2->fpart = 0;
+							if ( field->mg ) {
+								for ( mg = field->mg; mg->next; mg = mg->next ) ;
+								mg->next = mg2;
+							} else {
+								field->mg = mg2;
+							}
+							mg = mg2;
+							mg2 = mg2->next;
+							mg->next = NULL;
+						} else {
+							mg->fpart = 0;
+							if ( mg->part ) {
+								for ( part = mg->part; part->next; part = part->next ) ;
+								part->next = mg2->part;
+							} else {
+								mg->part = mg2->part;
+							}
+							mg2->part = NULL;
+							mg = mg2;
+							mg2 = mg2->next;
+							micrograph_kill(mg);
+							nmg++;
+						}
+					}
+					field2->mg = NULL;
+					field = field2;
+					field2 = field2->next;
+					field_kill(field);
+				}
+			}
+			project2->field = NULL;
+			for ( rec2 = project2->rec; rec2;  ) {
+				// Find the same reconstruction
+				for ( rec = project->rec; rec && rec2->id != rec->id; rec = rec->next ) ;
+				if ( rec ) {
+					rec->fpart = 0;
+					if ( rec->part ) {
+						for ( part = rec->part; part->next; part = part->next ) ;
+						part->next = rec2->part;
+					} else {
+						rec->part = rec2->part;
+					}
+					rec2->part = NULL;
+					rec = rec2;
+					rec2 = rec2->next;
+					reconstruction_kill(rec);
+					nrec++;
+				} else {
+					rec2->fpart = 0;
+					if ( project->rec ) {
+						for ( rec = project->rec; rec->next; rec = rec->next ) ;
+						rec->next = rec2;
+					} else {
+						project->rec = rec2;
+					}
+					rec = rec2;
+					rec2 = rec2->next;
+					rec->next = NULL;
+				}
+			}
+			project2->rec = NULL;
+			project_kill(project2);
+		}
+	}
+
+	project_renumber_particles(project);
+
+	long			npart(0), nsel(0);
+	double			percentage(0);
+	npart += project_count_mg_particles(project);
+	nsel += project_count_mg_part_selected(project);
+	npart += project_count_rec_particles(project);
+	nsel += project_count_rec_part_selected(project);
+	
+	if ( npart ) percentage = nsel*100.0/npart;
+
+	if ( verbose ) {
+		cout << "Micrographs updated:            " << nmg << endl;
+		cout << "Reconstructions updated:        " << nrec << endl;
+		cout << "Number of particles selected:   " << nsel << " (" << percentage << " %)" << endl << endl;
+	}
+	
+	return project;
+}
+
+/**
 @brief 	Adjusts FOM to the avergae of the first project.
 @param 	*project_list	linked list of project structures with all parameters.
 @param 	fom_index		index of FOM to select on.
@@ -328,7 +466,7 @@ long		project_multi_add(Bproject* project, Bstring* file_list, int fom_index)
 **/
 long 		project_multi_adjust_FOM(Bproject* project_list, int fom_index)
 {
-	long				np = count_list((char *)project_list);
+	long				np = project_list->count();
 	long				npart = project_check_same_number_particles(project_list);
 	
 	Bproject*			project;
@@ -402,7 +540,7 @@ long 		project_multi_adjust_FOM(Bproject* project_list, int fom_index)
 **/
 long 		project_multi_select_best_FOM(Bproject* project_list, double fom_cut, int fom_index, int fom_def_flag)
 {
-	long			np = count_list((char *)project_list);
+	long				np = project_list->count();
 	
 	if ( np < 1 ) {
 		cout << "Selecting best FOM: Too few parameter files provided!" << endl;
@@ -440,8 +578,11 @@ long 		project_multi_select_best_FOM(Bproject* project_list, double fom_cut, int
 		if ( fom_def_flag ) {
 			intercept_avg /= np;
 			slope_avg /= np;
-			if ( verbose )
-				cout << "FOM vs defocus slope:           " << slope_avg << endl;
+			if ( verbose ) {
+				cout << "FOM vs defocus:" << endl;
+				cout << tab << "Slope:                      " << slope_avg << endl;
+				cout << tab << "Intercept:                  " << intercept_avg << endl;
+			}
 		}
 		for ( ; field[0]; ) {
 			if ( verbose & VERB_FULL )
@@ -524,7 +665,7 @@ long 		project_multi_select_best_FOM(Bproject* project_list, double fom_cut, int
 **/
 long 		project_multi_selection_stats(Bproject* project_list)
 {
-	long			np = count_list((char *)project_list);
+	long				np = project_list->count();
 	
 	if ( np < 1 ) {
 		cerr << "Error: Selection statistics: Too few parameter files provided!" << endl;
@@ -663,7 +804,7 @@ long 		project_multi_selection_stats(Bproject* project_list)
 long 		project_multi_select_low_variance(Bproject* project_list, Bsymmetry& sym,
 				double origin_dev, double view_dev, double angle_dev, double mag_dev)
 {
-	long			np = count_list((char *)project_list);
+	long				np = project_list->count();
 	
 	if ( np < 2 ) {
 		cout << "Selecting lowest variance: Too few parameter files provided!" << endl;
@@ -675,7 +816,7 @@ long 		project_multi_select_low_variance(Bproject* project_list, Bsymmetry& sym,
 	
 	int				i, j, h, f, nsel(0), psel, flag3D(0);
 	double			var, ox_sum, oy_sum, oz_sum, ox_sqsum, oy_sqsum, oz_sqsum, origin_std, view_std, angle_std;
-	View			vsum, vsqsum;
+	View2<double>	vsum, vsqsum;
 	double			size_sum, size_sqsum, size_std, defsum, defsqsum, def_std;
 	double			def_avg_dev(0), origin_avg_dev(0), view_avg_dev(0), angle_avg_dev(0), size_avg_dev(0);
 	
@@ -690,8 +831,7 @@ long 		project_multi_select_low_variance(Bproject* project_list, Bsymmetry& sym,
 	Bfield**		field = new Bfield*[np];
 	Bmicrograph**	mg = new Bmicrograph*[np];
 	Bparticle**		part = new Bparticle*[np];
-//	View*			view, *v;
-	View			theview;
+	View2<double>	theview;
 //	double			da, da_min;
 	
 	for ( i=0, project=project_list; i<np; i++, project=project->next ) field[i] = project->field;
@@ -720,7 +860,7 @@ long 		project_multi_select_low_variance(Bproject* project_list, Bsymmetry& sym,
 					if ( verbose & VERB_FULL )
 						cout << part[0]->id << tab << part[0]->ori << endl;
 					for ( i=0; i<np; i++ ) {
-						theview = find_closest_symmetric_view(sym, part[0]->view, part[i]->view);
+						theview = sym.find_closest_symmetric_view(part[0]->view2(), part[i]->view2());
 						ox_sum += part[i]->ori[0];
 						ox_sqsum += part[i]->ori[0]*part[i]->ori[0];
 						oy_sum += part[i]->ori[1];
@@ -852,7 +992,7 @@ long 		project_multi_select_low_difference(Bproject* project1, Bproject* project
 	Bparticle		*part1, *part2;
 	Bparticle**		partarr1;
 	Bparticle**		partarr2;
-	View			view1, view2;
+	View2<double>	view1, view2;
 	
 	if ( project1->select < 1 ) {
 //		nmg = project_count_micrographs(project1);
@@ -894,8 +1034,8 @@ long 		project_multi_select_low_difference(Bproject* project1, Bproject* project
 				ndsel++;
 			}
 			dori = (part1->ori - part2->ori).length();
-			view1 = part1->view;
-			view2 = find_closest_symmetric_view(sym, view1, part2->view);
+			view1 = part1->view2();
+			view2 = sym.find_closest_symmetric_view(view1, part2->view2());
 //			cout << part1->id << tab << view1 << tab << view2 << endl;
 //			cout << view1.vector3().scalar(view2.vector3()) << endl;
 			dview = view1.angle(view2);
@@ -1001,7 +1141,7 @@ long 		project_multi_select_low_rmsd(Bproject* project1, Bproject* project2,
 	Bparticle		*part1, *part2;
 	Bparticle**		partarr1;
 	Bparticle**		partarr2;
-	View			view1, view2;
+	View2<double>	view1, view2;
 	
 	if ( project1->select < 1 ) {
 		nmg = project_count_micrographs(project1);
@@ -1029,8 +1169,8 @@ long 		project_multi_select_low_rmsd(Bproject* project1, Bproject* project2,
 		part2 = partarr2[i];
 		if ( part1->sel && part2->sel ) {
 			dori = (part1->ori - part2->ori).length();
-			view1 = part1->view;
-			view2 = find_closest_symmetric_view(sym, view1, part2->view);
+			view1 = part1->view2();
+			view2 = sym.find_closest_symmetric_view(view1, part2->view2());
 			dview = view1.angle(view2);
 			dang = fabs(angle_set_negPI_to_PI(view1.angle() - view2.angle()));
 			dsize = part1->mag - part2->mag;

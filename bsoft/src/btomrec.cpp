@@ -98,7 +98,7 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "sampling" )
 			sam = curropt->scale();
 		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.1 )
+			if ( ( resolution = curropt->value.real() ) < 0.01 )
 				cerr << "-resolution: A resolution limit must be specified!" << endl;
 		if ( curropt->tag == "size" )
 			size = curropt->size();
@@ -237,7 +237,7 @@ int 		main(int argc, char **argv)
 	fftwf_cleanup_threads();
 #endif
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

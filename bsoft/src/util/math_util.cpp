@@ -3,18 +3,19 @@
 @brief	Mathematics utility functions
 @author Bernard Heymann 
 @date	Created: 20030414
-@date	Modified: 20151203
+@date	Modified: 20230517
 **/
 
 #include "math_util.h" 
-#include "utilities.h" 
+#include "string_util.h"
+#include "utilities.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
 /**
 @brief 	Truncates a value to a specified number of decimal places.
-@param 	value	value to be truncated.
+@param 	value		value to be truncated.
 @param 	places		number of decimal places.
 @return int 			0.
 **/
@@ -49,8 +50,21 @@ double		bround(double value, int places)
 }
 
 /**
+@brief 	Returns the normalized cardinal sine.
+@param 	d		value.
+@return double 	sinc value.
+**/
+double		sinc(double d)
+{
+	if ( d ) return sin(M_PI*d)/(M_PI*d);
+	else return 1;
+}
+
+/**
 
 @brief 	Calculates the factorial of n.
+@param 	n			integer.
+@return double		factorial of n, <0 on error.
 
 	All values of n less than 1 returns 1.
 	An exact calculation is done for 1 < n <= 50.
@@ -60,8 +74,6 @@ double		bround(double value, int places)
 	The largest relative error is for 170: 1.22378e-13.
 Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 
-@param 	n			integer.
-@return double			factorial of n, <0 on error.
 **/
 double		factorial(int n)
 {
@@ -143,7 +155,7 @@ int			partition(vector<double>& a, int n, int k)
 @brief 	Finds all the prime factor for the input number.
 @param 	number		integer.
 @param 	&n			number of prime factors.
-@return long*		array of prime factors (can be NULL).
+@return long*			array of prime factors (can be NULL).
 
 	Calculates the prime factors from the smallest to the largest.
 Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
@@ -170,6 +182,31 @@ long*  	prime_factors(long number, long& n)
 	
 	if ( verbose & VERB_DEBUG ) {
 		for ( i=0; i<n; i++ ) cout << " " << pn[i];
+		cout << endl;
+	}
+	
+	return prime;
+}
+
+vector<long>	prime_factors(long number)
+{
+	long			divisor, n, i;
+	vector<long>	prime;
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG prime_factors: for number " << number << ":   ";
+	
+	for ( n=0; number > 1; n++ ) {
+		divisor = smallest_prime(number);
+		if ( divisor < 1 ) break;
+		prime.push_back(divisor);
+		number /= divisor;
+	}
+	
+	if ( n < 1 ) return prime;
+	
+	if ( verbose & VERB_DEBUG ) {
+		for ( i=0; i<n; i++ ) cout << " " << prime[i];
 		cout << endl;
 	}
 	
@@ -217,6 +254,25 @@ long		smallest_prime(long number)
 Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 
 **/
+int				next_permutation(string& s)
+{
+	int		i, j;
+	long	len = s.length();
+	
+	for ( i=len-2; i>=0 && s[i] >= s[i+1]; i-- ) ;
+	if ( i < 0 ) return 0;
+	
+	for ( j=len-1; j>=0 && s[i] >= s[j]; j-- ) ;
+	s = swap(s, i, j);
+	
+	for ( i++, j=len-1; i<j; i++, j-- ) s = swap(s, i, j);
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG next_permutation: " << s << endl;
+	
+	return 1;
+}
+
 int				next_permutation(Bstring& s)
 {
 	int		i, j;

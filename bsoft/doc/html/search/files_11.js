@@ -1,9 +1,9 @@
 var searchData=
 [
-  ['unitcell_2ecpp_6084',['UnitCell.cpp',['../_unit_cell_8cpp.html',1,'']]],
-  ['unitcell_2eh_6085',['UnitCell.h',['../_unit_cell_8h.html',1,'']]],
-  ['use_5fctf_2einc_6086',['use_ctf.inc',['../use__ctf_8inc.html',1,'']]],
-  ['use_5fdose_2einc_6087',['use_dose.inc',['../use__dose_8inc.html',1,'']]],
-  ['utilities_2ecpp_6088',['utilities.cpp',['../utilities_8cpp.html',1,'']]],
-  ['utilities_2eh_6089',['utilities.h',['../utilities_8h.html',1,'']]]
+  ['qsort_5f_5ffunctions_5f8cpp_2ejs_0',['qsort__functions_8cpp.js',['../qsort____functions__8cpp_8js.html',1,'']]],
+  ['qsort_5f_5ffunctions_5f8h_2ejs_1',['qsort__functions_8h.js',['../qsort____functions__8h_8js.html',1,'']]],
+  ['qsort_5ffunctions_2ecpp_2',['qsort_functions.cpp',['../qsort__functions_8cpp.html',1,'']]],
+  ['qsort_5ffunctions_2eh_3',['qsort_functions.h',['../qsort__functions_8h.html',1,'']]],
+  ['quaternion_2ecpp_4',['Quaternion.cpp',['../_quaternion_8cpp.html',1,'']]],
+  ['quaternion_2eh_5',['Quaternion.h',['../_quaternion_8h.html',1,'']]]
 ];

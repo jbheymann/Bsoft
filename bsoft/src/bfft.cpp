@@ -3,7 +3,7 @@
 @brief	General FFT for n-dimensional data
 @author Bernard Heymann
 @date	Created: 19980805
-@date 	Modified: 20210817
+@date 	Modified: 20230209
 Implementing the FFTW library
 **/
 
@@ -26,15 +26,22 @@ const char* use[] = {
 "Fast Fourier transforms to and from image and reflection formats.",
 " ",
 "Actions:",
-"-inverse                 Backward transform (default forward).",
-"-phaseshift              Shift phase by half of the size.",
+"-back                    Back transform to real space (default forward).",
+//"-inverse                 Back transform to real space (default forward).",
+"-xyft                    Only transform xy slices.",
+"-zft                     Only transform z columns.",
+"-convert real            Convert the complex transform: real, imag, amp, int, phase (default not).",
 "-powerspectrum           Calculate powerspectrum estimate (can be used with the -tile option).",
+"-tile 1024,1024,1        Size of tiles for calculating a transform or power spectrum.",
+//"-edgesmooth              Smooth the edge to get rid of any cross.",
+"-fix ver                 Fix the horizontal or vertical zero-frequency line, or both.",
 "-average                 Average multiple power spectra (can be used with the -tile option).",
 "-logarithm               Calculate the logarithm of the power spectrum.",
 "-color 1.5               Generate a phase-coloured power spectrum: amplitude scaling.",
 //"-weigh                   Weigh reflections with FOM.",
 //"-cutoff 0.2              Remove reflections with FOM < cutoff threshold.",
 "-zeroorigin              Zero the transform origin.",
+"-phaseshift              Shift phase by half of the size.",
 "-halfshift               Shift correlation map by half the size to put the origin in the middle.",
 //"-cone 45                 Remove missing cone.",
 "-test 2,75,278,1         Test FFT execution time: dimensions,size min and max, and optimization flag.",
@@ -47,9 +54,9 @@ const char* use[] = {
 "-origin 0,-10,30         Set origin, used with -size option (default 0,0,0).",
 "-size 22,33,14           Size for transform or hkl input (voxels, default from data).",
 "-sampling 2,3.5,1        Sampling (angstrom/voxel, a single value sets all three).",
-"-unitcell 100,100,100,90,90,90 Unit cell parameters.",
-"-symmetry 1              Space group.",
-"-tile 1024,1024,1        Size of tiles for calculating a power spectrum.",
+"-normalization 2         Scaling by size: 0:none, 1:sqrt(volume) (default), 2:volume.",
+//"-unitcell 100,100,100,90,90,90 Unit cell parameters.",
+//"-symmetry 1              Space group.",
 " ",
 //"Output:",
 //"-Postscript out.ps       Postscript output for radial logarithm of power spectrum (only with -logarithm option).",
@@ -62,7 +69,8 @@ int 	main(int argc, char **argv)
     // Initialize variables
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
     fft_direction	setdir(FFTW_FORWARD);		// Forward transform
-	int				phase_shift(0);				// Flag to shift phase by half the size
+    ComplexConversion	conv(NoConversion);		// Conversion from complex transform
+    int				partial(0);					// Only transform 1=xyslice, 2=z columns
 	int				setpower(0);				// Flag to calculate a power spectrum
 	int				power_flags(0);				// Power spectrum flags
 	int				setfom(0);					// Flag to modify reflections and FOM
@@ -71,13 +79,15 @@ int 	main(int argc, char **argv)
 	Vector3<double>	nuorigin;					// Origin for extraction or HKL
 	int				set_origin(0);				// Flag for setting the origin
 	Vector3<double>	sam;    					// Sampling
-	int 			spacegroup(0);  	    	// Spacegroup
-	UnitCell		uc(0,0,0,M_PI_2,M_PI_2,M_PI_2);		// Unit cell parameters
+//	int 			spacegroup(0);  	    	// Spacegroup
+//	UnitCell		uc;							// Unit cell parameters
 	Vector3<long>	tile_size;					// Size of power spectrum tiles
     
     double			hires(0), lores(1e4);		// Limiting resolution range (hires must be > 0 to be set)
 	int 			zero_origin(0);				// Don't zero the transform origin
+	int				phase_shift(0);				// Flag to shift phase by half the size
 	int				halfshift(0);				// Flag to shift origin to middle
+	int				norm(1);					// Normalization
     double			cone(M_PI_2);    	    	// Missing cone (default none)
     int 			weigh(0);   	    	    // No weighting
     double			fomcut(0);   	    	    // Selection based on FOM cutoff
@@ -98,11 +108,22 @@ int 	main(int argc, char **argv)
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "datatype" )
 			nudatatype = curropt->datatype();
-		if ( curropt->tag == "inverse" ) setdir = FFTW_BACKWARD;
-		if ( curropt->tag == "phaseshift" ) phase_shift = 1;
+		if ( curropt->tag == "back" ) setdir = FFTW_BACKWARD;
+//		if ( curropt->tag == "inverse" ) setdir = FFTW_BACKWARD;
+		if ( curropt->tag == "xyft" ) partial = 1;
+		if ( curropt->tag == "zft" ) partial = 2;
+		if ( curropt->tag == "convert" )
+			conv = curropt->complex_conversion();
 		if ( curropt->tag == "powerspectrum" ) setpower = 1;
+		if ( curropt->tag == "edgesmooth" ) power_flags |= 16;
+		if ( curropt->tag == "fix" ) {
+			if ( curropt->value[0] == 'h' ) power_flags |= 32;
+			if ( curropt->value[0] == 'v' ) power_flags |= 64;
+			if ( curropt->value[0] == 'b' ) power_flags |= 96;
+		}
 		if ( curropt->tag == "average" ) power_flags |= 2;
 		if ( curropt->tag == "logarithm" ) { power_flags |= 8; }
+		if ( curropt->tag == "phaseshift" ) phase_shift = 1;
 		if ( curropt->tag == "halfshift" ) { power_flags |= 4; halfshift = 1; }
 		if ( curropt->tag == "zeroorigin" ) { power_flags |= 1; zero_origin = 1; }
  		if ( curropt->tag == "color" )
@@ -125,6 +146,10 @@ int 	main(int argc, char **argv)
 			else
 				setfom = 1;
   		}
+ 		if ( curropt->tag == "normalization" ) {
+ 			if ( curropt->value[0] == '0' ) norm = 0;
+ 			if ( curropt->value[0] == '2' ) norm = 2;
+ 		}
 		if ( curropt->tag == "weigh" )
        		setfom = weigh = 1;
   		if ( curropt->tag == "cutoff" ) {
@@ -145,11 +170,11 @@ int 	main(int argc, char **argv)
 			size = curropt->size();
  		if ( curropt->tag == "sampling" )
         	sam = curropt->scale();
- 		if ( curropt->tag == "unitcell" )
-			uc = curropt->unit_cell();
- 		if ( curropt->tag == "symmetry" )
-        	if ( ( spacegroup = curropt->value.integer() ) < 1 )
-				cerr << "-symmetry: The space group number must be specified" << endl;
+// 		if ( curropt->tag == "unitcell" )
+//			uc = curropt->unit_cell();
+// 		if ( curropt->tag == "symmetry" )
+//        	if ( ( spacegroup = curropt->value.integer() ) < 1 )
+//				cerr << "-symmetry: The space group number must be specified" << endl;
 		if ( curropt->tag == "tile" )
 			tile_size = curropt->size();
  		if ( curropt->tag == "Postscript" )
@@ -182,17 +207,20 @@ int 	main(int argc, char **argv)
 	
 	if ( nudatatype == Unknown_Type )
 		nudatatype = p->data_type();
+		
+	if ( setdir == FFTW_FORWARD )
+		nudatatype = Float;
 	
 	if ( p->data_type() < Float )
 		p->change_type(Float);
 	
-	if ( spacegroup ) p->space_group(spacegroup);
+//	if ( spacegroup ) p->space_group(spacegroup);
 	
 	if ( sam.volume() > 0 ) p->sampling(sam);
 		
 	if ( set_origin ) p->origin(nuorigin);
 		
-	if ( uc.check() ) p->unit_cell(uc);
+//	if ( uc.check() ) p->unit_cell(uc);
 		
     // Apply symmetery and select specific reflections if it is a transform
 	if ( p->compound_type() == TComplex ) {
@@ -212,8 +240,7 @@ int 	main(int argc, char **argv)
 	
 	if ( setpower ) {
 		if ( tile_size.volume() > 0 ) {
-			power_flags |= 2;
-			pnu = p->powerspectrum_tiled(0, tile_size, power_flags);
+			pnu = p->powerspectrum_tiled_exact(0, tile_size, power_flags);
 			if ( pnu ) {
 				delete p;
 				p = pnu;
@@ -221,15 +248,32 @@ int 	main(int argc, char **argv)
 		} else {
 			p->power_spectrum(power_flags);
 		}
-		p->information();
+		if ( verbose & VERB_FULL )
+			p->information();
 		p->powerspectrum_isotropy(0, lores, hires);
 	} else {
 		if ( phase_shift && p->fourier_type() == Standard )
 			p->phase_shift_to_center();
-		if ( p->fft(setdir) )
-			return error_show("bfft", __FILE__, __LINE__);
+		if ( hires && setdir == FFTW_BACKWARD )
+			p->fspace_bandpass(hires, lores, 0);
+		if ( tile_size.volume() > 0 ) {
+			if ( p->fft(setdir, tile_size, norm) )
+				return error_show("bfft", __FILE__, __LINE__);
+		} else if ( partial == 1 ) {
+			if ( p->fftxy(setdir, norm) )
+				return error_show("bfft", __FILE__, __LINE__);
+		} else if ( partial == 2 ) {
+			if ( p->fftz(setdir, norm) )
+				return error_show("bfft", __FILE__, __LINE__);
+		} else {
+			if ( p->fft(setdir, norm) )
+				return error_show("bfft", __FILE__, __LINE__);
+		}
 		if ( phase_shift && p->fourier_type() == Standard )
 			p->phase_shift_to_center();
+//		if ( hires && setdir == FFTW_FORWARD )
+//			p->fspace_bandpass(hires, lores, 0);
+		p->complex_convert(conv);
 	}
 	
 	if ( size.volume() > 0 )
@@ -269,7 +313,7 @@ int 	main(int argc, char **argv)
 	fftwf_cleanup_threads();
 #endif
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -290,8 +334,8 @@ int 	main(int argc, char **argv)
 **/
 int 		img_fft_times(int ndim, int minsize, int maxsize, int opt)
 {
-	long			i, size, nprime;
-	long*			prime = NULL;
+	long			i, size;
+	vector<long>	prime;
     Bimage*			p = NULL;
 	double			tvs, tvp, tvf;
 	double			dtp, dte;
@@ -322,7 +366,7 @@ int 		img_fft_times(int ndim, int minsize, int maxsize, int opt)
 				p = new Bimage(Float, TComplex, size, size, size, 1);
 				break;
 		}
-		prime = prime_factors(size, nprime);
+		prime = prime_factors(size);
 		tvs = getwalltime();
 		plan = p->fft_setup(FFTW_FORWARD, opt);
 		tvp = getwalltime();
@@ -333,9 +377,8 @@ int 		img_fft_times(int ndim, int minsize, int maxsize, int opt)
 		dtp = tvp - tvs;
 		dte = tvf - tvp;
 		cout << size << tab << fixed << setprecision(5) << dtp << tab << dte;
-		for ( i=0; i<nprime; i++ ) cout << tab << prime[i];
+		for ( i=0; i<prime.size(); i++ ) cout << tab << prime[i];
 		cout << endl;
-		delete[] prime;
 		delete p;
 		t[size-minsize].i = size;
 		t[size-minsize].f = dte;
@@ -353,3 +396,4 @@ int 		img_fft_times(int ndim, int minsize, int maxsize, int opt)
 
 	return 0;
 }
+

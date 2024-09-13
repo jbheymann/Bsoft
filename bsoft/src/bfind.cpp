@@ -3,7 +3,7 @@
 @brief	Searches orientation space for the best fit of a 3D map to a template.
 @author Bernard Heymann
 @date	Created: 20021027
-@date	Modified: 20200401
+@date	Modified: 20230524
 **/
 
 #include "rwimg.h"
@@ -12,7 +12,6 @@
 #include "rwmg.h"
 #include "symmetry.h"
 #include "ps_views.h"
-#include "linked_list.h"
 #include "file_util.h"
 #include "options.h"
 #include "utilities.h"
@@ -93,7 +92,7 @@ const char* use[] = {
 "-Postscript plot.ps      Output postscript file with a plot of global view vectors.",
 "-output file.star        Parameter output file with best orientation.",
 "-ppx                     Write temporary particle parameter files to directory \"ppx\".",
-"-json file.json          JSON single particle output file with best orientation.",
+"-jsin file.json          JSON single particle output file with best orientation.",
 "-particle newpart.pif    New transformed particle file.",
 "-newtemplate newtemp.pif New transformed template file.",
 " ",
@@ -127,9 +126,9 @@ int 		main(int argc, char **argv)
 	double			hires(0), lores(0);		// Limiting resolution for cross-correlation
 	double			search_radius(-1);		// Use default search radius
 	int				currview_set(0);		// Flag to indicate current view is set
-	View			currview;				// View to initiate search from and use as current view
-	View			bestview;				// Eventually the best view
-	View			ref_view;				// Reference view
+	View2<double>	currview;				// View to initiate search from and use as current view
+	View2<double>	bestview;				// Eventually the best view
+	View2<double>	ref_view;				// Reference view
 	double			accuracy(0);			// Accuracy for refinement: default at Nyquest
 	int				flags(0);				// Flags for processing options
 	Bstring			template_file;			// Reference template file name
@@ -256,7 +255,7 @@ int 		main(int argc, char **argv)
 			ps_file = curropt->filename();
 		if ( curropt->tag == "output" )
 			param_file = curropt->filename();
-		if ( curropt->tag == "json" )
+		if ( curropt->tag == "jsin" )
 			jsfile = curropt->filename();
 		if ( curropt->tag == "particle" )
 			newpart_file = curropt->filename();
@@ -315,7 +314,7 @@ int 		main(int argc, char **argv)
 					img_num = part->id;
 					read_img_num = part->id - 1;
 					if ( !currview_set ) {
-						currview = part->view;
+						currview = part->view2();
 						currview_set = 1;
 					}
 //					cout << "part->ori=" << part->ori << endl;
@@ -335,7 +334,7 @@ int 		main(int argc, char **argv)
 					bexit(-1);
 				}
 				if ( !currview_set ) {
-					currview = rec->view;
+					currview = rec->view2();
 					currview_set = 1;
 				}
 			} else {
@@ -364,7 +363,7 @@ int 		main(int argc, char **argv)
 
 //	cout << "part_ori=" << part_ori << endl;
 	
-	View*			view = NULL;
+	vector<View2<double>>	views;
 	Vector3<double>	origin, currshift, bestshift;
 	double			cc, best_cc(-1e37);
 	
@@ -378,22 +377,25 @@ int 		main(int argc, char **argv)
 	if ( global_bin[0] > 0 || !currview_set ) {
 		
 		if ( side_ang < 0 )
-			view = asymmetric_unit_views(sym, theta_step, phi_step, alpha_step, 1);
+			views = sym.asymmetric_unit_views(theta_step, phi_step, alpha_step, 1);
 		else
-			view = side_views(sym, side_ang, theta_step, phi_step, alpha_step);
+			views = sym.side_views(side_ang, theta_step, phi_step, alpha_step);
 		
 		if ( verbose & VERB_FULL )
-			show_views(view);
+			show_views(views);
 
-		if ( view_subset > 0 ) if ( view_list_subset(&view, view_start, view_subset) < 1 ) {
-			cerr << "Error: At least one view must be selected!" << endl;
-			bexit(-1);
+		if ( view_subset > 0 ) {
+			views = view_list_subset(views, view_start, view_subset);
+			if ( views.size() < 1 ) {
+				cerr << "Error: At least one view must be selected!" << endl;
+				bexit(-1);
+			}
 		}
 
-		if ( ps_file.length() && view ) ps_views(ps_file, sym.label(), view, 0);
+		if ( ps_file.length() && views.size() ) ps_views(ps_file.str(), sym.label(), views, 0);
 	
 		if ( verbose )
-			cout << "Number of global views:         " << count_list((char *) view) << endl << endl;
+			cout << "Number of global views:         " << views.size() << endl << endl;
 	
 		origin = temp_ori;
 
@@ -402,11 +404,10 @@ int 		main(int argc, char **argv)
 		
 		p = imgvec[0];
 
-		best_cc = p->search_views(imgvec[1], view, hires, lores, 
+		best_cc = p->search_views(imgvec[1], views, hires, lores,
 			search_radius/global_bin[0], imgvec[2], bestview, bestshift);
 		
-		kill_list((char *) view, sizeof(View));
-		view = NULL;
+		views.clear();
 		
 		if ( global_bin[0] != bin[0] )
 			bestshift *= Vector3<double>(global_bin[0]/bin[0], global_bin[1]/bin[1], global_bin[2]/bin[2]);
@@ -428,21 +429,21 @@ int 		main(int argc, char **argv)
 		p = imgvec[0];
 
 		if ( mode == "directional" ) {
-			view = views_within_limits(bestview, theta_step, phi_step, alpha_step, angle_limit, M_PI);
+			views = views_within_limits(bestview, theta_step, phi_step, alpha_step, angle_limit, M_PI);
 			if ( verbose ) {
 				cout << "Central view:                   " << bestview << endl;
-				cout << "Number of directional views:    " << count_list((char *) view) << endl << endl;
+				cout << "Number of directional views:    " << views.size() << endl << endl;
 			}
 		} else if ( mode == "symmetric" ) {
-			view = symmetry_get_all_views(sym, bestview);
+			views = sym.get_all_views(bestview);
 			if ( verbose )
-				cout << "Number of symmetry views:       " << count_list((char *) view) << endl << endl;
+				cout << "Number of symmetry views:       " << views.size() << endl << endl;
 		}
 
 		if ( mode == "directional" || mode == "symmetric" ) {
-			best_cc = p->search_views(imgvec[1], view, hires, lores, 
+			best_cc = p->search_views(imgvec[1], views, hires, lores,
 				search_radius, imgvec[2], bestview, bestshift);
-			kill_list((char *) view, sizeof(View));
+			views.clear();
 		} else if ( mode == "refine" ) {
 			currview = bestview;
 			best_cc = -1;
@@ -451,8 +452,8 @@ int 		main(int argc, char **argv)
 			while ( alpha_step >= accuracy ) {
 				if ( hires > alpha_step * p->real_size()[0] )
 					 hires = alpha_step * p->real_size()[0];
-				view = views_for_refinement(bestview, alpha_step);
-				cc = p->search_views(imgvec[1], view, hires, lores, 
+				views = views_for_refinement(bestview, alpha_step);
+				cc = p->search_views(imgvec[1], views, hires, lores,
 					search_radius, imgvec[2], bestview, currshift);
 				if ( currview.residual(bestview) < 1e-6 ||
 					fabs(cc - best_cc) < 1e-6 ||
@@ -465,7 +466,7 @@ int 		main(int argc, char **argv)
 					bestview = currview;
 					bestshift = currshift;
 				}
-				kill_list((char *) view, sizeof(View));
+				views.clear();
 				cnt++;
 			}
 		}
@@ -542,7 +543,7 @@ int 		main(int argc, char **argv)
 		if ( newpart_file.length() ) {
 			part->fpart = newpart_file;
 		} else {
-			part->view = bestview;
+			part->view2(bestview);
 			part->ori = origin + currshift;
 		}
 		part->fom[0] = best_cc;
@@ -558,7 +559,7 @@ int 		main(int argc, char **argv)
 		if ( newpart_file.length() ) {
 			rec->frec = newpart_file;
 		} else {
-			rec->view = bestview;
+			rec->view2(bestview);
 			rec->origin = origin + currshift;
 		}
 		for ( rec = project->rec; rec; rec = rec->next )
@@ -572,7 +573,7 @@ int 		main(int argc, char **argv)
 
 	project_kill(project);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

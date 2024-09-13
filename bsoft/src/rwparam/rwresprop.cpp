@@ -239,7 +239,7 @@ Bresidue_type*  residue_type_add(Bresidue_type** rtype, char c)
 
 Bresidue_type* 	read_residue_prop_star(Bstring& filename)
 {
- 	Bstar2			star;
+ 	Bstar			star;
 	
  	if ( star.read(filename.str()) < 0 )
 		error_show(filename.c_str(), __FILE__, __LINE__);
@@ -299,7 +299,7 @@ Bresidue_type* 	read_residue_prop_star(Bstring& filename)
 int 	write_residue_prop_star(Bstring& filename, Bresidue_type* rt)
 {
 	string			id("Residue_properties");
-	Bstar2			star;
+	Bstar			star;
 	Bresidue_type*	t = NULL;
 
 	star.comment("# Residue properties\n\n");
@@ -354,7 +354,7 @@ Bresidue_type* 	read_residue_properties(Bstring& filename)
     // The property list column headers are recognized by one of a set of
 	// expected strings (such "Mass" or "MW" or "VOL")
     int         i, n;
-	int 		headflag(0), nhead(0), nrow(0);
+	int 		headflag(0), nhead(0);
 	int 		imass = -1, ivol = -1, iext = -1, iextsd = -1, icharge = -1, ihphob = -1;
 	float		val[32];
 	int 		nrechead = 8;
@@ -381,7 +381,6 @@ Bresidue_type* 	read_residue_properties(Bstring& filename)
 			if ( iextsd > -1 ) rt_curr->extsd = val[iextsd];
 			if ( icharge > -1 ) rt_curr->charge = val[icharge];
 			if ( ihphob > -1 ) rt_curr->hphob = val[ihphob];
-			nrow++;
 	    }
 		if ( headflag == 0 ) 	// Check for property headers
 			for ( i=0; i<nrechead; i++ )
@@ -398,7 +397,6 @@ Bresidue_type* 	read_residue_properties(Bstring& filename)
 			}
 			string_kill(itemlist);
 			headflag = 100;
-			nrow = 0;
 		}
 	}
 	

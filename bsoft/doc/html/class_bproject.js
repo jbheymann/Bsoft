@@ -1,6 +1,7 @@
 var class_bproject =
 [
     [ "Bproject", "class_bproject.html#aa55d6d2fbdce6ab767ec921951e15099", null ],
+    [ "count", "class_bproject.html#a285be92a36b9fab0f56c860c7b3463d7", null ],
     [ "class_avg", "class_bproject.html#a9aef78dcc3cbe385b805baffc3cddcac", null ],
     [ "comment", "class_bproject.html#ad2dd3e56abb355d1b11ce3fac7abdbc0", null ],
     [ "euler_flag", "class_bproject.html#a64c14793e1f03d17d8b8568d56cf457c", null ],

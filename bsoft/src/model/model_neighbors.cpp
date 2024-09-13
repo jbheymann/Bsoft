@@ -8,7 +8,6 @@
 
 #include "model_neighbors.h"
 #include "model_util.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables

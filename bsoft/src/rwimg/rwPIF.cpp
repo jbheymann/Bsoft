@@ -174,7 +174,7 @@ int 	readPIF(Bimage* p, int readdata, int img_select)
 		p->images(header->numimages);
 	}
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	char		mon[4];
 	
 	fimg->seekg(header_size + imgstart*image_size, ios_base::beg);
@@ -267,7 +267,6 @@ int 	readPIF(Bimage* p, int readdata, int img_select)
 	UnitCell	uc(PIFscale*imageheader->xlength, PIFscale*imageheader->ylength,
 					PIFscale*imageheader->zlength, PIFscale*imageheader->alpha,
 					PIFscale*imageheader->beta, PIFscale*imageheader->gamma);
-	uc.degrees_to_radians();
 	p->unit_cell(uc);
 	
 	p->space_group(imageheader->ispg);
@@ -406,9 +405,9 @@ int 	writePIF(Bimage* p)
 
 	header->file_id[0] = 8;		// Need to change this!
 	header->file_id[4] = 8;		// Need to change this!
-	snprintf(astring, 32, "   %13e", PIFscale);
+	snprintf(astring, 16, "   %13e", PIFscale);
 	strncpy(header->realscalefactor, astring, 16);
-    snprintf(astring, 32, "%16.9E", invPIFscale);
+    snprintf(astring, 16, "%16.9E", invPIFscale);
 	strncpy(header->floatScaleStr, astring, 16);
 	header->numimages = p->images();
 	header->endianness = 1; 	// Byte order
@@ -454,7 +453,7 @@ int 	writePIF(Bimage* p)
 	PIFimagehead_new* imageheader_new = (PIFimagehead_new *) imageheader;
 	memset(imageheader, 0, sizeof(PIFimagehead));
 	
-	strncpy(imageheader->timestamp, asctime(p->get_localtime()), 30);
+	strncpy(imageheader->timestamp, asctime(p->get_local_time()), 30);
 	imageheader->mode = header->mode;
 	imageheader->nx = p->sizeX();
 	imageheader->ny = p->sizeY();

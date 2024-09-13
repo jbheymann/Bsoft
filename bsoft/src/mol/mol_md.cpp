@@ -43,7 +43,7 @@ double		md_leapfrog(Bmolgroup* molgroup, Bmd* md, int max_iter, double velocityl
 	Bresidue*		res;
 	Batom*  		atom;
 	Bbond*			bondlist = molgroup->bond;
-	Bangle*			anglelist = molgroup->angle;
+//	Bangle*			anglelist = molgroup->angle;
 		
 	int 			cycle = 0;
 	double			E(0), dE(0), vel;
@@ -57,12 +57,12 @@ double		md_leapfrog(Bmolgroup* molgroup, Bmd* md, int max_iter, double velocityl
 		error_show("Error in md_leapfrog: No bond list!", __FILE__, __LINE__);
 		return 1e10;
 	}
-	
+/*
 	if ( !anglelist && md->Kangle ) {
 		error_show("Error in md_leapfrog: No angle list!", __FILE__, __LINE__);
 		return 1e10;
 	}
-	
+*/
 	double			volume = molgroup->box.volume();
 	if ( volume < 1 ) {
 		molgroup->box = molgroup->max;
@@ -101,7 +101,7 @@ double		md_leapfrog(Bmolgroup* molgroup, Bmd* md, int max_iter, double velocityl
 		md->Ebond = md_bond_forces(molgroup, md->Kbond, md->wrap);
 		
 		// Angle forces
-		md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
+//		md->Eangle = md_angular_forces(molgroup, md->Kangle, md->wrap);
 		
 		// Nonbonded forces
 		md_nonbonded_forces(molgroup, md);
@@ -213,7 +213,7 @@ double		md_bond_forces(Bmolgroup* molgroup, double Kbond, int wrap)
 	return energy;
 }
 
-/**
+/*
 @brief 	Calculates the covalent bond angular forces and energy.
 @param 	*molgroup		molecular structure.
 @param 	Kangle			bond angle energy constant.
@@ -229,8 +229,8 @@ double		md_bond_forces(Bmolgroup* molgroup, double Kbond, int wrap)
 	where r1 is the vector from atom 2 to atom 1, r2 is the vector from
 	atom 2 to atom 3, and Ka is the bond angle energy constant.
 
-**/
-double		md_angular_forces(Bmolgroup* molgroup, double Kangle, int wrap)
+*/
+/*double		md_angular_forces(Bmolgroup* molgroup, double Kangle, int wrap)
 {
 	if ( Kangle <= 0 ) return 0;
 	
@@ -263,6 +263,7 @@ double		md_angular_forces(Bmolgroup* molgroup, double Kangle, int wrap)
 
 	return energy;
 }
+*/
 
 /**
 @brief 	Calculates the non-bonded forces and energy.

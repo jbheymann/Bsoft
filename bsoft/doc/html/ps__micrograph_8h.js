@@ -9,5 +9,5 @@ var ps__micrograph_8h =
     [ "ps_origins", "ps__micrograph_8h.html#a4f08be657df95ff59fc8a8a778dd6191", null ],
     [ "ps_part_fom_histogram", "ps__micrograph_8h.html#adc67703bc0c9d71ede2c2a3256865e94", null ],
     [ "ps_particle_phi_theta", "ps__micrograph_8h.html#a95ebe9348d41d7d126fd60387a93cd27", null ],
-    [ "ps_particle_views_origins", "ps__micrograph_8h.html#aa4782cb7fdb4e4eb72ca489e9d8b86df", null ]
+    [ "ps_particle_views_origins", "ps__micrograph_8h.html#a7f34ac966bb2f4805c33fbc3831620b7", null ]
 ];

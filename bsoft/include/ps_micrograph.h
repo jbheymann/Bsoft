@@ -1,9 +1,9 @@
 /**
 @file	ps_micrograph.h
 @brief	Header file for postscript tools dealing with micrograph particle sets
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20011127
-@date	Modified: 20210706
+@date	Modified: 20230524
 **/
 
 #include <fstream>
@@ -14,7 +14,7 @@
 int			ps_mg_origins(Bstring& filename, Bstring& title, Bproject* project);
 int			ps_mg_particle_positions(Bstring& filename, Bstring& title, Bproject* project);
 int 		ps_particle_views_origins(Bstring& filename, Bstring& title, 
-					Bstring& symmetry_string, Bproject* project, int selection);
+					Bsymmetry& sym, Bproject* project, int selection);
 int 		ps_particle_phi_theta(Bstring& filename, Bstring& title, 
 					Bproject* project, int selection);
 int			ps_origins(Bstring& filename, Bstring& title, Bproject* project, int flags);

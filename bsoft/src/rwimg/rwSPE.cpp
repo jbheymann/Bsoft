@@ -59,7 +59,7 @@ int			readSPE(Bimage* p, int readdata, int img_select)
 
 	p->label(header->Comments);
 
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	p->set_time(t);
  
 	if ( verbose & VERB_DEBUG )
@@ -125,10 +125,10 @@ int			writeSPE(Bimage* p)
 	SPEhead*	header = new SPEhead;
 	memset(header, 0, sizeof(SPEhead));
 
-	strncpy(header->Comments, p->label().c_str(), 400);
+	p->label().copy(header->Comments, 400);
 
 	// Map the parameters
-    tm* 		t = p->get_localtime();
+    tm* 		t = p->get_local_time();
 	snprintf(header->date, 10, "%02d%3s%04d", t->tm_mday, month[t->tm_mon], t->tm_year);
 	header->xdim = p->sizeX();
 	header->ydim = p->sizeY();

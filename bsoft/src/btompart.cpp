@@ -88,7 +88,7 @@ int 		main(int argc, char **argv)
 	int				pad_factor(2);				// Image padding factor
 	int				ctf_action(0);				// Default no CTF operation
 	double			wiener(0.2);				// Wiener for CTF correction
-	Bstring			symmetry_string("C1");		// Point group
+	Bsymmetry		sym("C1");					// Point group
 	Bstring			partbase;					// Particle base file name
 	Bstring			partpath;					// Particle file path
 	Bstring			partext;					// Particle image file format
@@ -154,7 +154,7 @@ int 		main(int argc, char **argv)
 				fast_angle *= M_PI/180.0;
 		}
 		if ( curropt->tag == "symmetry" )
-			symmetry_string = curropt->symmetry_string();
+			sym = curropt->symmetry();
 		if ( curropt->tag == "base" ) {
 			partbase = curropt->value;
 			if ( partbase.length() < 1 )
@@ -222,8 +222,6 @@ int 		main(int argc, char **argv)
 		}
 	}
 
-	Bsymmetry			sym(symmetry_string);
-	
 	if ( part_recon )
 		project_tomo_reconstruct_particles(project, resolution,
 			interp_type, pad_factor, ctf_action, wiener, sym, 
@@ -243,7 +241,7 @@ int 		main(int argc, char **argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

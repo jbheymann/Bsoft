@@ -6,7 +6,7 @@
 @date	Modified: 20141006
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes 
 int			model_set_neighbors(Bmodel* model, int number);

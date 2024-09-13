@@ -1,12 +1,12 @@
 /**
 @file	model_extract_build.h
 @brief	Functions to extract subvolumes and build new maps.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060411
 @date	Modified: 20190821
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 #include "rwimg.h"
 
 // Function prototypes 

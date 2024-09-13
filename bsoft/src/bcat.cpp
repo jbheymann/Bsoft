@@ -3,12 +3,11 @@
 @brief	Program to catenate image files
 @author Bernard Heymann
 @date	Created: 19991221
-@date	Modified: 20100121
+@date	Modified: 20230524
 **/
 
 #include "rwimg.h"
 #include "img_combine.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -51,14 +50,14 @@ int 		main(int argc, char **argv)
 {
 	// Initialize variables
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
-	Vector3<double>	sam;				// Units for the three axes (A/pixel)
-	Vector3<double>	origin;			// New image origin
+	Vector3<double>	sam;						// Units for the three axes (A/pixel)
+	Vector3<double>	origin;						// New image origin
 	int				set_origin(0);				// Flag to set origin
-	Bstring			catfile = "temp.pif";
-	Bstring			rawstring;
+	string			catfile("temp.pif");
+	string			rawstring;
 	int 			setZslices(0);             	// Pack slices as separate 2D images
 	Vector3<long> 	nusize;
-	int				reverse(0);
+	bool			reverse_list(0);
 	double			nuavg(0), nustd(0);
 	int 			fill_type(FILL_AVERAGE);	// Fill type for smaller images
 	double			fill(0);
@@ -80,7 +79,7 @@ int 		main(int argc, char **argv)
 			}
 		}
 		if ( curropt->tag == "reverse" )
-        	reverse = 1;
+        	reverse_list = 1;
 		if ( curropt->tag == "slices" )
         	setZslices = 1;
 		if ( curropt->tag == "size" )
@@ -93,12 +92,12 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "fill" )
 			fill = curropt->fill(fill_type);
 		if ( curropt->tag == "raw" ) {
-			rawstring = curropt->value;
+			rawstring = curropt->value.str();
 			if ( rawstring.length() < 1 )
 				cerr << "-raw: A valid format reinterpretation string must be specified!" << endl;
 		}
 		if ( curropt->tag == "output" ) {
-			catfile = curropt->value;
+			catfile = curropt->value.str();
 			if ( catfile.length() < 1 )
 				cerr << "-output: An output file must be specified!" << endl;
 		}
@@ -113,20 +112,18 @@ int 		main(int argc, char **argv)
 	double		ti = timer_start();
 
 	// Read all the file names
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( !file_list.size() ) {
 		cerr << "Error: No image files specified!" << endl;
 		bexit(-1);
 	}
 
-	if ( reverse ) reverse_list((char **) &file_list);
+	if ( reverse_list ) reverse(file_list.begin(), file_list.end());
 	
 	Bimage*			pcat = img_catenate(file_list, rawstring, nudatatype, 
 						nusize, setZslices, fill_type, fill, nuavg, nustd);
 
-	string_kill(file_list);
-	
 	if ( sam.volume() > 0 ) pcat->sampling(sam);
 	
 	if ( set_origin ) {
@@ -139,7 +136,7 @@ int 		main(int argc, char **argv)
 	
 	delete pcat;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

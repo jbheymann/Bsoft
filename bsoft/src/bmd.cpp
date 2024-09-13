@@ -13,7 +13,6 @@
 #include "mol_util.h"
 #include "Matrix.h"
 #include "options.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "timer.h"
 
@@ -206,7 +205,7 @@ int 	main(int argc, char **argv)
     molgroup_kill(molgroup);
 	md_kill(md);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -15,13 +15,13 @@ extern int 	verbose;		// Level of output to the screen
 
 extern char* month[];
 
-View		view_from_spider_euler(SPIDERhead* header)
+View2<double>	view_from_spider_euler(SPIDERhead* header)
 {
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG view_from_spider_euler: " 
 			   << header->gamma << "," << header->theta << "," << header->phi << endl;
 	
-	View	view;
+	View2<double>	view;
 	
 	view[0] = cos(header->phi)*sin(header->theta);
 	view[1] = sin(header->phi)*sin(header->theta);
@@ -34,7 +34,7 @@ View		view_from_spider_euler(SPIDERhead* header)
 	return view;
 }
 
-int			spider_euler_from_view(SPIDERhead* header, View view)
+int			spider_euler_from_view(SPIDERhead* header, View2<double> view)
 {
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG spider_euler_from_view: " << view << endl; 
@@ -151,7 +151,7 @@ int 	readSPIDER(Bimage* p, int readdata, int img_select)
 	p->standard_deviation(header->sig);
 	p->sampling(header->scale, header->scale, header->scale);
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	sscanf(header->ctim, "%d:%d:%d", &t->tm_hour, &t->tm_min, &t->tm_sec);
     sscanf(header->cdat, "%d", &t->tm_mday);
 	for ( i=0; i<12 && strncmp(&(header->cdat[3]),month[i],3); i++ ) ;
@@ -314,15 +314,12 @@ int 	writeSPIDER(Bimage* p)
 	
 	spider_euler_from_view(header, p->image->view());
 			
-    tm* 		t = p->get_localtime();
-	char		astring[12];
-	while ( t->tm_year > 100 ) t->tm_year -= 100;
-//	snprintf(header->ctim, 8, "%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
-	snprintf(astring, 12, "%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
-//    cout << "number of characters = %ld\n", strlen(header->ctim));
-	strncpy(header->ctim, astring, 8);
-    snprintf(header->cdat, 12, "%02d-%3s-%02d", t->tm_mday, month[t->tm_mon], t->tm_year);
-	strncpy(header->ctit, p->label().c_str(), 160);
+    tm* 		t = p->get_local_time();
+ 	strftime (header->cdat, 12, "%d-%b-%y", t);
+ 	strftime (header->ctim, 8, "%H:%M:%S", t);
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG writeSPIDER: date=" << header->cdat << " time=" << header->ctim << endl;
+	p->label().copy(header->ctit, 160);
 	
 	if ( verbose & VERB_DEBUG ) {
 		cout << "DEBUG writeSPIDER: Date and time: " << header->cdat << " " << header->ctim << endl;

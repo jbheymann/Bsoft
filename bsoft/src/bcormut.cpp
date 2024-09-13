@@ -104,7 +104,9 @@ int 	main(int argc, char **argv)
 	if ( verbose & VERB_PROCESS )
 		cout << "Alignment positions flagged:    " << j << endl;
 
-	Matrix	mat = seq_correlated_mutation(molgroup, refseq, cutoff, propfile);
+	Matrix	mat;
+	
+	mat = seq_correlated_mutation(molgroup, refseq, cutoff, propfile);
 	
 	if ( optind < argc )
 		write_molecule(argv[optind], molgroup);
@@ -121,7 +123,7 @@ int 	main(int argc, char **argv)
 		delete pimg;
 	}
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

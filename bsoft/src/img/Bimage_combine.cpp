@@ -226,6 +226,55 @@ int 		Bimage::place(long nn, Bimage* p, Vector3<double> loc,
 	return 0; 
 }
 
+int 		Bimage::place(Bimage* p, long nn, Vector3<double> loc,
+				double radius, int operation)
+{
+	if ( radius <= 0 ) radius = (x > y)? x: y;
+	if ( operation==0 && !next ) next = new Bimage(Float, compoundtype, size(), n);
+	
+    long			i, j, xx, yy, zz, cc;
+	long			pz, py, px;
+	double			dx2, dy2, dz2, d2, w, r2(radius*radius), v;
+//	Vector3<double>	start = loc - p->image[nn].origin() + 0.5;
+	Vector3<double>	start = loc - p->image[nn].origin();
+	
+	if ( verbose & VERB_FULL )
+		cout << "Placing image " << nn << " at " << loc << endl;
+	
+	for ( zz=0; zz<p->sizeZ(); ++zz ) {
+		pz = start[2] + zz;
+		dz2 = p->image[nn].origin()[2] - zz;
+		dz2 *= dz2;
+		if ( pz >= 0 && pz < z ) for ( yy=0; yy<p->sizeY(); ++yy ) {
+			py = start[1] + yy;
+			dy2 = p->image[nn].origin()[1] - yy;
+			dy2 *= dy2;
+			if ( py >= 0 && py < y ) for ( xx=0; xx<p->sizeX(); ++xx ) {
+				px = start[0] + xx;
+				dx2 = p->image[nn].origin()[0] - xx;
+				dx2 *= dx2;
+				d2 = dx2 + dy2 + dz2;
+				if ( px >= 0 && px < x && d2 <= r2 ) {
+					w = radius - sqrt(d2) + 1;
+					i = index(0, px, py, pz, 0);
+					j = p->index(0, xx, yy, zz, nn);
+//					cout << xx << tab << yy << tab << zz << endl;
+					for ( cc=0; cc<c; ++cc, ++i, ++j ) {
+						v = (*p)[j];
+						switch ( operation ) {
+							case 1: if ( v < (*this)[i] ) set(i, v); break;	// Maximum
+							case 2: if ( v > (*this)[i] ) set(i, v); break;	// Minimum
+							default: add(i, v*w); next->add(i, w);			// Sum
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return 0;
+}
+
 /**
 @brief 	Packs a tile into a new composite image with addition within overlap.
 @param 	*p			image = tiles.
@@ -492,8 +541,7 @@ double		Bimage::linear_fit(Bimage* p, Bimage* pmask, double max_exclude)
     
 	int				hist[1024];
 	for ( i=0; i<1024; i++ ) hist[i] = 0;
-	int*			inc_mask = new int[imgsize];
-	for ( i=0; i<imgsize; i++) inc_mask[i] = 1;
+	vector<int>		inc_mask(imgsize,1);
 	
 	if ( pmask ) pmask->change_type(UCharacter);
     
@@ -596,8 +644,6 @@ double		Bimage::linear_fit(Bimage* p, Bimage* pmask, double max_exclude)
 			cout << best_a << tab << best_b << tab << bestR << tab << best_excl << tab << best_excl*100.0/num << " %" << endl;
 	}
 	
-	delete[] inc_mask;
-	
 	if ( verbose >= VERB_PROCESS ) cout << endl;
     
 	return bestR;
@@ -692,6 +738,63 @@ int 		Bimage::histomatch(Bimage* p, long bins)
 	delete[] hist2;
 	delete[] map;
 	delete[] dens;
+	
+	return 0;
+}
+
+/**
+@brief 	Replaces values for >x/2 with the given image.
+@param 	*p			second image.
+@return int 			0, <0 if error.
+
+**/
+int 		Bimage::replace_half(Bimage* p)
+{
+	long 		nn, xx, cc, i, j, yz(y*z);
+	
+	for ( nn=0; nn<n; ++nn )
+		for ( j=0; j<yz; ++j )
+			for ( xx=x/2, i=((nn*yz + j)*x + xx)*c; xx<x; ++xx )
+				for ( cc=0; cc<c; ++cc, ++i )
+					set(i, (*p)[i]);
+	
+	statistics();
+	
+	return 0;
+}
+
+
+/**
+@brief 	Replaces part with the given image as spcified by the plane normal.
+@param 	*p				second image.
+@param	plane_normal	vector indicating the separting plane normal.
+@return int 				0, <0 if error.
+
+	The plane runs through the existing image origin.
+	
+**/
+int 		Bimage::replace_part(Bimage* p, Vector3<double> plane_normal)
+{
+	long 			nn, xx, yy, zz, cc, i;
+	double			d;
+	Vector3<double>	vec;
+	
+   for ( i=nn=0; nn<n; ++nn ) {
+		for ( zz=0; zz<z; ++zz ) {
+			vec[2] = zz - image[nn].origin()[2];
+	    	for ( yy=0; yy<y; ++yy ) {
+				vec[1] = yy - image[nn].origin()[1];
+				for ( xx=0; xx<x; ++xx ) {
+					vec[0] = xx - image[nn].origin()[0];
+					d = vec.scalar(plane_normal);
+					for ( cc=0; cc<c; ++cc, ++i )
+						if ( d < 0 ) set(i, (*p)[i]);
+				}
+    		}
+		}
+    }
+
+	statistics();
 	
 	return 0;
 }

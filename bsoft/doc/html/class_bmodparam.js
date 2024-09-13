@@ -1,10 +1,20 @@
 var class_bmodparam =
 [
     [ "Bmodparam", "class_bmodparam.html#a5d805a9388176c3f6154069f012dda74", null ],
+    [ "box", "class_bmodparam.html#a262f2a3d9e3757f06a4e01bce987a76f", null ],
+    [ "maximum", "class_bmodparam.html#acc7899587a66c037ab461bb8a8aa0541", null ],
+    [ "maximum", "class_bmodparam.html#a3ebfc6859c29aae856c13ccd1a7a463a", null ],
+    [ "minimum", "class_bmodparam.html#ad55df7d291c95798220e6ef8bfbb762d", null ],
+    [ "minimum", "class_bmodparam.html#a92d61f85bfc935a0212ac6b1fd22da88", null ],
+    [ "show", "class_bmodparam.html#a4d27443ca1be5b7ec98f679df09ebabc", null ],
+    [ "show_angles", "class_bmodparam.html#a4e8991b7c320cdbce4d0a3840a8f0211", null ],
+    [ "show_links", "class_bmodparam.html#a42d4c53d7a548fae5ab5d1c530268b68", null ],
+    [ "show_types", "class_bmodparam.html#a6aad15c38461e67a4ca7418223054e75", null ],
     [ "angletype", "class_bmodparam.html#a8d12a3f051a850bf42694d34646c14cd", null ],
     [ "comment", "class_bmodparam.html#a205414213e4b89dd7311b48984b0f29a", null ],
     [ "comptype", "class_bmodparam.html#aabc6a5114d3f6f46c4e3483bd4567881", null ],
     [ "cutoff", "class_bmodparam.html#a61663e8afc6b14cf5271941b8103919a", null ],
+    [ "distancetype", "class_bmodparam.html#ad640351b856e8e9e93725181f5e5206d", null ],
     [ "Eangle", "class_bmodparam.html#a41c6f5509f8684d0477805c95db56a5e", null ],
     [ "Edistance", "class_bmodparam.html#a2332d76ee0e931b6cc416fbd200ff958", null ],
     [ "Eelec", "class_bmodparam.html#a815ab90203da82eb9536a5df50afebe8", null ],
@@ -35,11 +45,13 @@ var class_bmodparam =
     [ "Kradial", "class_bmodparam.html#ab7b38be85237c5c311e5d43faa3ca93b", null ],
     [ "linksteps", "class_bmodparam.html#acb2ba1acda1ce6383c121bf7475f6a8c", null ],
     [ "linktype", "class_bmodparam.html#a10d97764501b1febabfaa4a8c91e5670", null ],
+    [ "max", "class_bmodparam.html#a2d5e6b1ccf60dd88a97cc17a071d987c", null ],
+    [ "min", "class_bmodparam.html#aed5c87dd69ed074ff1a2b984f7e881af", null ],
     [ "point", "class_bmodparam.html#a13e16c567be0a1a113f6c11155cae1c2", null ],
     [ "pointdecay", "class_bmodparam.html#ac9ba109881f4a703d61320d653398c30", null ],
     [ "radius", "class_bmodparam.html#a30cea80da5b4e15ec175673cb41822f3", null ],
     [ "sepdist", "class_bmodparam.html#a048554e41110c37653a21638f3b16022", null ],
     [ "sigma", "class_bmodparam.html#a4239457e4ad5a79c5ae262b472ee52ca", null ],
     [ "timestep", "class_bmodparam.html#aecc7b2033914eaf91cda37aae8f5bc91", null ],
-    [ "wrap", "class_bmodparam.html#a9b9ea70d1bdf6498d1c8225690ad8968", null ]
+    [ "wrap", "class_bmodparam.html#ae1b302feeb261d3e79a0e8c1dedbd888", null ]
 ];

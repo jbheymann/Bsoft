@@ -23,6 +23,10 @@ const char* use[] = {
 "Usage: bgradient [options] input.img output.img",
 "-----------------------------------------------",
 "Calculates image gradients.",
+"Types:",
+"	Central difference in 2 or 3 directions",
+"	Gradient across a 3x3(x3) kernel",
+"	Frequency space gradient by imposing gaussians in 2 or 3 directions",
 " ",
 "Actions:",
 "-gaussian 2.4,5.1,20.4   Anisotropic gaussian filter (one value sets all).",
@@ -47,7 +51,7 @@ int 		main(int argc, char **argv)
 	Vector3<double>	origin;					// Mask origin
 	int				set_origin(0); 			// Flag to set origin
 	Vector3<double>	sigma;					// Gaussian sigma values
-	int				gtype(0);				// Gradient type
+	Bstring			gtype;					// Gradient type
 	int				mag(0);					// Magnitude flag
 	long			aniso_iter(0);			// Anisotropic gradient iterations
 	double			aniso_k(1);				// Anisotropic kernel size
@@ -59,11 +63,8 @@ int 		main(int argc, char **argv)
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "gaussian" )
 			sigma = curropt->scale();
-		if ( curropt->tag == "gradient" ) {
-			if ( curropt->value[0] == 'c' ) gtype = 1;
-			if ( curropt->value[0] == '3' ) gtype = 2;
-			if ( curropt->value[0] == 'f' ) gtype = 3;
-		}
+		if ( curropt->tag == "gradient" )
+			gtype = curropt->value;
 		if ( curropt->tag == "magnitude" ) mag = 1;
 		if ( curropt->tag == "anisotropic" )
 			if ( curropt->values(aniso_iter, aniso_w) < 1 )
@@ -99,18 +100,20 @@ int 		main(int argc, char **argv)
 	
 	Bimage*		pg = NULL;
 	
-	if ( gtype < 3 &&  sigma.length() ) {
+	if ( gtype[0] != 'f' &&  sigma.length() ) {
 		if ( p->fourier_type() == NoTransform ) p->fft();
 		p->fspace_weigh_gaussian(0, sigma);
 		p->fft_back();
 	}
 	
-	if ( gtype == 1 )
-		pg = p->gradient();
-	else if ( gtype == 2 )
-		pg = p->gradient3x3();
-	else if ( gtype == 3 )
-		pg = p->fspace_gradient(sigma);
+	if ( gtype.length() ) {
+		if ( gtype[0] == 'c' )
+			pg = p->gradient();
+		else if ( gtype[0] == '3' )
+			pg = p->gradient3x3();
+		else if ( gtype[0] == 'f' )
+			pg = p->fspace_gradient(sigma);
+	}
 	
 	if ( pg && mag ) pg->vector_to_simple();
 
@@ -124,7 +127,7 @@ int 		main(int argc, char **argv)
 	
 	delete pg;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

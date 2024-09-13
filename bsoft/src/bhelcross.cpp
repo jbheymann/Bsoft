@@ -8,7 +8,6 @@
 
 #include "rwimg.h"
 #include "symmetry.h"
-#include "linked_list.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -215,7 +214,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

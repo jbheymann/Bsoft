@@ -64,6 +64,11 @@ public:
 		d[2][0] = d6; d[2][1] = d7; d[2][2] = d8;
 	}
 	Matrix3(const Matrix3& m) { for ( long i=0; i<3; i++ ) d[i] = m.d[i]; }
+	Matrix3(Matrix& m) {
+		for ( long i=0; i<3; ++i )
+			for ( long j=0; j<3; ++j )
+				d[i][j] = m[i][j];
+	}
 	// Matrix from a quaternion
 	Matrix3(Quaternion q) {
 		from_quaternion(q);

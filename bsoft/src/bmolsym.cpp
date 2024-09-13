@@ -57,7 +57,7 @@ int 		main(int argc, char **argv)
 	int				com_origin(0);			// Flag to set the center-of-mass as origin of rotation
     Transform		t;						// Rotation origin, axis and angle
     Bstring    		atom_select("ALL");
-	View			ref_view;				// Reference view for symmetry application
+	View2<double>	ref_view;				// Reference view for symmetry application
 	Bsymmetry		sym;					// Point group
 	Bsymmetry		sym_B;					// Symmetry for B factor calculation
 	int				sym_flag(0);
@@ -131,7 +131,7 @@ int 		main(int argc, char **argv)
 	
 	double		ti = timer_start();
 	
-	if ( show ) sym_show_operational_matrices(sym);
+	if ( show ) sym.show_operational_matrices();
 	
 	if ( optind >= argc ) bexit(-1);
     
@@ -188,7 +188,7 @@ int 		main(int argc, char **argv)
 
 	molgroup_kill(molgroup);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

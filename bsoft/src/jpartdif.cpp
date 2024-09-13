@@ -18,7 +18,6 @@
 #include "options.h"
 #include "timer.h"
 #include "Vector3.h"
-#include "View.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
@@ -100,8 +99,8 @@ int			main(int argc, char** argv)
 	Bparticle*		part2 = NULL;
 	Bparticle*		part3 = NULL;
 	Bparticle*		part = NULL;
-	View			view1;
-	View			view2;
+	View2<double>	view1;
+	View2<double>	view2;
 	Vector3<double>	part1_view;
 	Vector3<double>	part2_view;
 
@@ -173,8 +172,8 @@ int			main(int argc, char** argv)
 						if ( locdiff ) { part->loc = part1->loc - part2->loc; }		
 						if ( fomdiff ) { part->fom[0] = part1->fom[0] - part2->fom[0]; }
 
-						view1 = View(part1->view[0],part1->view[1],part1->view[2],part1->view.angle());
-						view2 = View(part2->view[0],part2->view[1],part2->view[2],part2->view.angle());
+						view1 = part1->view2();
+						view2 = part2->view2();
 
 						view1 = view1.backward();
 						view2 = view2.backward();
@@ -241,7 +240,7 @@ int			main(int argc, char** argv)
 	project_kill(project2);
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

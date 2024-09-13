@@ -72,12 +72,6 @@ double		model_compare(Bmodel* model1, Bmodel* model2)
 	long	n(0), n1(0), n2(0);
 	double			d, dmin, R(0);
 
-//	Vector3<float>	com1 = model_center_of_mass(model1);
-//	Vector3<float>	com2 = model_center_of_mass(model2);
-
-//	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) comp1->location() -= com1;
-//	for ( comp2 = model2->comp; comp2; comp2 = comp2->next ) comp2->location() -= com2;
-
 	if ( verbose ) {
 		cout << "Comparing " << model1->identifier() << " with " << model2->identifier() << ":" << endl;
 		cout << "Comp1\tComp2\tDmin" << endl;
@@ -268,10 +262,11 @@ long		model_consolidate(Bmodel* model, double distance)
 	Bcomponent*		c = NULL;
 	Bcomponent*		c_list = NULL;
 	string			cid;
+	Matrix			mat;
 
 	n = model->component_count();
 
-	Matrix			mat = model_distance_matrix(model, 0);
+	mat = model_distance_matrix(model, 0);
 	
 	if ( verbose ) {
 		cout << model->identifier() << tab << n << endl;
@@ -298,7 +293,8 @@ long		model_consolidate(Bmodel* model, double distance)
 		c->select(k);
 	}
 	
-	component_list_kill(model->comp);
+//	component_list_kill(model->comp);
+	model->clear_components();
 	model->comp = c_list;
 
 	if ( verbose )
@@ -368,7 +364,7 @@ Bmodel*		models_consensus(Bmodel* model, double distance)
 	delete[] mat;
 	
 	Bmodel*			numod = new Bmodel(model->identifier());
-	Bstring			cid;
+	string			cid;
 	RGBA<float>		color;
 	int*			ns = new int[nmod+1];
 	for ( i=0; i<=nmod; i++ ) ns[i] = 0;
@@ -380,7 +376,7 @@ Bmodel*		models_consensus(Bmodel* model, double distance)
 
 	for ( n=0, m1 = model; m1->next; m1 = m1->next ) {
 		for ( c1 = m1->comp; c1; c1 = c1->next ) if ( c1->select() ) {
-			cid = Bstring(++n, "%d");
+			cid = to_string(++n);
 			c2 = numod->add_component(c1);
 			c2->type(ct);
 			c2->identifier(cid);

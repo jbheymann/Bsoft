@@ -1,6 +1,9 @@
 var class_breconstruction =
 [
     [ "Breconstruction", "class_breconstruction.html#a4b010cc97600a14e2837b9ac59dfbd80", null ],
+    [ "count", "class_breconstruction.html#a0f81955d94899221c348546b32bc716d", null ],
+    [ "view2", "class_breconstruction.html#a4714d5cec28b2dc6d355ce7658268f95", null ],
+    [ "view2", "class_breconstruction.html#a3651f27ab8d4832dd634722e008e9da0", null ],
     [ "bad", "class_breconstruction.html#a049826715e92e4f325c978ae064adf06", null ],
     [ "bad_radius", "class_breconstruction.html#aa50455d943706a4f14e5e021eceb82ee", null ],
     [ "block", "class_breconstruction.html#a15fe069f644585e2aba1ba8286e5efc6", null ],
@@ -28,6 +31,6 @@ var class_breconstruction =
     [ "sf_radius", "class_breconstruction.html#a717f64caebb5e93edc130a27b2d6ff7d", null ],
     [ "symmetry", "class_breconstruction.html#a1a86ec643150a36a695a030f1f8cb88d", null ],
     [ "type", "class_breconstruction.html#a32358b64fa2b72c4d4fef799b501ab12", null ],
-    [ "view", "class_breconstruction.html#ad4301601b8434b6804999696c04b6e6b", null ],
+    [ "view", "class_breconstruction.html#a93da0ec3bfef53932fe560b43f1c52ce", null ],
     [ "voxel_size", "class_breconstruction.html#ac33146985faf2d9bbd6c3cc07efdc8ee", null ]
 ];

@@ -277,7 +277,7 @@ int 	main(int argc, char **argv)
 	}
 	
 	if ( modelfile.length() ) {
-		model = read_model(&modelfile);
+		model = read_model(modelfile.str());
 	} else if ( grid_sampling[0] > 0 ) {
 		model = molgroup_generate_masked_grid_list(molgroup, grid_sampling, pmask);
 	} else if ( angle_step > 0 ) {
@@ -290,7 +290,7 @@ int 	main(int argc, char **argv)
 		else
 			mcm_molecule_list(molgroup, model, md, map, beta, max_angle, max_shift, max_iter, rigid);
 		if ( filename.length() )
-			write_model(filename, model);
+			write_model(filename.str(), model);
 	} else {
 		if ( rigid < 3 ) {
 			molgroup = monte_carlo_metropolis(molgroup, md, map, beta, max_angle, max_shift, 
@@ -313,7 +313,7 @@ int 	main(int argc, char **argv)
 	model_kill(model);
 	md_kill(md);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

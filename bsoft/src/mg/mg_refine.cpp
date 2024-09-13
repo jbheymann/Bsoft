@@ -3,7 +3,7 @@
 @brief	Reciprocal space refinement of orientation parameters of particle images.
 @author Bernard Heymann
 @date	Created: 20070115
-@date	Modified: 20200205
+@date	Modified: 20220813
 **/
 
 #include "mg_processing.h"
@@ -13,7 +13,6 @@
 #include "rwimg.h"
 #include "Complex.h"
 #include "Matrix3.h"
-#include "linked_list.h"
 #include "random_numbers.h"
 #include "utilities.h"
 
@@ -31,11 +30,11 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 				CTFparam* em_ctf, double def_std, double shift_std, 
 				double view_std, double max_angle, double max_mag, int flags,
 				FSI_Kernel* kernel, fft_plan planf);
-double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res, 
+double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,  int flags,
 				int max_iter, int fom_type, vector<double>& weight, CTFparam* em_ctf, 
 				double def_std, double shift_std, double view_std,
 				double max_angle, double max_mag, FSI_Kernel* kernel, long &number);
-double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
+double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res, int flags,
 				double alpha_step, double accuracy, double shift_step, 
 				double shift_accuracy, double max_mag,
 				int fom_type, vector<double>& weight, CTFparam* em_ctf, double def_std, FSI_Kernel* kernel, long &number);
@@ -65,7 +64,7 @@ double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 @param 	max_angle		maximum random rotation angle adjustment.
 @param 	max_mag			maximum magnification adjustment.
 @param 	flags			option flags.
-@return long			number of comparisons, <0 on error.
+@return long				number of comparisons, <0 on error.
 
 	The orientation, origin, magnitude and defocus are refined for each particle.
 	The default method uses a grid search around the existing view and origin.
@@ -75,7 +74,7 @@ double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 
 **/
 long		mg_refine_orientations(Bproject* project, Bstring& reffile, Bstring& maskfile,
-				Bstring& sym_string, int part_select, int max_iter, 
+				string& sym_string, int part_select, int max_iter,
 				double alpha_step, double accuracy, double shift_step, 
 				double shift_accuracy, int fom_type, vector<double> weight,
 				double hi_res, double lo_res, int kernel_width, int kernel_power,
@@ -247,7 +246,7 @@ long		mg_refine_orientations(Bproject* project, Bstring& reffile, Bstring& maskf
 }
 
 long		project_refine_orientations(Bproject* project, Bstring& reffile, Bstring& maskfile,
-				Bstring& sym_string, int part_select, int max_iter, 
+				string& sym_string, int part_select, int max_iter, 
 				double alpha_step, double accuracy, double shift_step, 
 				double shift_accuracy, int fom_type, vector<double> weight,
 				double hi_res, double lo_res, int kernel_width, int kernel_power,
@@ -572,6 +571,7 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 			if ( part->def < 1 ) part->def = em_ctf->defocus_average();
 			bestdef = part->def;
 			apply_ctf = 1;
+			flags |= APPLY_CTF;
 		}
 	}
 
@@ -579,18 +579,17 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 	double			fom, bestmag = part->mag;
 	Vector3<double>	sam(p->image->sampling()), bestsam(sam);
 	Vector3<double>	ori(p->image->origin()), bestorigin(ori);
-	View			bestview = part->view;
-	View*			view = symmetry_get_all_views(sym, part->view);
-	View*			v;
+	View2<double>	bestview = part->view2();
+	vector<View2<double>>	view = sym.get_all_views(part->view2());
 	CTFparam*		ctf_copy = new CTFparam;
 	
-	for ( i=1, v = view; v; v = v->next, i++ ) {
+	for ( i=0; i<view.size(); ++i ) {
 		p->sampling(sam);
 		p->origin(ori);
-		p->view(*v);
+		p->view(view[i]);
 		p->image->magnification(part->mag);
 		if ( verbose & VERB_DEBUG )
-			cout << "DEBUG part_refine_orientation: view=" << *v << endl;
+			cout << "DEBUG part_refine_orientation: view=" << view[i] << endl;
 	
 		if ( em_ctf ) {
 			ctf_copy->update(em_ctf);
@@ -598,26 +597,26 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 		}
 		
 		if ( max_iter )
-			fom = img_refine_monte(p, pref, hi_res, lo_res, max_iter, fom_type, 
+			fom = img_refine_monte(p, pref, hi_res, lo_res, flags, max_iter, fom_type,
 				weight, ctf_copy, def_std,
 				shift_std, view_std, max_angle, max_mag, kernel, number);
 		else 
-			fom = img_refine_grid(p, pref, hi_res, lo_res, alpha_step, accuracy,
+			fom = img_refine_grid(p, pref, hi_res, lo_res, flags, alpha_step, accuracy,
 				shift_step, shift_accuracy, max_mag,
 				fom_type, weight, ctf_copy, def_std, kernel, number);
 		
 		if ( part->fom[0] < fom ) {
 			part->fom[0] = fom;
 			part->fom[1] = p->image->FOM();
-			part->sel = i;
+			part->sel = i+1;
 			if ( ctf_copy && apply_ctf ) bestdef = ctf_copy->defocus_average();
 			bestsam = p->image->sampling();
 			bestorigin = p->image->origin();
 			bestview = p->image->view();
 			bestmag = p->image->magnification();
-			if ( bestdef < 1000 ) {
-				cerr << "Bad defocus! pid = " << part->id << tab << bestdef << endl;
-			}
+//			if ( bestdef < 1000 ) {
+//				cerr << "Bad defocus! pid = " << part->id << tab << bestdef << endl;
+//			}
 		}
 		
 	}
@@ -631,10 +630,9 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 	}
 	part->pixel_size = bestsam*scale;
 	part->ori = bestorigin/scale;
-	part->view = bestview;
+	part->view2(bestview);
 	part->mag = bestmag;
 	
-	kill_list((char *) view, sizeof(View));
 	delete p;
 
 	if ( flags & WRITE_PPX ) {
@@ -657,8 +655,11 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 		    (    sum(|Fo|+|Fc|)     )
 */
 double		img_recip_space_fom(Bimage* p, Bimage* pref, double hi_res, double lo_res,
-				int fom_type, vector<double>& weight, int apply_ctf, CTFparam* em_ctf)
+				int fom_type, vector<double>& weight, int flags, CTFparam* em_ctf)
 {
+	bool			apply_ctf(flags & APPLY_CTF);
+	bool			invert(flags & INVERT);
+	
 	if ( pref->sampling(0)[0] < 0.01 ) pref->sampling(1,1,1);
 	if ( lo_res > 0 && hi_res > lo_res ) swap(hi_res, lo_res);
 	pref->check_resolution(hi_res);
@@ -723,7 +724,8 @@ double		img_recip_space_fom(Bimage* p, Bimage* pref, double hi_res, double lo_re
 				dtemp = refdata[i];
 				if ( apply_ctf ) {
 					ctf_fac = em_ctf->calculate(s2, atan2(iv[1],iv[0]));
-					dtemp *= -ctf_fac;
+					if ( invert ) ctf_fac = -ctf_fac;
+					dtemp *= ctf_fac;
 				}
 				if ( fom_type < 1 ) {
 					fom[j] += data[i].real()*dtemp.real() + data[i].imag()*dtemp.imag();
@@ -775,12 +777,12 @@ double		img_recip_space_fom(Bimage* p, Bimage* pref, double hi_res, double lo_re
 	return f;
 }
 
-double		img_fit_in_recip_space_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
+double		img_fit_in_recip_space_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res, int flags,
 				int max_iter, int fom_type, vector<double>& weight, CTFparam* em_ctf, double def_std, double shift_std, 
 				FSI_Kernel* kernel, long &number)
 {
 	// Defocus may be changed in this function
-	int				apply_ctf(0);
+	bool			apply_ctf(flags&APPLY_CTF);
 	double			predef(0), bestdef(0);
 	if ( def_std && em_ctf && em_ctf->defocus_average() ) {
 		predef = bestdef = em_ctf->defocus_average();
@@ -788,7 +790,7 @@ double		img_fit_in_recip_space_monte(Bimage* p, Bimage* pref, double hi_res, dou
 	}
 	
 	Vector3<double>	scale = pref->sampling(0)/p->sampling(0);
-	View			view(p->image->view());
+	View2<double>		view(p->image->view());
 	Matrix3			mat = view.matrix();
 //	mat = mat * p->image->magnification();
 	mat[0] *= scale;
@@ -821,7 +823,7 @@ double		img_fit_in_recip_space_monte(Bimage* p, Bimage* pref, double hi_res, dou
 		pcopy->origin(origin);
 		pcopy->phase_shift_to_origin();
 				
-		fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, apply_ctf, em_ctf);
+		fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, flags, em_ctf);
 		number++;
 
 		if ( bestfom < fom ) {
@@ -854,11 +856,11 @@ double		img_fit_in_recip_space_monte(Bimage* p, Bimage* pref, double hi_res, dou
 	return bestfom;
 }
 
-double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
+double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res, int flags,
 				double step, double accuracy, int fom_type, vector<double>& weight, CTFparam* em_ctf, double def_std, FSI_Kernel* kernel, long &number)
 {
 	// Defocus may be changed in this function
-	int				apply_ctf(0);
+	bool			apply_ctf(flags&APPLY_CTF);
 	double			bestdef(em_ctf->defocus_average());
 	if ( def_std && em_ctf && bestdef ) {
 		bestdef = em_ctf->defocus_average();
@@ -869,7 +871,7 @@ double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, doub
 //	Vector3<double>	scale = p->sampling(0)/pref->sampling(0);
 	scale[2] = 1;
 	
-	View			view(p->image->view());
+	View2<double>		view(p->image->view());
 	Matrix3			mat = view.matrix();
 //	mat = mat * p->image->magnification();
 //	mat = scale * mat;
@@ -893,7 +895,7 @@ double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, doub
 		pcopy->phase_shift_to_origin();
 		for ( def = def_start; def <= def_end; def += def_std ) {
 			em_ctf->defocus_average(def);
-			fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, apply_ctf, em_ctf);
+			fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, flags, em_ctf);
 			number++;
 			if ( bestfom < fom ) {
 				bestfom = fom;
@@ -916,7 +918,7 @@ double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, doub
 				pcopy->image->origin(ori);
 				pcopy->phase_shift_to_origin();
 
-				fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, apply_ctf, em_ctf);
+				fom = img_recip_space_fom(pcopy, pcs, hi_res, lo_res, fom_type, weight, flags, em_ctf);
 	
 				number++;
 	
@@ -950,6 +952,7 @@ double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, doub
 @param 	*pref			reference map.
 @param 	hi_res			high resolution limit (angstrom).
 @param 	lo_res			low resolution limit (angstrom).
+@param 	flags			APPLY_CTF, INVERT.
 @param 	max_iter		maximum number of refining iterations.
 @param 	fom_type		type of resolution measure: 0=FRC, 1=DPR
 @param 	weight			1D reciprocal space weight curve.
@@ -970,7 +973,7 @@ double		img_fit_in_recip_space_grid(Bimage* p, Bimage* pref, double hi_res, doub
 	FOM is returned.
 
 **/
-double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res, 
+double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res, int flags,
 				int max_iter, int fom_type, vector<double>& weight, CTFparam* em_ctf, 
 				double def_std, double shift_std, double view_std,
 				double max_angle, double max_mag, FSI_Kernel* kernel, long &number)
@@ -979,7 +982,7 @@ double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 	double			def(0), predef(0), bestdef(0);
 	if ( def_std && em_ctf && em_ctf->defocus_average() ) {
 		def = predef = bestdef = em_ctf->defocus_average();
-		apply_ctf = 1;
+		apply_ctf = (flags & APPLY_CTF);
 	}
 	
 	long			iter;
@@ -990,8 +993,8 @@ double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 //	double			bestmag(mag), premag(mag);
 	Vector3<double>	sam(p->image->sampling()), bestsam(sam), presam(sam);
 	Vector3<double>	ori(p->image->origin()), r, bestorigin(ori);
-	View			view(p->image->view());
-	View			bestview = view, preview = view;
+	View2<double>		view(p->image->view());
+	View2<double>		bestview = view, preview = view;
 
 	for ( iter = 0; iter<max_iter; iter++ ) {
 		if ( verbose & VERB_DEBUG )
@@ -1014,7 +1017,7 @@ double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 		p->image->sampling(magx * sam[0], magy * sam[1], 1);
 		if ( apply_ctf ) em_ctf->defocus_average(def);	// Resets defocus to original
 		p->origin(ori);									// Resets origin to original
-		fom = img_fit_in_recip_space_monte(p, pref, hi_res, lo_res, max_iter, fom_type, weight, em_ctf,
+		fom = img_fit_in_recip_space_monte(p, pref, hi_res, lo_res, flags, max_iter, fom_type, weight, em_ctf,
 				def_std, shift_std, kernel, number);
 		if ( bestfom < fom ) {
 			bestfom = fom;
@@ -1056,6 +1059,7 @@ double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 @param 	*pref			reference map.
 @param 	hi_res			high resolution limit (angstrom).
 @param 	lo_res			low resolution limit (angstrom).
+@param 	flags			APPLY_CTF, INVERT.
 @param 	alpha_step		grid search angular step size.
 @param 	accuracy		grid search accuracy.
 @param 	shift_step		grid shift size.
@@ -1076,7 +1080,7 @@ double		img_refine_monte(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 	FOM is returned.
 
 **/
-double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
+double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res, int flags,
 				double alpha_step, double accuracy, double shift_step, 
 				double shift_accuracy, double max_mag, int fom_type, vector<double>& weight, 
 				CTFparam* em_ctf, double def_std, FSI_Kernel* kernel, long &number)
@@ -1104,31 +1108,30 @@ double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 	double			magx, magy, mmin(1.0-max_mag), mmax(1.0+max_mag), mstep(max_mag/10);
 	Vector3<double>	sam(p->image->sampling()), bestsam(sam);
 	Vector3<double>	ori(p->image->origin()), bestorigin(ori);
-	View			view(p->image->view()), bestview(view);
-	View			*views, *v;
+	View2<double>	view(p->image->view()), bestview(view);
+	vector<View2<double>>	views;
 
 	while ( alpha_step >= accuracy ) {
 		prefom = bestfom;
 		bestfom = -1;
 		views = views_for_refinement(bestview, alpha_step);
-		for ( i=ibest=0, v = views; v; v = v->next, i++ ) {
-			p->view(*v);
+		for ( i=ibest=0; i<views.size(); ++i ) {
+			p->view(views[i]);
 			if ( def ) em_ctf->defocus_average(def);		// Resets defocus to original
 			p->origin(ori);	// Resets origin to original
 //			p->image->magnification(mag);		// Resets magnification to original
 			if ( verbose & VERB_DEBUG )
-				cout << "DEBUG img_refine_grid: view=" << *v << endl;
-			fom = img_fit_in_recip_space_grid(p, pref, hi_res, lo_res, shift_step, shift_accuracy, fom_type, weight, em_ctf, def_std, kernel, number);
+				cout << "DEBUG img_refine_grid: view=" << views[i] << endl;
+			fom = img_fit_in_recip_space_grid(p, pref, hi_res, lo_res, flags, shift_step, shift_accuracy, fom_type, weight, em_ctf, def_std, kernel, number);
 			if ( bestfom < fom ) {
 				bestfom = fom;
 				ibest = i;
-				bestview = *v;
+				bestview = views[i];
 				bestorigin = p->image->origin();
 				if ( def ) bestdef = em_ctf->defocus_average();
 				bestcv = p->image->FOM();
 			}
 		}
-		kill_list((char *) views, sizeof(View));
 		if ( verbose & VERB_FULL )
 			cout << alpha_step << tab << bestfom << tab << bestcv << endl;
 		if ( ibest == i/2 || fabs(prefom - bestfom) < 1e-6 ) alpha_step /= 2;	// Contract around best case
@@ -1156,7 +1159,7 @@ double		img_refine_grid(Bimage* p, Bimage* pref, double hi_res, double lo_res,
 //				cout << "DEBUG img_refine_grid: mag=" << mag << endl;
 				if ( verbose & VERB_DEBUG )
 					cout << "DEBUG img_refine_grid: sam=" << p->image->sampling() << endl;
-				fom = img_fit_in_recip_space_grid(p, pref, hi_res, lo_res, 0.4, 0.1, fom_type, weight, em_ctf, def_std, kernel, number);
+				fom = img_fit_in_recip_space_grid(p, pref, hi_res, lo_res, flags, 0.4, 0.1, fom_type, weight, em_ctf, def_std, kernel, number);
 				if ( bestfom < fom ) {
 					bestfom = fom;
 //					bestmag = mag;

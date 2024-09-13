@@ -3,46 +3,45 @@
 @brief	Library routines to read and write symmetry operators
 @author Bernard Heymann
 @date	Created: 19991225
-@date	Modified: 20210328
+@date	Modified: 20230623
 **/
 
 #include "rwsymop.h"
 #include "star.h"
 #include "sym_tags.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
 
 // Internal function prototypes
-char* 		read_symop_star(Bstring& filename, int spacegroup, int& nsym);
-char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym);
-int 		write_symop_star(Bstring& filename, int spacegroup, int nsym, char* symop, int line_len);
-int 		write_pointgroup_star(Bstring& filename, Bsymmetry& sym, View ref_view);
-float*		sym_matrices_from_text_list(int nsym, char* symop, int line_len);
+vector<string>	read_symop_star(string& filename, int spacegroup);
+vector<string>	read_symop_lib(string& filename, int spacegroup);
+int 		write_symop_star(string& filename, int spacegroup, vector<string>& symop, int line_len);
+int 		write_pointgroup_star(string filename, Bsymmetry& sym, View2<double> ref_view);
+vector<float>	sym_matrices_from_text_list(vector<string>& symop, int line_len);
 
 /**
 @brief 	Reading crystallographic symmetry operators.
 @param 	&filename		file name.
 @param 	spacegroup		crystal space group number.
 @param 	&nsym			number of symmetry operators.
-@return float* 			set of 12-value symmetry matrices.
+@return vector<float>		set of 12-value symmetry matrices.
 
 	The symmetry operators are encoded as a set of matrices.
 
 **/
-float* 		read_symat(Bstring& filename, int spacegroup, int& nsym)
+vector<float>	read_symat(string& filename, int spacegroup, int& nsym)
 {
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_symat: Getting symmetry matrices from: " << filename << endl;
 	
-	char* 		symop = read_symop(filename, spacegroup, nsym);
+	vector<string>	symop = read_symop(filename, spacegroup);
+	
+	nsym = symop.size();
 	
 	// Set up the symmetry operator matrix
-	float*		mat = sym_matrices_from_text_list(nsym, symop, 80);
-	
-	delete[] symop;
+	vector<float>	mat = sym_matrices_from_text_list(symop, 80);
 	
 	return mat;
 }
@@ -51,16 +50,47 @@ float* 		read_symat(Bstring& filename, int spacegroup, int& nsym)
 @brief 	Reading crystallographic symmetry operators.
 @param 	&symopfile		file name.
 @param 	spacegroup		crystal space group number.
-@param 	&nsym			number of symmetry operators.
-@return char* 			set of 12-value symmetry matrices.
+@param	&nsym			number of symmetry operators.
+@return char*			80 character symmetry operators.
 
 	The symmetry operators are encoded as 80 character lines.
 
 **/
-char* 		read_symop(Bstring& symopfile, int spacegroup, int& nsym)
+char*		read_symop(string& symopfile, int spacegroup, int& nsym)
 {
+	vector<string>	op = read_symop(symopfile, spacegroup);
+	
+	nsym = op.size();
+	
+	int				i, j, k, len;
+	char*			symop = new char[80*nsym];
+	
+	for ( i=k=0; i<nsym; ++i ) {
+		len = op[i].length();
+		for ( j=0; j<80; ++j, ++k ) {
+			if ( j<len ) symop[k] = op[i][j];
+			else symop[k] = ' ';
+		}
+	}
+	
+	return symop;
+}
+
+/**
+@brief 	Reading crystallographic symmetry operators.
+@param 	&symopfile		file name.
+@param 	spacegroup		crystal space group number.
+@return vector<string>	80 character symmetry operators.
+
+	The symmetry operators are encoded as 80 character lines.
+
+**/
+vector<string>	read_symop(string& symopfile, int spacegroup)
+{
+	vector<string>	symop;
+	
 	// No space group has more than 192 operators
-	if ( spacegroup < 1 || spacegroup > 100000 ) return 0;
+	if ( spacegroup < 1 || spacegroup > 100000 ) return symop;
 	
 	if ( symopfile.length() < 1 ) {
 		symopfile = "symop.star";
@@ -70,17 +100,15 @@ char* 		read_symop(Bstring& symopfile, int spacegroup, int& nsym)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_symop: Reading symmetry operator file " << symopfile << endl;
 
-	Bstring		ext = symopfile.extension();
-	
-	char*		symop = NULL;
+	string		ext = extension(symopfile);
 	
 	if ( spacegroup > 1 ) {
-		if ( ext.contains("star") || ext.contains("cif") ) {
-			symop = read_symop_star(symopfile, spacegroup, nsym);
+		if ( ext.find("star") != string::npos || ext.find("cif") != string::npos ) {
+			symop = read_symop_star(symopfile, spacegroup);
 		} else {
-			symop = read_symop_lib(symopfile, spacegroup, nsym);
+			symop = read_symop_lib(symopfile, spacegroup);
 		}
-		if ( !symop )
+		if ( !symop.size() )
 			cerr << "Error: No symmetry operator file read!" << endl;
 	}
 	
@@ -96,18 +124,14 @@ char* 		read_symop(Bstring& symopfile, int spacegroup, int& nsym)
 @param 	spacegroup		crystal space group number.
 @return int				error code (<0 means failure).
 **/
-int 		write_symat(Bstring& filename, int spacegroup)
+int 		write_symat(string& filename, int spacegroup)
 {
-	int				nsym(0), err(0);
-	Bstring			temp;
-	char*			symop = read_symop(temp, spacegroup, nsym);
-	if ( !symop || !nsym ) return -1;
+	int				err(0);
+	string			temp;
+	vector<string>	symop = read_symop(temp, spacegroup);
+	if ( symop.size() < 1 ) return -1;
 	
-	Bstring		symatfile = filename;
-	
-	err = write_symop_star(symatfile, spacegroup, nsym, symop, 80);
-	
-	delete[] symop;
+	err = write_symop_star(filename, spacegroup, symop, 80);
 	
 	return err;
 }
@@ -119,7 +143,7 @@ int 		write_symat(Bstring& filename, int spacegroup)
 @param 	ref_view			reference view.
 @return int					error code (<0 means failure).
 **/
-int 		write_pointgroup(Bstring& filename, Bstring& symmetry_string, View ref_view)
+int 		write_pointgroup(string filename, string& symmetry_string, View2<double> ref_view)
 {
 	Bsymmetry	sym(symmetry_string);
 	
@@ -128,11 +152,11 @@ int 		write_pointgroup(Bstring& filename, Bstring& symmetry_string, View ref_vie
 	return err;
 }
 
-int 		write_pointgroup(Bstring& filename, Bsymmetry& sym, View ref_view)
+int 		write_pointgroup(string filename, Bsymmetry& sym, View2<double> ref_view)
 {
 	int			err(0);
 
-	if ( filename.contains(".star") )
+	if ( filename.find(".star") != string::npos )
 		err = write_pointgroup_star(filename, sym, ref_view);
 	else {
 		cerr << "Error: File type for " << filename << " not supported!" << endl;
@@ -143,31 +167,30 @@ int 		write_pointgroup(Bstring& filename, Bsymmetry& sym, View ref_view)
 }
 
 // Find space group label and operators in a STAR format file
-char* 		read_symop_star(Bstring& filename, int spacegroup, int& nsym)
+vector<string>	read_symop_star(string& filename, int spacegroup)
 {
- 	Bstar2					star;
+ 	Bstar			star;
+	vector<string>	symop;
 	
- 	if ( star.read(filename.str()) < 0 )
+ 	if ( star.read(filename) < 0 )
 		error_show(filename.c_str(), __FILE__, __LINE__);
 	
 	if ( star.blocks().size() < 0 ) {
 		cerr << "No data blocks found in the STAR file!" << endl;
-		return NULL;
+		return symop;
 	}
 
-	int				i(0), j;
-	char*			symop = NULL;
+	int				j;
 
 	for ( auto ib: star.blocks() ) {
 		if ( spacegroup == ib.integer(SYMMETRY_NUMBER) ) {
 			for ( auto il: ib.loops() ) {
 				if ( ( j = il.find(SYMMETRY_EQUIVXYZ) ) >= 0 ) {
-					nsym = il.data().size();
-					symop = new char[nsym*80];
+//					nsym = il.data().size();
 					for ( auto ir: il.data() ) {
-						string	symstr(ir[j]);
-						strcpy(symop+80*i, symstr.c_str());
-						i++;
+//						string	symstr(ir[j]);
+//						strcpy(symop+80*i, symstr.c_str());
+						symop.push_back(ir[j]);
 					}
 				}
 			}
@@ -179,17 +202,19 @@ char* 		read_symop_star(Bstring& filename, int spacegroup, int& nsym)
 }
 
 // Find space group label and operators in "symop.lib" or similar file
-char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym)
+vector<string>	read_symop_lib(string& filename, int spacegroup)
 {
-	int				i, j, k(0), notfound(1), number(0), nlines;
+	int				i, j, k(0), notfound(1), number(0), nlines, nsym(0);
 	char			aline[80], symall[4000];
 	for ( i=0; i<4000; i++ ) symall[i] = 0;
-	
+
+	vector<string>	symop;
+
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_symop_lib: Symmetry operator library: " << filename << endl << endl;
 
-	Bstring			atfile;
-	Bstring			symopfile;
+	string			atfile;
+	string			symopfile;
 	if ( filename.empty() ) symopfile = filename;
 	else symopfile = "symop.lib";
 	
@@ -198,7 +223,7 @@ char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym)
 
 	ifstream		fsym;
 	fsym.open(symopfile.c_str());
-	if ( fsym.fail() ) return NULL;
+	if ( fsym.fail() ) return symop;
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_symop_lib: Symmetry operator library: " << symopfile << endl << endl;
@@ -210,7 +235,7 @@ char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym)
 	
 	if ( notfound ) {
 		fsym.close();
-		return NULL;
+		return symop;
 	}
 	
 	for ( i=nsym=0; i<nlines; i++ ) {
@@ -230,20 +255,21 @@ char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_symop_lib: Spacegroup=" << number << " Noperators=" << nsym << endl;
 
-	char*		symop = new char[nsym*80];
-	for ( i=0; i<nsym*80; i++ ) symop[i] = 0;
+//	char*		symop = new char[nsym*80];
+//	for ( i=0; i<nsym*80; i++ ) symop[i] = 0;
 
 	j = 0;
 	for ( i=0; i<nsym; i++ ) {
 		k = 0;
+		symop.push_back(string(80,' '));
 		while( symall[j] != '*' && k<80 ) {
-			symop[i*80+k] = symall[j];
+			symop[i][k] = symall[j];
 			j++;
 			k++;
 		}
 		j++;
 		if ( verbose & VERB_DEBUG )
-			cout << "DEBUG read_symop_lib: " << &symop[80*i] << endl;
+			cout << "DEBUG read_symop_lib: " << symop[i] << endl;
 	}
 	
 	fsym.close();
@@ -251,11 +277,10 @@ char* 		read_symop_lib(Bstring& filename, int spacegroup, int& nsym)
 	return symop;
 }
 
-int 		write_symop_star(Bstring& filename, int spacegroup, int nsym, char* symop, int line_len)
+int 		write_symop_star(string& filename, int spacegroup, vector<string>& symop, int line_len)
 {
 	int				i;
-	Bstring			s;
-	Bstar2			star;
+	Bstar			star;
 
 	star.comment("# Symmetry operators\n\n");
 
@@ -267,19 +292,18 @@ int 		write_symop_star(Bstring& filename, int spacegroup, int nsym, char* symop,
 	loop.tags()[SYMMETRY_EQUIVID] = 0;
 	loop.tags()[SYMMETRY_EQUIVXYZ] = 1;
 
-	for ( i=0; i<nsym; ++i ) {
-		s = Bstring(symop+line_len*i);
+	for ( i=0; i<symop.size(); ++i ) {
 		vector<string>&	vs = loop.add_row(2);
 		vs[0] = to_string(i+1);
-		vs[1] = s.str();
+		vs[1] = symop[i];
 	}
 	
-	return star.write(filename.str());
+	return star.write(filename);
 }
 
-int 		write_pointgroup_star(Bstring& filename, Bsymmetry& sym, View ref_view)
+int 		write_pointgroup_star(string filename, Bsymmetry& sym, View2<double> ref_view)
 {
- 	Bstar2			star;
+ 	Bstar			star;
 
 	star.comment("# Symmetry from bsym\n\n");
 
@@ -287,9 +311,9 @@ int 		write_pointgroup_star(Bstring& filename, Bsymmetry& sym, View ref_view)
 	Matrix3			mat = ref_view.matrix();
 	Vector3<double>	v;
 
-	BstarBlock&		block = star.add_block(sym.label().str());
+	BstarBlock&		block = star.add_block(sym.label());
 
-	block[SYMMETRY_POINT_GROUP] = sym.label().str();
+	block[SYMMETRY_POINT_GROUP] = sym.label();
 	block[SYMMETRY_PG_NUMBER] = to_string(sym.point());
 
 	BstarLoop&		loop = block.add_loop();
@@ -307,15 +331,14 @@ int 		write_pointgroup_star(Bstring& filename, Bsymmetry& sym, View ref_view)
 		vs[3] = to_string(v[2]);
 	}
 	
-	return star.write(filename.str());
+	return star.write(filename);
 }
 
 /**
 @brief 	Calculates symmetry matrices from a list of strings.
-@param 	nsym			number of symmetry operators.
-@param 	*symop			array of symmetry operator lines.
+@param 	&symop			array of symmetry operator lines.
 @param 	line_len		length of text line in the array.
-@return float* 			a set of 12-value symmetry matrices.
+@return vector<float>		a set of 12-value symmetry matrices.
 
 	The list of strings is expected to be packed into a single character
 	array with a fixed length for each string. Each string encodes a
@@ -323,12 +346,12 @@ int 		write_pointgroup_star(Bstring& filename, Bsymmetry& sym, View ref_view)
 	space.
 
 **/
-float*		sym_matrices_from_text_list(int nsym, char* symop, int line_len)
+vector<float>	sym_matrices_from_text_list(vector<string>& symop, int line_len)
 {
 	// Set up the symmetry operator matrix
 	int 		i, j, k, l;
-	float*		mat = new float[nsym*12];
-	for ( i=0; i<nsym*12; i++ ) mat[i] = 0;
+	int			nsym(symop.size());
+	vector<float>	mat(nsym*12,0);
 
 	char		op[200];
 	for ( i=0; i<nsym; i++ ) {
@@ -338,8 +361,8 @@ float*		sym_matrices_from_text_list(int nsym, char* symop, int line_len)
 		for ( j=0; j<3; j++ ) {
 			l = 0;
 			memset(op, 0, line_len);
-			while ( k<line_len && symop[i*line_len+k] != ',' ) {
-				op[l] = tolower(symop[i*line_len+k]);
+			while ( k<line_len && symop[i][k] != ',' ) {
+				op[l] = tolower(symop[i][k]);
 				k++;
 				l++;
 			}
@@ -364,5 +387,5 @@ float*		sym_matrices_from_text_list(int nsym, char* symop, int line_len)
 		}
 	}
 	
-	return 0;
+	return mat;
 }

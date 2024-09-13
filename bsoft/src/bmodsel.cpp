@@ -3,7 +3,7 @@
 @brief	Manipulates selections from sets of components as solutions of fits
 @author Bernard Heymann
 @date	Created: 20060908
-@date 	Modified: 20210318
+@date 	Modified: 20221115
 **/
 
 #include "rwmolecule.h"
@@ -55,6 +55,7 @@ const char* use[] = {
 "-fraction 0.6            Select: FOM/FOMmax ratio cutoff.",
 "-rank 5                  Select: Rank components into a number of groups.",
 "-prune fom               Type of pruning: simple, fom, similar, large.",
+"-bounds -5,-3,-7,8,4,6   Select within these bounds.",
 "-shell 7,18,23,5.4,-3.5  Select within a shell within given radii from the center (default {0,0,0}).",
 "-delete                  Delete non-selected models and components.",
 " ",
@@ -100,6 +101,7 @@ int 	main(int argc, char **argv)
 	int				rank(0);					// Ranking selection into a number of groups
 	int				prune_type(0);				// Prune type: 1=simple, 2=fom, 3=fit, 4=large
 	Bstring			prune_type_string("none");	// Prune type string
+	Vector3<double>	bounds_start, bounds_end;	// Bounding box
 	double			distance(10);				// Prune distance between components criterion
 	int				mod_comp_del(0);			// Flag to delete non-selected models and components
 	Bstring    		atom_select("all");
@@ -149,6 +151,15 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "rank" )
 			if ( ( rank = curropt->value.integer() ) < 1 )
 				cerr << "-rank: A number must be specified!" << endl;
+		if ( curropt->tag == "bounds" ) {
+			vector<double>	d = curropt->value.split_into_doubles(",");
+			if ( d.size() < 6 ) {
+				cerr << "-bounds: All 6 values for the bounds must be specified!" << endl;
+			} else {
+				bounds_start = Vector3<double>(d[0],d[1],d[2]);
+				bounds_end = Vector3<double>(d[3],d[4],d[5]);
+			}
+		}
 		if ( curropt->tag == "prune" ) {
 			prune_type_string = curropt->value;
 			if ( prune_type_string.length() < 1 )
@@ -186,15 +197,14 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No parameter or image files specified!" << endl;
 		bexit(-1);
 	}
 
 	Bmodel*		model = read_model(file_list);		
-	string_kill(file_list);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -237,8 +247,11 @@ int 	main(int argc, char **argv)
 	else if ( prune_type == 1 ) models_process(model, distance, model_prune_simple);
 	
 	if ( ovlapfile.length() )
-		model_find_overlap(model, ovlapfile, distance);
-	
+		model_find_overlap(model, ovlapfile.str(), distance);
+
+	if ( (bounds_end-bounds_start).volume() > 0 )
+		models_select_within_bounds(model, bounds_start, bounds_end);
+
 	if ( maskfile.length() ) {
 		Bimage*		pmask = read_img(maskfile, 1, 0);
 		model_select_in_mask(model, pmask);
@@ -256,15 +269,16 @@ int 	main(int argc, char **argv)
 	if ( reset ) models_process(model, model_reset_selection);
 	
 	model_selection_stats(model);
-
+	model_show_selection(model);
+	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

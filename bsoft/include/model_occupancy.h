@@ -8,7 +8,7 @@
 
 
 #include "rwimg.h"
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes
 int			model_occupancy(Bmodel* model, Bimage* pmask, double mol_weight, double rho, double cutoff, int invert_flag);

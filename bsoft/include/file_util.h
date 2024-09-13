@@ -1,9 +1,9 @@
 /**
 @file	file_util.h 
 @brief	Header file for file checking functions 
-@author Bernard Heymann 
+@author 	Bernard Heymann
 @date	Created: 20010601
-@date	Modified: 20210413
+@date	Modified: 20230628
 **/
 
 #include "Bstring.h"
@@ -23,6 +23,7 @@ enum FileType {
 	Micrograph = 2,			// Micrograph parameter file 
 	Molecule = 3,			// Molecular coordinate file 
 	Model = 4,				// Model parameter file
+	Material = 5,			// Material parameter file
 	MgRelion = 11			// Relion micrograph
 } ;
 #define _filetype_ 
@@ -36,6 +37,7 @@ string		find_file(string filename, string path, int flag=0);
 vector<string>	file_list(string path);
 vector<string>	file_list(string path, string ext);
 FileType	file_type(const char* filename);
+FileType	file_type(string filename);
 FileType	file_type(Bstring& filename);
 int			detect_and_fix_carriage_return(const char* filename);
 

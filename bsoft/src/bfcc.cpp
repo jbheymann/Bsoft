@@ -3,14 +3,13 @@
 @brief	Fast cross-correlation search for the best fit of a 3D map to a template.
 @author Bernard Heymann
 @date	Created: 20130523
-@date	Modified: 20160604
+@date	Modified: 20230526
 **/
 
 #include "rwimg.h"
 #include "mg_processing.h"
 #include "mg_particle_select.h"
 #include "rwmg.h"
-#include "linked_list.h"
 #include "file_util.h"
 #include "options.h"
 #include "utilities.h"
@@ -21,11 +20,11 @@
 extern int 	verbose;		// Level of output to the screen
 
 // Function prototypes
-double		img_fcc_search(Bimage* p, Bimage* ptemp, View* view,
+double		img_fcc_search(Bimage* p, Bimage* ptemp, vector<View2<double>>& view,
 				FSI_Kernel* kernel, double hires, double lores, Bimage* pmask);
-double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View view,
+double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View2<double>& view,
 				FSI_Kernel* kernel, double hires, double lores, Bimage* pmask);
-double		img_cc_for_view(Bimage* p, Bimage* ptemp, View view,
+double		img_cc_for_view(Bimage* p, Bimage* ptemp, View2<double>& view,
 				FSI_Kernel* kernel, double hires, double lores, double searchrad,
 				Bimage* pmask);
 
@@ -118,13 +117,13 @@ int 		main(int argc, char **argv)
 	double			phi_step(M_PI_4);			// Angular step size for phi
 	double			side_ang(-1);				// Side view variation angle
 	double			angle_limit(M_PI/9.0);		// Angular limit for directional search
-	Bsymmetry		sym;					// Default: asymmetric or C1 point group
+	Bsymmetry		sym;						// Default: asymmetric or C1 point group
 	double			hires(0), lores(0);			// Limiting resolution for cross-correlation
 	double			search_radius(-1);			// Use default search radius
 	int				currview_set(0);			// Flag to indicate current view is set
-	View			currview;					// View to initiate search from and use as current view
-	View			bestview;					// Eventually the best view
-	View			ref_view;					// Reference view
+	View2<double>	currview;					// View to initiate search from and use as current view
+	View2<double>	bestview;					// Eventually the best view
+	View2<double>	ref_view;					// Reference view
 	double			accuracy(M_PI/360.0);		// Accuracy for refinement default = 0.5 degrees
 	Bstring			template_file;				// Reference template file name
 	Bstring			mask_file;					// Reciprocal space mask file name
@@ -283,7 +282,7 @@ int 		main(int argc, char **argv)
 					img_num = part->id;
 					read_img_num = part->id - 1;
 					if ( !currview_set ) {
-						currview = part->view;
+						currview = part->view2();
 						currview_set = 1;
 					}
 //					cout << "part->ori=" << part->ori << endl;
@@ -297,7 +296,7 @@ int 		main(int argc, char **argv)
 					bexit(-1);
 				}
 				if ( !currview_set ) {
-					currview = rec->view;
+					currview = rec->view2();
 					currview_set = 1;
 				}
 			} else {
@@ -388,7 +387,7 @@ int 		main(int argc, char **argv)
 	p->phase_shift_to_origin();
 	ptemp->phase_shift_to_origin();
 	
-	View*			view = NULL, *view2 = NULL;
+	vector<View2<double>>	views;
 	Vector3<double>	currshift, bestshift;
 	double			cc, best_cc = -1e37;
 	
@@ -403,22 +402,20 @@ int 		main(int argc, char **argv)
 //		cout << "Doing global" << endl;
 		
 		if ( side_ang < 0 )
-			view = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+			views = sym.asymmetric_unit_views(theta_step, phi_step, 1);
 		else
-			view = side_views(sym, side_ang, theta_step, phi_step);
-		view2 = view_list_expand_angles(view, -M_PI, M_PI - alpha_step/2, alpha_step);
-		kill_list((char *) view, sizeof(View));
-		view = view2;
+			views = sym.side_views(side_ang, theta_step, phi_step);
+		views = view_list_expand_angles(views, -M_PI, M_PI - alpha_step/2, alpha_step);
 		
 		if ( verbose & VERB_FULL )
-			show_views(view);
+			show_views(views);
 
 //		if ( ps_file.length() && view ) ps_views(ps_file, symmetry_string, view, 0);
 	
 //		if ( verbose )
 //			cout << "Number of global views:         " << count_list((char *) view) << endl << endl;
 	
-		best_cc = img_fcc_search(p, ptemp, view, kernel, hires, lores, pmask);
+		best_cc = img_fcc_search(p, ptemp, views, kernel, hires, lores, pmask);
 		bestview = p->image->view();
 
 		best_cc = img_cc_for_view(p, ptemp, bestview, kernel, hires, lores,
@@ -429,34 +426,31 @@ int 		main(int argc, char **argv)
 		if ( verbose )
 			cout << alpha_step*180.0/M_PI << tab << bestshift << tab << bestview << tab << best_cc << endl;
 		
-		kill_list((char *) view, sizeof(View));
-		view = NULL;
+		views.clear();
 	}
 
 	if ( mode == "directional" ) {
-		view = views_within_limits(bestview, theta_step, phi_step, alpha_step, angle_limit, M_PI);
+		views = views_within_limits(bestview, theta_step, phi_step, alpha_step, angle_limit, M_PI);
 		if ( verbose ) {
 			cout << "Central view:                   " << bestview << endl;
-			cout << "Number of directional views:    " << count_list((char *) view) << endl << endl;
+			cout << "Number of directional views:    " << views.size() << endl << endl;
 		}
 	} else if ( mode == "symmetric" ) {
-		view = symmetry_get_all_views(sym, bestview);
+		views = sym.get_all_views(bestview);
 		if ( verbose )
-			cout << "Number of symmetry views:       " << count_list((char *) view) << endl << endl;
+			cout << "Number of symmetry views:       " << views.size() << endl << endl;
 	}
 
 	if ( mode.length() ) {
 		if ( mode == "directional" || mode == "symmetric" ) {
-			best_cc = img_fcc_search(p, ptemp, view, kernel, hires, lores, pmask);
+			best_cc = img_fcc_search(p, ptemp, views, kernel, hires, lores, pmask);
 			bestview = p->image->view();
-
-			kill_list((char *) view, sizeof(View));
 		} else if ( mode == "refine" ) {
 			currview = bestview;
 			best_cc = -1;
 			while ( alpha_step >= accuracy ) {
-				view = views_for_refinement(bestview, alpha_step);
-				cc = img_fcc_search(p, ptemp, view, kernel, hires, lores, pmask);
+				views = views_for_refinement(bestview, alpha_step);
+				cc = img_fcc_search(p, ptemp, views, kernel, hires, lores, pmask);
 				currview = p->image->view();
 				if ( currview.residual(bestview) < 1e-6 ) alpha_step /= 2;	// Contract around best point
 				if ( best_cc < cc ) {
@@ -464,11 +458,8 @@ int 		main(int argc, char **argv)
 					bestview = currview;
 //					bestshift = currshift;
 				}
-
 				if ( verbose )
 					cout << alpha_step*180.0/M_PI << tab << bestshift << tab << bestview << tab << best_cc << endl;
-
-				kill_list((char *) view, sizeof(View));
 			}
 		}
 		
@@ -538,7 +529,7 @@ int 		main(int argc, char **argv)
 				part->fpart = newpart_file;
 				part->ori = origin;
 			} else {
-				part->view = bestview;
+				part->view2(bestview);
 				part->ori = origin - bestshift;
 			}
 			for ( part = rec->part; part; part = part->next )
@@ -550,7 +541,7 @@ int 		main(int argc, char **argv)
 				rec->frec = newpart_file;
 				rec->origin = origin;
 			} else {
-				rec->view = bestview;
+				rec->view2(bestview);
 				rec->origin = origin - bestshift;
 			}
 			for ( rec = project->rec; rec; rec = rec->next )
@@ -563,7 +554,7 @@ int 		main(int argc, char **argv)
 
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);
@@ -573,7 +564,7 @@ int 		main(int argc, char **argv)
 @brief 	Fast cross-correlation searches a 2D/3D density map for a template.
 @param 	*p			the Fourier transformed image.
 @param 	*ptemp		the Fourier transformed template to be searched for.
-@param 	view		view.
+@param 	&views		list of views.
 @param 	*kernel		interpolation kernel.
 @param 	hires		high resolution limit.
 @param 	lores		low resolution limit.
@@ -586,29 +577,27 @@ int 		main(int argc, char **argv)
 	The best view is returned in the image view record.
 
 **/
-double		img_fcc_search(Bimage* p, Bimage* ptemp, View* view,
+double		img_fcc_search(Bimage* p, Bimage* ptemp, vector<View2<double>>& views,
 				FSI_Kernel* kernel, double hires, double lores, Bimage* pmask)
 {
 	if ( !p ) return -1e37;
 
-	long 			n, nviews, ibest;
+	long 			n, nviews(views.size()), ibest;
 	double			best(-1e37);
 
-	View*			view_arr = view_array(view, nviews);
-
-	double*			cc = new double[nviews];
-	
 	if ( verbose & VERB_PROCESS  )
 		cout << "Number of views:                " << nviews << endl;
 	
 #ifdef HAVE_GCD
+	__block vector<double>		cc(nviews,0);
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t k){
-		cc[k] = img_fcc_for_view(p, ptemp, view_arr[k], kernel, hires, lores, pmask);
+		cc[k] = img_fcc_for_view(p, ptemp, views[k], kernel, hires, lores, pmask);
 	});
 #else
+	vector<double>		cc(nviews,0);
 #pragma omp parallel for
 	for ( n=0; n<nviews; n++ )
-		cc[n] = img_fcc_for_view(p, ptemp, view_arr[n], kernel, hires, lores, pmask);
+		cc[n] = img_fcc_for_view(p, ptemp, views[n], kernel, hires, lores, pmask);
 #endif
 
 	double			ccmin(1), ccmax(-1), ccavg(0), ccstd(0);
@@ -632,11 +621,8 @@ double		img_fcc_search(Bimage* p, Bimage* ptemp, View* view,
 	if ( verbose & VERB_PROCESS )
 		cout << "Min, max, avg, std:             " << ccmin << " " << ccmax << " " << ccavg << " " << ccstd << endl;
 
-	p->view(view_arr[ibest]);
+	p->view(views[ibest]);
 	p->image->FOM(best);
-	
-	delete[] view_arr;
-	delete[] cc;
 	
 	return best;
 }
@@ -645,7 +631,7 @@ double		img_fcc_search(Bimage* p, Bimage* ptemp, View* view,
 @brief Searches a 2D/3D density map for a template using a specific view.
 @param 	*p				the Fourier transformed image.
 @param 	*ptemp			the Fourier transformed template to be searched for.
-@param 	view			view.
+@param 	&view			view.
 @param 	*cc				interpolation kernel.
 @param 	hires			high resolution limit.
 @param 	lores			low resolution limit.
@@ -656,7 +642,7 @@ double		img_fcc_search(Bimage* p, Bimage* ptemp, View* view,
 	a set of high-scoring fits.
 	The views must be calculated externally to allow for custom sets.
 **/
-double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View view,
+double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View2<double>& view,
 				FSI_Kernel* kernel, double hires, double lores, Bimage* pmask)
 {
 	Matrix3			mat = view.matrix();
@@ -715,7 +701,7 @@ double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View view,
 @brief Searches a 2D/3D density map for a template using a specific view.
 @param 	*p				the Fourier transformed image.
 @param 	*ptemp			the Fourier transformed template to be searched for.
-@param 	view			view.
+@param 	&view			view.
 @param 	*cc				interpolation kernel.
 @param 	hires			high resolution limit.
 @param 	lores			low resolution limit.
@@ -728,7 +714,7 @@ double		img_fcc_for_view(Bimage* p, Bimage* ptemp, View view,
 	The views must be calculated externally to allow for custom sets.
 	The shift is encoded in the image origin.
 **/
-double		img_cc_for_view(Bimage* p, Bimage* ptemp, View view,
+double		img_cc_for_view(Bimage* p, Bimage* ptemp, View2<double>& view,
 				FSI_Kernel* kernel, double hires, double lores, double searchrad,
 				Bimage* pmask)
 {

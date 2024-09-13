@@ -3,10 +3,11 @@
 @brief	Functions to manage CTF (contrast transfer function) parameters
 @author Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210531
+@date	Modified: 20240320
 **/
 
 #include "ctf.h"
+#include "string_util.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -21,28 +22,26 @@ int			CTFparam::update(CTFparam& ctf)
 {
 	int			i;
 	
+	if ( ctf.identifier().length() ) id = ctf.identifier();	// Optics group
+	sel = ctf.sel;										// Optics group number
 	if ( ctf.volt() ) volt(ctf.volt());					// Acceleration voltage (volts)
 	if ( ctf.focal_length() ) fl = ctf.focal_length();	// Focal length (angstrom)
 	if ( ctf.objective_aperture() ) oa = ctf.objective_aperture();		// Objective aperture (angstrom)
-	if ( ctf.Cs() ) Cs(ctf.Cs());						// Spherical aberation (angstrom)
 	if ( ctf.Cc() ) cc = ctf.Cc();						// Chromatic aberation (angstrom)
 	if ( ctf.alpha() ) a = ctf.alpha();					// Illumination half-angle (radians)
 	if ( ctf.dE() ) de = ctf.dE();						// Energy spread (eV)
-	if ( ctf.amp_shift() ) amp_shift(ctf.amp_shift());	// CTF amplitude phase shift (radians)
-	if ( ctf.defocus_average() ) def_avg = ctf.defocus_average();		// CTF defocus average (angstrom)
-	if ( ctf.defocus_deviation() ) def_dev = ctf.defocus_deviation();	// CTF defocus deviation (angstrom)
-	if ( ctf.astigmatism_angle() ) ast_ang = ctf.astigmatism_angle();	// CTF astigmatism angle (radians)
-	if ( ctf.baseline_type() ) {					// Baseline equation
+	if ( ctf.baseline_type() ) {						// Baseline equation
 		bt = ctf.baseline_type();
 		for ( i=0; i<NCTFPARAM; i++ ) base[i] = ctf.baseline(i);
 	}
-	if ( ctf.envelope_type() ) {					// Envelope equation
+	if ( ctf.envelope_type() ) {						// Envelope equation
 		et = ctf.envelope_type();
 		for ( i=0; i<NCTFPARAM; i++ ) env[i] = ctf.envelope(i);
 	}
-	
+	if ( ctf.abw.size() ) abw = ctf.abw;
+	if ( ctf.f ) f = ctf.f;								// Figure-of-merit
+
 	update_terms();
-	zero(1);
 	
 	return 0;
 }
@@ -70,7 +69,7 @@ vector<double>	CTFparam::calculate(int nrad, int npsi, double step_size)
 {
 	vector<double>	ctf;
 
-	if ( check_defocus() || check_Cs() ) {
+	if ( check_defocus() ) {
 		cerr << "in CTFparam::calculate" << endl;
 		return ctf;
 	}
@@ -78,19 +77,17 @@ vector<double>	CTFparam::calculate(int nrad, int npsi, double step_size)
 	if ( npsi < 1 ) npsi = 1;
 	
 	int 		i, j, k;
-	double		s2, dphi, defocus;
-	double		dpsi = M_PI*2.0/npsi;
+	double		s2, ang;
+	double		dpsi(M_PI*2.0/npsi);
 	
 	ctf.resize(nrad*npsi);
 	
-	defocus = def_avg;
 	for ( j=k=0; j<npsi; j++ ) {
-		if ( npsi > 1 ) defocus = def_avg + def_dev*cos(2*(j*dpsi-ast_ang));
+		ang = j*dpsi;
 		for ( i=0; i<nrad; i++, k++ ) {
 			s2 = i*step_size;
 			s2 *= s2;
-			dphi = (t1*s2 - t2*defocus)*s2 - ac;
-			ctf[k] = sin(dphi);
+			ctf[k] = calculate(s2, ang);
 //			cout << k << tab << ctf[i] << endl;
 		}
 	}
@@ -103,7 +100,7 @@ vector<double>	CTFparam::calculate(int nrad, int npsi, double step_size)
 /**
 @brief 	Calculates the zeroes of a CTF curve on the spatial frequency scale.
 @param 	max_s			maximum spatial frequency.
-@return vector<double>		array of spatial frequencies for zeroes, NULL on error.
+@return vector<double>	array of spatial frequencies for zeroes, NULL on error.
 
 	The nth zero is given by the reciprocal space distance where the
 	phase shift term is equal to -n*PI:
@@ -114,7 +111,7 @@ vector<double>	CTFparam::calculate(int nrad, int npsi, double step_size)
 	The array returned start with the first zero at index 0.
 
 **/
-vector<double>	CTFparam::zeroes(double max_s)
+/*vector<double>	CTFparam::zeroes(double max_s)
 {
 	vector<double>	zero;
 
@@ -126,28 +123,30 @@ vector<double>	CTFparam::zeroes(double max_s)
 	long		i;
 	double		t, sm2(max_s*max_s);
     double		l = lambda();
-    double		lf = l*def_avg;
-	double		ps = ac/M_PI;
-	double		l3Cs = l*l*l*cs/2.0;
+	double		ps = abw[{0,0}]/M_PI;
+	double		df = defocus_average();
+    double		lf = l*df;
+//	double		l3Cs = l*l*l*cs/2.0;
+	double		l3Cs = abw[{4,0}]/M_PI;
 	
 //	cout << l*def_avg*sm2 << tab << l3Cs*sm2*sm2 << tab << ps << endl;
 	
-	long		nzero = (long) (l*def_avg*sm2 - l3Cs*sm2*sm2 + ps);
+	long		nzero = (long) (lf*sm2 - l3Cs*sm2*sm2 + ps);
 	
 	if ( nzero < 1 ) nzero = 1;
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG CTFparam::zeroes: " << nzero << tab << max_s << tab << cs << endl;
+		cout << "DEBUG CTFparam::zeroes: " << nzero << tab << max_s << tab << Cs() << endl;
 
 	zero.resize(nzero);
 	
-	if ( cs < 1e3 ) {
+	if ( abw[{4,0}] < 1 ) {
 		for ( i=0; i<nzero; i++ ) {
 			t = double(i)+1.0-ps;
 			zero[i] = sqrt(t/lf);
 		}
 	} else {
-		double		fz = def_avg/(l*l*cs), fz2 = fz*fz;
+		double		fz = df/(l*l*Cs()), fz2 = fz*fz;
 		for ( i=0; i<nzero; i++ ) {
 			t = (i+1.0-ps)/l3Cs;
 			if ( fz2 > t )
@@ -163,6 +162,106 @@ vector<double>	CTFparam::zeroes(double max_s)
 	
 	return zero;
 }
+*/
+vector<double>	CTFparam::zeroes(double max_s)
+{
+	vector<double>	zero;
+
+	if ( check_defocus() ) {
+		cerr << "in CTFparam::zeroes" << endl;
+		return zero;
+	}
+	
+	long		i;
+	double		t, z;
+
+	if ( abw[{4,0}] < 1 ) {
+		for ( i=0; i<100; i++ ) {
+			t = abw[{0,0}] - M_PI*double(i+1);
+			z = sqrt(t/abw[{2,0}]);
+			if ( z <= max_s ) zero.push_back(z);
+			else break;
+		}
+	} else {
+		double		fz = -0.5*abw[{2,0}]/abw[{4,0}], fz2 = fz*fz;
+//		cout << "fz = " << fz << endl;
+		for ( i=0; i<100; i++ ) {
+			t = (abw[{0,0}] - M_PI*double(i+1))/abw[{4,0}];
+//			cout << i << tab << t << endl;
+			if ( fz2 > t )
+				z = sqrt(fz - sqrt(fz2 + t));
+			else
+				break;
+			if ( !isfinite(z) )
+				break;
+			if ( z <= max_s )
+				zero.push_back(z);
+			else
+				break;
+		}
+	}
+
+	long		nzero(zero.size());
+
+	if ( nzero < 1 ) {
+		cerr << "Error in CTFparam::zeroes: No zeroes calculated!" << endl;
+	}
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG CTFparam::zeroes: " << nzero << tab << max_s << endl;
+
+	if ( verbose & VERB_DEBUG )
+		for ( i=0; i<nzero; i++ ) cout << i+1 << tab << zero[i] << tab << 1.0/zero[i] << endl;
+	
+	return zero;
+}
+/*
+vector<double>	CTFparam::zeroes(double max_s)
+{
+	vector<double>	zero;
+
+	if ( check_defocus() ) {
+		cerr << "in CTFparam::zeroes" << endl;
+		return zero;
+	}
+	
+	long		i;
+	double		t, sm2(max_s*max_s);
+	
+	long		nzero = (long) ((abw[{0,0}] - abw[{2,0}]*sm2 - abw[{4,0}]*sm2*sm2)/M_PI);
+
+	if ( nzero < 1 ) nzero = 1;
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG CTFparam::zeroes: " << nzero << tab << max_s << endl;
+
+	zero.resize(nzero);
+	
+	if ( abw[{4,0}] < 1 ) {
+		for ( i=0; i<nzero; i++ ) {
+			t = abw[{0,0}] - M_PI*double(i+1);
+			zero[i] = sqrt(t/abw[{2,0}]);
+		}
+	} else {
+		double		fz = -0.5*abw[{2,0}]/abw[{4,0}], fz2 = fz*fz;
+//		cout << "fz = " << fz << endl;
+		for ( i=0; i<nzero; i++ ) {
+			t = (abw[{0,0}] - M_PI*double(i+1))/abw[{4,0}];
+//			cout << i << tab << t << endl;
+			if ( fz2 > t )
+				zero[i] = sqrt(fz - sqrt(fz2 + t));
+			else
+				zero[i] = -1;
+			if ( !isfinite(zero[i]) ) zero[i] = 0.0001;
+		}
+	}
+
+	if ( verbose & VERB_DEBUG )
+		for ( i=0; i<nzero; i++ ) cout << i+1 << tab << zero[i] << tab << 1.0/zero[i] << endl;
+	
+	return zero;
+}
+*/
 
 /**
 @brief 	Calculates the maxima of a CTF curve on the spatial frequency scale.
@@ -264,6 +363,12 @@ Bstring		CTFparam::envelope_equation()
 			enveq += Bstring(env[1], " + %.4g") + Bstring(env[2], "*exp(%.4g*$s2)") +
 				Bstring(env[3], " + %.4g") + Bstring(env[4], "*exp(%.4g*$s2)");
 			break;
+		case 5:		// Hyperbolic decay with constant
+			enveq += Bstring(env[1], " + %.4g/$s");
+			break;
+		case 6:		// Exponential decay with constant
+			enveq += Bstring(env[1], " + %.4g") + Bstring(env[2], "*pow($s, %.4g)");
+			break;
 		default: break;
 	}
 
@@ -280,11 +385,14 @@ Bstring		CTFparam::envelope_equation()
 **/
 int			CTFparam::parse_baseline_equation(Bstring base_eq)
 {
+//	cout << "Base eq = " << base_eq << endl;
+
 	base_eq = base_eq.remove('\"');
-	
-	int 		n(0);
 		
-	if ( base_eq.contains("s4") ) {				// Polynomial
+	int 		n(0);
+	base[1] = base[2] = base[3] = base[4] = 0;
+		
+	if ( base_eq.contains("s3") ) {				// Polynomial
 		bt = 1;	
 		sscanf(base_eq.c_str(), "%lf + %lf*$s + %lf*$s2 + %lf*$s3 + %lf*$s4%n",
 			   &base[0], &base[1], &base[2], &base[3], &base[4], &n);
@@ -296,16 +404,23 @@ int			CTFparam::parse_baseline_equation(Bstring base_eq)
 		bt = 2;
 		sscanf(base_eq.c_str(), "%lf + %lf*exp(%lf*$s2) + %lf*exp(%lf*$s2)%n",
 			   &base[0], &base[1], &base[2], &base[3], &base[4], &n);
+	} else if ( base_eq.length() ) {
+		bt = 0;
+		sscanf(base_eq.c_str(), "%lf", &base[0]);
 	} else {
-		bt = 1;
+		bt = 0;
 		base[0] = 1;
-		base[1] = base[2] = base[3] = base[4] = 0;
 	}
 
-	char*		ptr = &base_eq[n];
-	if ( strstr(ptr, "exp") ) {
-//		cout << ptr << endl;
-		sscanf(ptr, " + %lf*exp(%lf*(%lf - $s)*(%lf - $s))",
+	// Water ring
+	Bstring		wr = base_eq.substr(n, 100);
+//	char*		ptr = &base_eq[n];
+//	if ( n < base_eq.length() && strstr(ptr, "exp") ) {
+	if ( wr.contains("exp") ) {
+		cout << base_eq << tab << wr << tab << n << endl;
+//		sscanf(ptr, " + %lf*exp(%lf*(%lf - $s)*(%lf - $s))",
+//			&base[5], &base[7], &base[6], &base[6]);
+		sscanf(wr.c_str(), " + %lf*exp(%lf*(%lf - $s)*(%lf - $s))",
 			&base[5], &base[7], &base[6], &base[6]);
 		bt += 3;
 //		cout << base[5] << tab << base[6] << tab << base[7] << endl;
@@ -331,9 +446,15 @@ int			CTFparam::parse_envelope_equation(Bstring env_eq)
 {
 	env_eq = env_eq.remove('"');
 	
-	et = 2*env_eq.count('s') - 1;
-	if ( env_eq.index('+') > 0 )
-		if ( env_eq.index('+') < env_eq.index('*') ) et++;
+	if ( env_eq.contains("s2") ) {
+		et = 2*env_eq.count('s') - 1;
+		if ( env_eq.index('+') > 0 )
+			if ( env_eq.index('+') < env_eq.index('*') ) et++;
+	} else if ( env_eq.contains("pow") ) {
+		et = 6;
+	} else {
+		et = 5;
+	}
 	
 //	cout << et << tab << env_eq << endl;
 
@@ -354,6 +475,14 @@ int			CTFparam::parse_envelope_equation(Bstring env_eq)
 			sscanf(env_eq.c_str(), "%lf + %lf*exp(%lf*$s2) + %lf*exp(%lf*$s2)",
 		   		&env[0], &env[1], &env[2], &env[3], &env[4]);
 			break;
+		case 5:		// Hyperbolic decay with constant
+			sscanf(env_eq.c_str(), "%lf + %lf/$s",
+		   		&env[0], &env[1]);
+			break;
+		case 6:		// Exponential decay with constant
+			sscanf(env_eq.c_str(), "%lf + %lf*pow($s, %lf)",
+		   		&env[0], &env[1], &env[2]);
+			break;
 		default:
 			et = 4;
 			env[0] = 1;		// Default envelope
@@ -364,6 +493,31 @@ int			CTFparam::parse_envelope_equation(Bstring env_eq)
 	}
 	
 	return 0;
+}
+
+/**
+@brief 	Calculates the envelope curve based on partial coherence.
+@param 	s			spatial frequency.
+@return double		amplitude.
+
+The curve is calculated at frequency s as:
+	Epc(s) = exp(-(pi*alpha*(Cs*lamda^2*s^2 - def)*s)^2)
+where
+	Cs: Spherical aberation (~2e7 A)
+	alpha: Beam spread/source size (~0.1 mrad)
+	def: Defocus (~1e4 A)
+	lamda: electron wavelength (~0.03 A)
+
+References:
+	Zhu et al. (1997) JSB 118, 197-219.
+**/
+double		CTFparam::partial_coherence(double s)
+{
+    double			Csl2(Cs()*wl*wl);
+	double			pal(M_PI*a*wl);
+	double			arg = pal*(Csl2*s*s - defocus_average())*s;
+	
+	return exp(-arg*arg);
 }
 
 /**
@@ -386,17 +540,43 @@ References:
 vector<double>	CTFparam::envelope_partial_coherence(long n, double freq_step)
 {
 	long			i;
-    double			l = lambda(), Csl2(cs*l*l);
+    double			Csl2(Cs()*wl*wl);
 	double			s, arg, pal(M_PI*a);
 	vector<double>	curve(n);
 	
 	for ( i=0; i<n; i++ ) {
 		s = i*freq_step;
-		arg = pal*(Csl2*s*s - def_avg)*s;
+		arg = pal*(Csl2*s*s - defocus_average())*s;
 		curve[i] = exp(-arg*arg);
 	}
 	
 	return curve;
+}
+
+/**
+@brief 	Calculates the envelope curve based on energy spread.
+@param 	s2			spatial frequency squared.
+@return double		amplitude.
+
+The curve is calculated at frequency s as:
+	Ees(s) = exp(-0.5*(pi*lambda*Cc*(dE/V)*s^2)^2)
+where
+	Cc: Chromatic aberation (~2e7 A)
+	dE: Energy spread (~1 eV)
+	V: Acceleration voltage (~1e5 V)
+	lamda: electron wavelength (~0.03 A)
+
+References:
+	Freitag et al. (2005) Ultramicroscopy 102, 209-14.
+	Zhu et al. (1997) JSB 118, 197-219.
+**/
+double		CTFparam::energy_spread(double s2)
+{
+//	double			fac(1.0/(16*log(2.0)));
+	double			fac(0.5);
+    double			arg = M_PI*wl*cc*de*s2/av;
+	
+	return exp(-fac*arg*arg);
 }
 
 /**
@@ -423,7 +603,7 @@ vector<double>	CTFparam::envelope_energy_spread(long n, double freq_step)
 	double			s, arg;
 //	double			fac(1.0/(16*log(2.0)));
 	double			fac(0.5);
-    double			l = lambda(), deccl(M_PI*l*cc*de/av);
+    double			deccl(M_PI*wl*cc*de/av);
 	vector<double>	curve(n);
 	
 	for ( i=0; i<n; i++ ) {
@@ -436,29 +616,115 @@ vector<double>	CTFparam::envelope_energy_spread(long n, double freq_step)
 }
 
 /**
+@brief 	Calculates the envelope curve based on partial coherence and energy spread.
+@param 	s2			spatial frequency squared.
+@return double		amplitude.
+
+References:
+	Freitag et al. (2005) Ultramicroscopy 102, 209-14.
+	Zhu et al. (1997) JSB 118, 197-219.
+**/
+double	CTFparam::partial_coherence_and_energy_spread(double s2)
+{
+	double			s(sqrt(s2));
+//	double			sc = M_PI*a*wl*(Cs()*wl*wl*s2 - defocus_average())*s;
+	// Esc = (a/(2*l)) * (-2*pi*l*∆f*s + 2*pi*Cs*l^3*s^3)
+	long double		sc = a*(abw[{2,0}]*s + 2*abw[{4,0}]*s*s2)/wl;
+//	double			fac(1.0/(16*log(2.0)));
+	double			fac(0.5);
+    double			es = M_PI*wl*cc*de*s2/av;
+	
+	return exp(-sc*sc-fac*es*es);
+}
+
+/*double	CTFparam::coherence_envelope_phi(double s, double angle)
+{
+	if (abw.size() < 5 ) return 0;	// At least the usual CTF parameters
+	long		i(0), n(0), m(0);
+	long double	dphi_es = M_PI*wl*cc*de*s*s/av;
+	long double	dphi(0), sn(1);
+	for ( i=0, n=1; n<=maxord && i<abw.size(); ++n ) {
+		for ( m=-n; m<=n; m+=2, ++i ) {
+			if ( m==0 ) dphi += n*abw[{n,m}]*sn;
+			else if ( m<0 ) dphi += n*abw[{n,m}]*sn*sinl(-m*angle);
+			else dphi += n*abw[{n,m}]*sn*cosl(m*angle);
+		}
+		sn *= s;
+	}
+	dphi *= M_PI*a;
+	dphi = dphi*dphi + dphi_es*dphi_es/2;
+	return dphi;
+}*/
+
+double	CTFparam::coherence_envelope_phi(double s)
+{
+	if (abw.size() < 5 ) return 0;	// At least the usual CTF parameters
+	long double	s2(s*s);
+//	long double	dphi_sc = M_PI*a*(2*abw[{2,0}]*s + 4*abw[{4,0}]*s*s2);
+	// Esc = (a/(2*l)) * (-2*pi*l*∆f*s + 2*pi*Cs*l^3*s^3)
+	long double	dphi_sc = a*(abw[{2,0}]*s + 2*abw[{4,0}]*s*s2)/wl;
+	long double	dphi_tc = M_PI*wl*cc*de*s2/av;
+	return dphi_sc*dphi_sc + dphi_tc*dphi_tc/2;
+}
+
+vector<double>	CTFparam::coherence_envelope(long n, double freq_step)
+{
+	long			i;
+	double			s;
+	vector<double>	curve(n);
+	
+	for ( i=0; i<n; ++i ) {
+		s = i*freq_step;
+		curve[i] = exp(-coherence_envelope_phi(s));
+	}
+	
+	return curve;
+}
+
+/**
 @brief 	Converts microscope parameters to a JSON object list.
-@param 	&cp			microscope parsmeter structure.
+@param 	&cp			microscope parameter structure.
 @return JSvalue		JSON object list.
 **/
 JSvalue		ctf_to_json(CTFparam& cp)
 {
 	JSvalue		js(JSobject);
 	
+	js["Optics_group"] = cp.identifier();
 	js["Volt"] = cp.volt();
 	js["Wavelength"] = cp.lambda();
 	js["Focal_length"] = cp.focal_length();
+	js["Focus_step"] = cp.focus_step();
 	js["Objective_aperture"] = cp.objective_aperture();
 	js["Slit_width"] = cp.slit_width();
-	js["Cs"] = cp.Cs();
 	js["Cc"] = cp.Cc();
 	js["Beam_convergence"] = cp.alpha();
 	js["Energy_spread"] = cp.dE();
-	js["Amplitude_phase"] = cp.amp_shift();
-	js["Defocus_average"] = cp.defocus_average();
-	js["Defocus_deviation"] = cp.defocus_deviation();
-	js["Astigmatism_angle"] = cp.astigmatism_angle();
 	
+	js["Aberration"] = JSvalue(cp.aberration_coefficients_with_tags());
+	
+	js["Baseline_type"] = cp.baseline_type();
+	js["Baseline"] = cp.baseline();
+	
+	js["Envelope_type"] = cp.envelope_type();
+	js["Envelope"] = cp.envelope();
+
 	return js;
+}
+
+/**
+@brief 	Converts sets of microscope parameters to an array of JSON objects.
+@param 	&cpa		set of microscope parameter structures.
+@return JSvalue		array of JSON objects.
+**/
+JSvalue		ctf_array_to_json(vector<CTFparam>& cpa)
+{
+	JSvalue		jsa(JSarray);
+	
+	for ( auto cp: cpa )
+		jsa.push_back(ctf_to_json(cp));
+	
+	return jsa;
 }
 
 /**
@@ -484,20 +750,6 @@ CTFparam	ctf_from_json(JSvalue& js)
 	CTFparam		cp;
 	ctf_update_from_json(cp, js);
 	
-/*	if ( js.exists("Volt") ) cp.volt(js["Volt"].real());
-//	if ( js.exists("Wavelength") ) cp.lambda(js["Wavelength"].real());
-	if ( js.exists("Focal_length") ) cp.focal_length(js["Focal_length"].real());
-	if ( js.exists("Objective_aperture") ) cp.objective_aperture(js["Objective_aperture"].real());
-	if ( js.exists("Slit_width") ) cp.slit_width(js["Slit_width"].real());
-	if ( js.exists("Cs") ) cp.Cs(js["Cs"].real());
-	if ( js.exists("Cc") ) cp.Cc(js["Cc"].real());
-	if ( js.exists("Beam_convergence") ) cp.alpha(js["Beam_convergence"].real());
-	if ( js.exists("Energy_spread") ) cp.dE(js["Energy_spread"].real());
-	if ( js.exists("Amplitude_phase") ) cp.amp_shift(js["Amplitude_phase"].real());
-	if ( js.exists("Defocus_average") ) cp.defocus_average(js["Defocus_average"].real());
-	if ( js.exists("Defocus_deviation") ) cp.defocus_deviation(js["Defocus_deviation"].real());
-	if ( js.exists("Astigmatism_angle") ) cp.astigmatism_angle(js["Astigmatism_angle"].real());
-*/
 	return cp;
 }
 
@@ -509,21 +761,84 @@ CTFparam	ctf_from_json(JSvalue& js)
 **/
 int			ctf_update_from_json(CTFparam &cp, JSvalue &js)
 {
+//	cout << js << endl;
+	if ( js.exists("Optics_group") ) cp.identifier(js["Optics_group"].value());
 	if ( js.exists("Volt") ) cp.volt(js["Volt"].real());
-//	if ( js.exists("Wavelength") ) cp.lambda(js["Wavelength"].real());
 	if ( js.exists("Focal_length") ) cp.focal_length(js["Focal_length"].real());
+	if ( js.exists("Focus_step") ) cp.focus_step(js["Focus_step"].real());
 	if ( js.exists("Objective_aperture") ) cp.objective_aperture(js["Objective_aperture"].real());
 	if ( js.exists("Slit_width") ) cp.slit_width(js["Slit_width"].real());
-	if ( js.exists("Cs") ) cp.Cs(js["Cs"].real());
 	if ( js.exists("Cc") ) cp.Cc(js["Cc"].real());
 	if ( js.exists("Beam_convergence") ) cp.alpha(js["Beam_convergence"].real());
 	if ( js.exists("Energy_spread") ) cp.dE(js["Energy_spread"].real());
+
 	if ( js.exists("Amplitude_phase") ) cp.amp_shift(js["Amplitude_phase"].real());
 	if ( js.exists("Defocus_average") ) cp.defocus_average(js["Defocus_average"].real());
-	if ( js.exists("Defocus_deviation") ) cp.defocus_deviation(js["Defocus_deviation"].real());
-	if ( js.exists("Astigmatism_angle") ) cp.astigmatism_angle(js["Astigmatism_angle"].real());
+	if ( js.exists("Defocus_deviation") && js.exists("Astigmatism_angle") )
+		cp.astigmatism(js["Defocus_deviation"].real(), js["Astigmatism_angle"].real()*M_PI/180.0);
+	if ( js.exists("Cs") ) cp.Cs(js["Cs"].real());
+	
+	if ( js.exists("Aberration_even") ) {
+		vector<double>	v = parse_real_vector(js["Aberration_even"].value().substr(1));
+		cp.aberration_even_update(v);
+	}
+	if ( js.exists("Aberration_odd") ) {
+		vector<double>	v = parse_real_vector(js["Aberration_odd"].value().substr(1));
+		cp.aberration_odd(v);
+	}
+
+	vector<string> 	tags = cp.aberration_tags();
+	for ( auto t: tags )
+		if ( js.exists(t) )
+			cp.aberration_coefficient(t,js[t].real());
+
+	if ( js.exists("Aberration") ) {
+		JSvalue&	jsab = js["Aberration"];
+		for ( auto t: tags )
+			if ( jsab.exists(t) )
+				cp.aberration_coefficient(t,jsab[t].real());
+	}
+
+	if ( js.exists("Baseline_type") ) cp.baseline_type(js["Baseline_type"].integer());
+	if ( js.exists("Baseline") ) cp.baseline() = js["Baseline"].array_real();
+	
+	if ( js.exists("Envelope_type") ) cp.envelope_type(js["Envelope_type"].integer());
+	if ( js.exists("Envelope") ) cp.envelope() = js["Envelope"].array_real();
 
 	return 0;
+}
+
+/**
+@brief 	Converts an array of JSON objects to a set of microscope parameters.
+@param 	&js				array of JSON objects.
+@return vector<CTFparam>	set of microscope parameters.
+**/
+vector<CTFparam>	ctf_from_json_array(JSvalue &js)
+{
+	CTFparam			cp;
+	vector<CTFparam>	cpa;
+	
+	for ( auto jv: js.array() ) {
+		ctf_update_from_json(cp, jv);
+		cpa.push_back(cp);
+	}
+	
+	return cpa;
+}
+
+/**
+@brief 	Calculates the lorentz factor.
+@param 	volt		acceleration voltage.
+@return double		lorentz factor.
+
+				e*volt
+	gamma = 1 + ------
+	            me*c^2
+
+**/
+double			lorentz(double volt)
+{
+	return 1 + ECHARGE*volt/(EMASS*LIGHTSPEED*LIGHTSPEED);
 }
 
 /**
@@ -542,9 +857,11 @@ int			ctf_update_from_json(CTFparam &cp, JSvalue &js)
 double		electron_wavelength(double volt)
 {
 	if ( volt < 1 ) {
-		error_show("Error in electron_wavelength", __FILE__, __LINE__);
-		cerr << "The acceleration voltage is below 1 V! (" << volt << " V)" << endl;
-		return -1;
+		if ( verbose & VERB_FULL ) {
+			error_show("Error in electron_wavelength", __FILE__, __LINE__);
+			cerr << "The acceleration voltage is below 1 V! (" << volt << " V)" << endl;
+		}
+		return 0;
 	}
 	
  //   return 12.2642596/sqrt(volt*(1+volt*0.978475598e-6));
@@ -552,25 +869,26 @@ double		electron_wavelength(double volt)
  	return 1e10*PLANCK/sqrt(2*EMASS*ECHARGE*volt*(1+ECHARGE*volt/(2*EMASS*LIGHTSPEED*LIGHTSPEED)));
 }
 
+double			electron_wavelength_relativistic(double volt)
+{
+	return lorentz(volt)*electron_wavelength(volt);
+}
+
 /**
 @brief 	Calculates the square of the relative electron velocity.
 @param 	volt		acceleration voltage.
 @return double		square of the relative electron velocity.
 
-	                     1
-	beta2 = 1 - ---------------------
-	            (1+e*volt/(me*c^2))^2
+	                1                  1
+	beta2 = 1 - ------- = 1 - ---------------------
+				gamma^2       (1+e*volt/(me*c^2))^2
 
 **/
 double			beta2(double volt)
 {
-	double		f, b2(0);
+	double		g = lorentz(volt);
 	
-	f = 1 + ECHARGE*volt/(EMASS*LIGHTSPEED*LIGHTSPEED);
-	
-	b2 = 1 - 1/(f*f);
-	
-	return b2;
+	return 1 - 1/(g*g);
 }
 
 /**
@@ -662,7 +980,7 @@ vector<double>	defocus_range_profile(CTFparam& ctf, double freq_step, double def
 }
 
 /**
-@brief 	Calculates an integrated defocus weighting factor for a raneg of defocus values.
+@brief 	Calculates an integrated defocus weighting factor for a range of defocus values.
 @param 	&ctf			CTF parameters.
 @param 	def_min			minimum defocus.
 @param 	def_max			maximum defocus.

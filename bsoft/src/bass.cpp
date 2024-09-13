@@ -120,25 +120,25 @@ int 	main(int argc, char **argv)
 	
 	double			ti = timer_start();
 	
-	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
-		cerr << "Error: No model files specified!" << endl;
-		bexit(-1);
-	}
-
 	Bmodel*			model = NULL;
 	Bmolgroup*		molgroup = NULL;
 	
 	if ( com ) {
+		Bstring*		file_list = NULL;
+		while ( optind < argc ) string_add(&file_list, argv[optind++]);
+		if ( !file_list ) {
+			cerr << "Error: No model files specified!" << endl;
+			bexit(-1);
+		}
 		molgroup = read_molecule(*file_list, atom_select, paramfile);
 		model = model_generate_com(molgroup);
 		molgroup_kill(molgroup);
 		molgroup = NULL;
-	} else {
-		model = read_model(file_list, paramfile);		
 		string_kill(file_list);
+	} else {
+		vector<string>	file_list;
+		while ( optind < argc ) file_list.push_back(argv[optind++]);
+		model = read_model(file_list, paramfile.str());
 	}
 
 	if ( !model ) {
@@ -153,7 +153,7 @@ int 	main(int argc, char **argv)
 	if ( first ) model_select_first(model, first);
 	
 	if ( associate_file.length() )
-		model_associate(model, associate_type, associate_file);
+		model_associate(model, associate_type.str(), associate_file.str());
 	
 	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
 
@@ -161,7 +161,7 @@ int 	main(int argc, char **argv)
 
 	if ( calc_views.length() ) model_calculate_views(model, calc_views);
 	
-	molgroup = model_assemble(model, paramfile, separate);
+	molgroup = model_assemble(model, paramfile.str(), separate);
 	
 	if ( molgroup ) {
 		if ( untangle ) {
@@ -181,12 +181,12 @@ int 	main(int argc, char **argv)
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
 	model_kill(model);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

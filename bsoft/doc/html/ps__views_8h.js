@@ -1,10 +1,9 @@
 var ps__views_8h =
 [
     [ "ps_phi_theta_plot", "ps__views_8h.html#ab71b2d8b9ea379dd787f6d22059c3467", null ],
-    [ "ps_sets_of_views", "ps__views_8h.html#add60a9bad88803b961b26f18d18fd8fa", null ],
-    [ "ps_views", "ps__views_8h.html#ab26ff3c689a4226022a03e5f2d28d9fc", null ],
-    [ "ps_views", "ps__views_8h.html#a3be5a01e383fb32ed7c4396853f97c17", null ],
-    [ "ps_views", "ps__views_8h.html#a7daa0a0b2ab47c766bd0ca9776c7dccb", null ],
-    [ "ps_views", "ps__views_8h.html#a56bf55a82acdefda2233ceb498fefb99", null ],
-    [ "ps_views2", "ps__views_8h.html#ad653ae8313121bcb8443bbee86f8a4c4", null ]
+    [ "ps_sets_of_views", "ps__views_8h.html#a266e3ae90d54090171b1593468156e68", null ],
+    [ "ps_views", "ps__views_8h.html#aaeae442062fd867d455c409098f62c03", null ],
+    [ "ps_views", "ps__views_8h.html#a5fc104fb2f2cf7b7d75c874e68684c6c", null ],
+    [ "ps_views", "ps__views_8h.html#a9506ca8c30999b8fd0f510aa72b1d8d9", null ],
+    [ "ps_views", "ps__views_8h.html#ac9e24c55c9b690b19afbc9beb358cdbd", null ]
 ];

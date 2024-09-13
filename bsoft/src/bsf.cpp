@@ -84,7 +84,7 @@ int 	main(int argc, char **argv)
 	int 			wrap(0);				// No wrapping as default
 	double			Bfactor(0);				// B-factor = 0 angstrom squared
 	int 			spacegroup(1);
-	UnitCell		uc(0,0,0,M_PI_2,M_PI_2,M_PI_2);
+	UnitCell		uc;
 	Bstring			curves;					// String with elements for curve output
 	Bstring			coorfile;				// Atomic coordinates
 	Bstring			mapfile;				// Map to compare with
@@ -115,7 +115,7 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "realspace" )
 			set_backtransform = 1;
 		if ( curropt->tag == "scatter" ) {
-			if ( ( volt = curropt->value.real() ) < 1 )
+			if ( ( volt = curropt->real_units() ) < 1 )
 				cerr << "-scatter: A voltage must be specified!" << endl;
 			else
 				if ( volt < 1e3 ) volt *= 1e3;	// Assume kilovolts
@@ -161,7 +161,7 @@ int 	main(int argc, char **argv)
 	double		ti = timer_start();
 		
 	if ( outfile.length() )
-		write_scattering_curves(paramfile, outfile, curves);
+		write_scattering_curves(paramfile.str(), outfile.str(), curves.str(), resolution);
 	
 	Bmolgroup*		molgroup = NULL;
 	Bimage* 		p = NULL;
@@ -236,7 +236,7 @@ int 	main(int argc, char **argv)
 		if ( volt ) {
 			double		lambda = electron_wavelength(volt);
 			double		b2 = beta2(volt);
-			double		scale = 2*lambda/sqrt(1 - b2);
+			double		scale = sqrt(8.0*M_PI)*lambda/sqrt(1 - b2);
 			if ( verbose ) {
 				cout << "Scaling to correct scattering amplitudes:" << endl;
 				cout << "Voltage:                        " << volt*1e-3 << " kV" << endl;
@@ -274,7 +274,7 @@ int 	main(int argc, char **argv)
 	if ( p ) delete p;
 	if ( pcalc ) delete pcalc;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -3,7 +3,7 @@
 @brief	Methods for the image class
 @author Bernard Heymann
 @date	Created: 20110603
-@date 	Modified: 20211109
+@date 	Modified: 20230321
 **/
 
 #include "Bimage.h"
@@ -18,7 +18,7 @@ extern int 		verbose;		// Level of output to the screen
 /**
 @brief Initializes a sub-image.
 
-	All values are set to zero except mag and fom, set to one.
+	All values are set to zero or one.
 
 **/
 Bsub_image::Bsub_image()
@@ -505,6 +505,8 @@ void			Bimage::check()
 		smax = max;
 	}
 	
+	unit_cell_check();
+	
 	if ( verbose & VERB_DEBUG ) {
 		cout << "DEBUG Bimage::check: Min, max, mean, stdev: " << 
 				min << " " << max << " " << avg << " " << std << endl;
@@ -515,12 +517,12 @@ void			Bimage::check()
 		cout << endl;
 	}
 	
-	View		view;
+	View2<double>		view;
 	for ( j=0; j<n; j++ ) {
 		if ( !isfinite(image[j].background()) ) image[j].background(0);
 		else if ( fabs((double)image[j].background()) < 1e-30 ) image[j].background(0);
-		if ( !isfinite(image[j].origin()[0]) || !isfinite(image[j].origin()[0])
-			| !isfinite(image[j].origin()[0]) ) image[j].origin(0,0,0);
+		if ( !isfinite(image[j].origin()[0]) || !isfinite(image[j].origin()[1])
+			|| !isfinite(image[j].origin()[2]) ) image[j].origin(0,0,0);
 		view = image[j].view();
 		view.normalize();
 		image[j].view(view);
@@ -528,30 +530,12 @@ void			Bimage::check()
 			image[j].magnification(1);
 	}
 
-	UnitCell		uc = unit_cell();
-	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG Bimage::check: Unit cell: " << uc.a() << " " << uc.b() << " " << uc.c()
-			 << " " << uc.alpha() << " " << uc.beta() << " " << uc.gamma() << endl;
-	
-	
-	if ( uc.a() < 1 ) uc.a(u[0]*x);
-	if ( uc.b() < 1 ) uc.b(u[1]*y);
-	if ( uc.c() < 1 ) uc.c(u[2]*z);
-	if ( uc.a() > 100*x*u[0] ) uc.a(u[0]*x);
-	if ( uc.b() > 100*y*u[1] ) uc.b(u[1]*y);
-	if ( uc.c() > 100*z*u[2] ) uc.c(u[2]*z);
-	if ( uc.alpha() > TWOPI || uc.beta() > TWOPI || uc.gamma() > TWOPI ) uc.degrees_to_radians();
-	if ( uc.alpha() < 0.001 || uc.alpha() > M_PI ) uc.alpha(M_PI_2);
-	if ( uc.beta() < 0.001 || uc.beta() > M_PI ) uc.beta(M_PI_2);
-	if ( uc.gamma() < 0.001 || uc.gamma() > M_PI ) uc.gamma(M_PI_2);
-	
-	unit_cell(uc);
-	
-	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG Bimage::check: Unit cell: " << uc.a() << " " << uc.b() << " " << uc.c()
-			 << " " << uc.alpha() << " " << uc.beta() << " " << uc.gamma() << endl;
-/*	
+//		cout << "DEBUG Bimage::check: Unit cell: " << uc.a() << " " << uc.b() << " " << uc.c()
+//			 << " " << uc.alpha() << " " << uc.beta() << " " << uc.gamma() << endl;
+		cout << "DEBUG Bimage::check: Unit cell: " << unit_cell() << endl;
+
+/*
 	Bstring		t;
 	if ( lbl.length() ) {
 		j = lbl.length() - 1;
@@ -643,16 +627,42 @@ void		Bimage::check_sampling()
 @brief Checks that the resolution falls within reasonable limits.
 @param &resolution	resolution (modified).
 
-	The resolution is set to between half the real size and the Nyquist frequency.
+	The resolution is set to between the real size and the sampling.
 
 **/
 void		Bimage::check_resolution(double& resolution)
 {
+	if ( resolution > real_size()[0] ) {
+		resolution = real_size()[0];
+		return;
+	}
+
+	double			invsum2(0), rm;
 	Vector3<double>	u(image->sampling());
-	if ( x > 1 && resolution < 2*u[0] ) resolution = 2*u[0];
-	if ( y > 1 && resolution < 2*u[1] ) resolution = 2*u[1];
-	if ( z > 1 && resolution < 2*u[2] ) resolution = 2*u[2];
-	if ( resolution > real_size()[0]/2.0 ) resolution = real_size()[0]/2.0;
+	
+	if ( x > 1 ) invsum2 += 1/(u[0]*u[0]);
+	if ( y > 1 ) invsum2 += 1/(u[1]*u[1]);
+	if ( z > 1 ) invsum2 += 1/(u[2]*u[2]);
+	rm = 2/sqrt(invsum2);
+	if ( resolution < rm ) resolution = rm;
+}
+/*
+void		Bimage::check_resolution(double& resolution)
+{
+	Vector3<double>	u(image->sampling());
+	if ( x > 1 && resolution < u[0] ) resolution = u[0];
+	if ( y > 1 && resolution < u[1] ) resolution = u[1];
+	if ( z > 1 && resolution < u[2] ) resolution = u[2];
+	if ( resolution > real_size()[0] ) resolution = real_size()[0];
+}
+*/
+
+void		Bimage::set_hi_lo_resolution(double& hi, double& lo)
+{
+	if ( lo < 1e-6 ) lo = 1e6;
+	if ( hi > lo ) swap(hi, lo);
+	check_resolution(hi);
+	check_resolution(lo);
 }
 
 /**
@@ -1253,7 +1263,7 @@ void		Bimage::set(long j, Vector3<double> vec)
 
 	The index refers to compound values.
 **/
-void		Bimage::set(long j, View view)
+/*void		Bimage::set(long j, View view)
 {
 	long		i4 = 4*j;
 
@@ -1263,6 +1273,18 @@ void		Bimage::set(long j, View view)
 	set(i4++, view[1]);
 	set(i4++, view[2]);
 	set(i4, view.angle());
+}
+*/
+void		Bimage::set(long j, View2<double> view)
+{
+	long		i4 = 4*j;
+
+	if ( i4 >= datasize ) return;
+	
+	set(i4++, view[0]);
+	set(i4++, view[1]);
+	set(i4++, view[2]);
+	set(i4, view[3]);
 }
 
 /**
@@ -1745,7 +1767,6 @@ Bstring		Bimage::compound_type_string()
 
 /**
 @brief Determines the replacement data type.
-@return DataType				replacement data type.
 
 	An integer data type is switched between signed and unsigned.
 
@@ -1873,7 +1894,7 @@ void		Bimage::change_type(DataType nutype)
 	// Integer switches between signed and unsigned
 	if ( datatype >= UCharacter && datatype <= Long ) {
 		if ( oldtype >= Float ) {		// floating point to integer
-			if ( min >= 0 ) scale = mx/max;
+			if ( min >= 0 && datatype > UCharacter ) scale = mx/max;
 			else {
 				scale = (mx - mn)/(max - min);
 				shift = mn - min*scale;
@@ -1951,47 +1972,12 @@ void		Bimage::change_type(DataType nutype)
 }
 
 /**
-@brief 	Splits the channels into individual images.
+@brief 	Splits the channels into individual sub-images.
 @return Bimage*			new image.
 
 	The channels are converted to successive sets of images.
 
 **/
-/*void		Bimage::split_channels()
-{
-	long			nn, cc, j, m, k;
-	long			tsize = data_type_size();
-	long			imgsize = x*y*z;
-	unsigned char*	nudata = new unsigned char[alloc_size()];
-
-	for ( nn=k=0; nn<n; nn++ ) {
-		for ( j=0; j<imgsize; j++ ) {
-			for ( cc=0, m=nn*imgsize+j; cc<c; cc++, k+=tsize, m+=imgsize ) {
-				memcpy(nudata+m*tsize, d.uc+k, tsize);
-			}
-		}
-	}
-
-	data_assign(nudata);
-	
-	Bsub_image*		nusub = new Bsub_image[n*c];
-	
-	if ( image ) {
-		for ( nn=j=0; nn<n; nn++ )
-			for ( cc=0; cc<c; cc++, j++ )
-				nusub[j] = image[nn];
-		delete[] image;
-	}
-
-	image = nusub;
-	
-	compoundtype = TSimple;
-	n *= c;
-	c = 1;
-
-	statistics();
-}
-*/
 Bimage*		Bimage::split_channels()
 {
 	Bimage*			pnu = copy_header(n*c);
@@ -2007,6 +1993,35 @@ Bimage*		Bimage::split_channels()
 				pnu->set(k, (*this)[i]);
 
 	pnu->statistics();
+	
+	return pnu;
+}
+
+/**
+@brief 	Splits the channels into individual images in a linked list.
+@return Bimage*			new image.
+
+	Each channels is converted to a separate image in the list.
+
+**/
+Bimage*		Bimage::split_channels_to_images()
+{
+	Bimage*			pnu = copy_header(n);
+	pnu->compound_type(TSimple);
+	pnu->channels(1);
+	pnu->data_alloc();
+	
+	Bimage*			p1 = pnu;
+	
+	long			i, j, k, nn, cc, imgsize(x*y*z);
+
+	for ( cc=0; cc<c; ++cc ) {
+		if ( cc ) p1 = p1->next = p1->copy();
+		for ( nn=k=0, i=cc; nn<n; ++nn )
+			for ( j=0; j<imgsize; ++j, ++k, i+=c )
+				p1->set(k, (*this)[i]);
+		p1->statistics();
+	}
 	
 	return pnu;
 }
@@ -2155,8 +2170,8 @@ int 		Bimage::slices_to_images()
 int 		Bimage::images_to_slices()
 {
 	if ( z > 1 ) {
-		cerr << "Error: " << metadata["filename"] << " is already a 3D image file!" << endl;
-		error_show("Bimage::images_to_slices", __FILE__, __LINE__);
+		cerr << "Warning: " << metadata["filename"] << " is already a 3D image file!" << endl;
+//		error_show("Bimage::images_to_slices", __FILE__, __LINE__);
 		return -1;
 	}
 	
@@ -2573,9 +2588,11 @@ int			Bimage::pack_transform(int img_select, unsigned char* data, FourierType tf
 **/
 int		Bimage::information()
 {
-	tm*			t = get_localtime();
-	cout << "Time:                           " << t->tm_year+1900 << "-" << t->tm_mon+1 
-		<< "-" << t->tm_mday << " " << t->tm_hour << ":" << t->tm_min << ":" << t->tm_sec << endl;
+//	tm*			t = get_localtime();
+//	cout << "Time:                           " << t->tm_year+1900 << "-" << t->tm_mon+1
+//		<< "-" << t->tm_mday << " " << t->tm_hour << ":" << t->tm_min << ":" << t->tm_sec << endl;
+//	if ( metadata.exists("time") ) show_localtime(metadata["time"].integer());
+	show_localtime(get_time());
 	if ( metadata.exists("user") ) cout << "User:                           " << metadata["user"] << endl;
 	if ( metadata.exists("type") ) cout << "Type:                           " << metadata["type"] << endl;
 	cout << "Data offset:                    " << offset << endl;
@@ -2600,6 +2617,7 @@ int		Bimage::information()
 	cout << "Compound type:                  " << compoundtype_string << endl;
 	Vector3<double>	u(image->sampling());
 	cout << "Voxel units/sampling:           " << u[0] << " " << u[1] << " " << u[2] << endl;
+	if ( fabs(min) < 1e-4 || max > 1e4 ) cout << scientific;
 	cout << "Min, max, ave, std:             " << 
 			min << " " << max << " " << avg << " " << std << endl;
 	
@@ -2651,7 +2669,7 @@ int			Bimage::subimage_information()
 
 	cout << "Image\tSampling\t\tOrigin\t\t\tView" << endl;
 	for ( nn=0; nn<n; nn++ )
-		cout << nn+1 << tab << setprecision(2) <<
+		cout << nn+1 << tab << setprecision(3) <<
 			image[nn].sampling() << tab << setprecision(2) <<
 			image[nn].origin() << tab << setprecision(4) <<
 			image[nn].view().vector3() << tab <<
@@ -2740,24 +2758,31 @@ int			Bimage::moments(long max_order, long nn)
 /**
 @brief 	Prints out header information associated with a tag string.
 @param	tag			tag string.
+
+Recognized tags:
+	size, ch(annel), x, y, z, im(age), sam(pling), ori(gen), view,
+	min(imum), max(imum), av(erage), st(andard deviation), var(iance), stat(istics),
+	text, json
+	
 **/
 void		Bimage::get(Bstring tag)
 {
-	if ( tag == "size" ) cout << size() << endl;
-	else if ( tag == "channels" ) cout << c << endl;
+	if ( tag == "time" ) cout << get_time() << endl;
+	else if ( tag == "size" ) cout << size() << endl;
+	else if ( tag.contains("ch") ) cout << c << endl;
 	else if ( tag == "x" ) cout << x << endl;
 	else if ( tag == "y" ) cout << y << endl;
 	else if ( tag == "z" ) cout << z << endl;
-	else if ( tag == "images" ) cout << n << endl;
-	else if ( tag == "sampling" || tag == "pixelsize" ) cout << sampling(0) << endl;
-	else if ( tag == "origin" ) cout << image->origin() << endl;
+	else if ( tag.contains("im") ) cout << n << endl;
+	else if ( tag.contains("sam") || tag.contains("pix") ) cout << sampling(0) << endl;
+	else if ( tag.contains("ori") ) cout << image->origin() << endl;
 	else if ( tag == "view" ) cout << image->view() << endl;
-	else if ( tag == "min" ) cout << min << endl;
-	else if ( tag == "max" ) cout << max << endl;
-	else if ( tag == "avg" ) cout << avg << endl;
-	else if ( tag == "std" ) cout << std << endl;
-	else if ( tag == "var" ) cout << std*std << endl;
-	else if ( tag == "stat" ) cout << min << tab << max << tab << avg << tab << std << endl;
+	else if ( tag.contains("min") ) cout << min << endl;
+	else if ( tag.contains("max") ) cout << max << endl;
+	else if ( tag.contains("av") ) cout << avg << endl;
+	else if ( tag.contains("std") ) cout << std << endl;
+	else if ( tag.contains("var") ) cout << std*std << endl;
+	else if ( tag.contains("stat") ) cout << min << tab << max << tab << avg << tab << std << endl;
 	else if ( tag == "text" ) cout << label() << endl;
 	else if ( tag == "json" ) cout << metadata << endl;
 }
@@ -3029,7 +3054,7 @@ long		Bimage::kernel_max(long idx, long ksize)
 }
 
 /**
-@brief 	Finds the highest value in a kernel.
+@brief 	Calculates the average value in a kernel.
 @param 	idx		index in multi-image.
 @param 	ksize	kernel edge half size.
 @param 	tmin	miminum to exclude.
@@ -3068,7 +3093,36 @@ double		Bimage::kernel_average(long idx, long ksize, double tmin, double tmax)
 }
 
 /**
-@brief 	Finds the highest value in a kernel.
+@brief 	Calculates the sum in a kernel.
+@param 	idx		index in multi-image.
+@param 	ksize	kernel edge half size.
+@return double 	sum.
+**/
+double		Bimage::kernel_sum(long idx, long ksize)
+{
+	
+	long			i, xx, yy, zz, nn(idx/(x*y*z));
+	double			sum(0);
+	
+	//calculate the bounds on the kernel
+	Vector3<long>	lo = kernel_low(idx, ksize);
+	Vector3<long>	hi = kernel_high(idx, ksize);
+	
+	// Loop through the kernel
+	for ( zz=lo[2]; zz<=hi[2]; zz++ ) {
+		for ( yy=lo[1]; yy<=hi[1]; yy++ ) {
+			for ( xx=lo[0]; xx<=hi[0]; xx++ ) {
+				i = index(0,xx,yy,zz,nn);
+				sum += (*this)[i];
+			}
+		}
+	}
+	
+	return sum;
+}
+
+/**
+@brief 	Finds the average of neigbor values in a kernel.
 @param 	idx		index in multi-image.
 @param 	ksize	kernel edge half size.
 @return double 	average value.
@@ -3475,11 +3529,28 @@ void 		Bimage::reslice(Bstring order)
 }
 
 /**
-@brief Adds a constant value to an image.
+@brief 	Converts to absolute values.
+**/
+void		Bimage::absolute()
+{
+	if ( verbose & VERB_FULL )
+		cout << "Converting to absolute values" << endl << endl;
+	
+	for ( long j=0; j<datasize; j++ )
+		set(j, fabs((*this)[j]));
+	
+	statistics();
+}
+
+/**
+@brief	Adds a constant value to an image.
 @param 	v		constant to be added.
 **/
 void		Bimage::add(double v)
 {
+	if ( verbose & VERB_FULL )
+		cout << setprecision(6) << "Adding " << v << endl << endl;
+	
 	double			v1;
 	
 	for ( long j=0; j<datasize; j++ ) {
@@ -3487,24 +3558,51 @@ void		Bimage::add(double v)
 		set(j, v1);
 	}
 	
+	for ( long nn=0; nn<n; nn++ )
+		image[nn].background(background(nn) + v);
+
 	statistics();
 }
 
 /**
-@brief Multiplies an image with a constant value.
+@brief	Adds a constant value to a phase image and wraps as necssary.
+@param 	v		constant to be added.
+**/
+void		Bimage::phase_add(double v)
+{
+	if ( verbose & VERB_FULL )
+		cout << setprecision(6) << "Adding " << v << " to phase image" << endl << endl;
+	
+	double			v1;
+	
+	for ( long j=0; j<datasize; j++ ) {
+		v1 = angle_set_negPI_to_PI((*this)[j] + v);
+		set(j, v1);
+	}
+	
+	for ( long nn=0; nn<n; nn++ )
+		image[nn].background(angle_set_negPI_to_PI(background(nn) + v));
+
+	statistics();
+}
+
+/**
+@brief	Multiplies an image with a constant value.
 @param 	v		constant multiplier.
 **/
 void		Bimage::multiply(double v)
 {
-	long			j, nn;
+	if ( verbose & VERB_FULL )
+		cout << setprecision(6) << "Multiplying with " << v << endl << endl;
+	
 	double			v1;
 	
-	for ( j=0; j<datasize; j++ ) {
+	for ( long j=0; j<datasize; j++ ) {
 		v1 = (*this)[j] * v;
 		set(j, v1);
 	}
 
-	for ( nn=0; nn<n; nn++ )
+	for ( long nn=0; nn<n; nn++ )
 		image[nn].background(background(nn) * v);
 
 	statistics();
@@ -3517,6 +3615,9 @@ void		Bimage::multiply(double v)
 **/
 void		Bimage::multiply(long nn, double v)
 {
+	if ( verbose & VERB_FULL )
+		cout << setprecision(6) << "Multiplying with " << v << endl << endl;
+	
 	long			i, j, imgsize(c*x*y*z);
 	double			v1;
 	
@@ -3524,6 +3625,8 @@ void		Bimage::multiply(long nn, double v)
 		v1 = (*this)[j] * v;
 		set(j, v1);
 	}
+	
+	image[nn].background(background(nn) * v);
 	
 	statistics();
 }
@@ -3534,11 +3637,134 @@ void		Bimage::multiply(long nn, double v)
 **/
 void		Bimage::power(double v)
 {
+	if ( verbose & VERB_PROCESS )
+		cout << "Raising to power " << v << endl << endl;
+	
 	double			v1;
 	
 	for ( long j=0; j<datasize; j++ ) {
 		v1 = pow((*this)[j], v);
 		set(j, v1);
+	}
+	
+	statistics();
+}
+
+/**
+@brief Calculates the sine of a phase image.
+
+	The values must be in radians.
+	
+**/
+void		Bimage::sine()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating a sine image" << endl << endl;
+	
+	for ( long j=0; j<datasize; ++j )
+		set(j, sinl((*this)[j]));
+	
+	statistics();
+}
+
+/**
+@brief Calculates the arcsine of an image.
+
+	The values are truncated to be within [-1,1].
+	
+**/
+void		Bimage::arcsine()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating an arcsine image" << endl << endl;
+	
+	double		v;
+	
+	for ( long j=0; j<datasize; ++j ) {
+		v = (*this)[j];
+		if ( v < -1 ) v = -1;
+		else if ( v > 1 ) v = 1;
+		set(j, asinl(v));
+	}
+	
+	statistics();
+}
+
+/**
+@brief Calculates the cosine of a phase image.
+
+	The values must be in radians.
+	
+**/
+void		Bimage::cosine()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating a cosine image" << endl << endl;
+	
+	for ( long j=0; j<datasize; ++j )
+		set(j, cosl((*this)[j]));
+	
+	statistics();
+}
+
+/**
+@brief Calculates the arccosine of an image.
+
+	The values are truncated to be within [-1,1].
+	
+**/
+void		Bimage::arccosine()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating an arcsine image" << endl << endl;
+	
+	double		v;
+	
+	for ( long j=0; j<datasize; ++j ) {
+		v = (*this)[j];
+		if ( v < -1 ) v = -1;
+		else if ( v > 1 ) v = 1;
+		set(j, acosl(v));
+	}
+	
+	statistics();
+}
+
+/**
+@brief Calculates the tangent of a phase image.
+
+	The values must be in radians.
+	
+**/
+void		Bimage::tangent()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating a tangent image" << endl << endl;
+	
+	for ( long j=0; j<datasize; ++j )
+		set(j, tanl((*this)[j]));
+	
+	statistics();
+}
+
+/**
+@brief Calculates the arctangent of an image.
+
+	The values are truncated to be within [-1,1].
+	
+**/
+void		Bimage::arctangent()
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating an arctangent image" << endl << endl;
+	
+	double		v;
+	
+	for ( long j=0; j<datasize; ++j ) {
+		v = (*this)[j];
+		if ( v < -1 ) v = -1;
+		else if ( v > 1 ) v = 1;
+		set(j, atanl(v));
 	}
 	
 	statistics();
@@ -3673,7 +3899,6 @@ Bimage*		Bimage::moving_sum(long window, long step, int flag)
 
 /**
 @brief 	Progressive sum of the sub-images.
-@return int		0.
 
 	Each sub-image is summed with all previous sub-images.
 **/
@@ -3745,15 +3970,15 @@ void		Bimage::subtract(Bimage* p)
 @param 	*p		image to be added.
 
 	Requirement: The images must have the same size.
-	If the FOM block is defined, it is used to accumulate a sum of:
-		the FOM block of the added image if it exists,
-		or otherwise the square of the data added.
 
 **/
 void		Bimage::add(long nn, Bimage* p)
 {
 	long			i, j, imgsize(c*image_size());
 	double			v1;
+	
+	if ( verbose & VERB_FULL )
+		cout << "Adding to image " << nn << endl << endl;
 	
 	for ( i=0, j=nn*imgsize; i<imgsize; i++, j++ ) {
 		v1 = (*this)[j] + (*p)[i];
@@ -3762,6 +3987,31 @@ void		Bimage::add(long nn, Bimage* p)
 
 	statistics();
 }
+
+/**
+@brief 	Adds the sub-image of another image.
+@param 	*p		image to be added.
+@param	nn		sub-image.
+
+	Requirement: The images must have the same size.
+
+**/
+void		Bimage::add(Bimage* p, long nn)
+{
+	long			i, j, imgsize(c*image_size());
+	double			v1;
+	
+	if ( verbose & VERB_FULL )
+		cout << "Adding from image " << nn << endl << endl;
+	
+	for ( i=0, j=nn*imgsize; i<imgsize; i++, j++ ) {
+		v1 = (*this)[i] + (*p)[j];
+		set(i, v1);
+	}
+
+	statistics();
+}
+
 
 /**
 @brief 	Adds another image to an image.
@@ -3778,6 +4028,9 @@ void		Bimage::add(Bimage* p, double scale, double shift)
 		error_show("Bimage::add", __FILE__, __LINE__);
 		return;
 	}
+	
+	if ( verbose & VERB_FULL )
+		cout << "Adding images" << endl << endl;
 	
 	double			v1;
 	
@@ -3804,6 +4057,9 @@ void		Bimage::add(long nn, Bimage* p, double scale, double shift)
 	long			i, j, imgsize(c*image_size());
 	double			v1;
 	
+	if ( verbose & VERB_FULL )
+		cout << "Adding image " << nn << endl << endl;
+	
 	for ( i=0, j=nn*imgsize; i<imgsize; i++, j++ ) {
 		v1 = (*this)[j] + (*p)[i] * scale + shift;
 		set(j, v1);
@@ -3828,6 +4084,9 @@ void		Bimage::multiply(Bimage* p, double scale, double shift)
 		return;
 	}
 	
+	if ( verbose & VERB_FULL )
+		cout << "Multiplying images" << endl << endl;
+	
 	double			v1;
 	
 	for ( long j=0; j<datasize; j++ ) {
@@ -3849,6 +4108,9 @@ void		Bimage::multiply(Bimage* p, double scale, double shift)
 void		Bimage::multiply(long nn, Bimage* p)
 {
 	if ( nn >= n ) return;
+	
+	if ( verbose & VERB_FULL )
+		cout << "Multiplying image " << nn << endl << endl;
 	
 	long			imgsize(x*y*z*c), i(nn*imgsize), j(0), k(0);
 	
@@ -3902,7 +4164,8 @@ void		Bimage::divide(Bimage* p, double scale, double shift)
 {
 	double			minval = p->min*scale + shift;
 
-	if ( !check_if_same_size(p) ) {
+	if ( size() != p->size() || n != p->n ) {
+		check_if_same_size(p);
 		error_show("Bimage::divide", __FILE__, __LINE__);
 		return;
 	}
@@ -3926,6 +4189,12 @@ void		Bimage::divide(Bimage* p, double scale, double shift)
 			div =  (*p)[j] * scale + shift;
 			if ( div < minval ) div = minval;
 			set(j, (*this)[j]/div);
+		}
+	} else if ( p->compound_type() != TComplex ) {
+		for ( j=0; j<datasize; j++ ) {
+			div =  (*p)[j] * scale + shift;
+			if ( div < minval ) div = minval;
+			set(j, complex(j)/div);
 		}
 	} else {
 		for ( j=0; j<datasize; j++ ) {
@@ -4063,6 +4332,30 @@ void		Bimage::smallest(Bimage* p)
 	for ( long j=0; j<datasize; j++ ) {
 		v1 = (*p)[j];
     	if ( (*this)[j] > v1 ) set(j, v1);
+    }
+	
+	statistics();
+}
+
+/**
+@brief 	Calculates the inverse tangent from two images.
+@param 	*p		denominator (x) image.
+
+**/
+void		Bimage::arctangent(Bimage* p)
+{
+	if ( !check_if_same_size(p) ) {
+		error_show("Bimage::arctangent", __FILE__, __LINE__);
+		return;
+	}
+
+    if ( verbose & VERB_PROCESS )
+		cout << "Calculating the inverse tangent" << endl;
+	
+	double		v1;
+	for ( long j=0; j<datasize; j++ ) {
+		v1 = atan2((*this)[j], (*p)[j]);
+    	set(j, angle_set_negPI_to_PI(v1));
     }
 	
 	statistics();

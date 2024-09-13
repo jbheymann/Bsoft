@@ -382,7 +382,7 @@ int			project_mass_normalize(Bproject* project, double avg, double std, int norm
 {
 	if ( !project->field ) return -1;
 	
-	int				nimg(0);
+//	int				nimg(0);
 	Bfield* 		field;
 	Bmicrograph*	mg;
 	Bimage*			p;
@@ -393,7 +393,7 @@ int			project_mass_normalize(Bproject* project, double avg, double std, int norm
 	for ( field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) {
 			if ( oldname != mg->fmg ) {
-				nimg++;
+//				nimg++;
 				p = read_img(mg->fmg, 1, -1);
 				if ( !p ) {
 					error_show("project_mass_normalize", __FILE__, __LINE__);
@@ -1238,10 +1238,10 @@ long		img_erase_markers(Bimage* p, Bmarker* mark, double marker_radius)
 	if ( marker_radius < 1 ) return 0;
 	
 	long			nm(0);
-	double			fill, fstd;
+	vector<double>	stats;
 	for ( ; mark; mark = mark->next, nm++ ) {
-		p->stats_within_radii(0, mark->loc, marker_radius, 2*marker_radius, fill, fstd);
-		p->sphere(mark->loc, marker_radius, 2, FILL_USER, fill);
+		stats = p->stats_within_radii(0, mark->loc, marker_radius, 2*marker_radius);
+		p->sphere(mark->loc, marker_radius, 2, FILL_USER, stats[3]);
 	}
 	
 	return nm;
@@ -2266,7 +2266,7 @@ int			micrograph_clear_extraneous_areas(Bmicrograph* mg, Bimage* p, long thickne
 	if ( !p )
 		return error_show("micrograph_clear_extraneous_areas", __FILE__, __LINE__);
 		
-	View			view = View(mg->matrix);
+	View2<double>		view = View2<double>(mg->matrix);
 	p->origin(mg->origin);
 	p->image->view(view);
 	
@@ -2320,7 +2320,7 @@ int			project_clear_extraneous_areas(Bproject* project, long thickness, double w
 
 //	mg = project->field->mg;
 
-/*	View			view;
+/*	View2<double>		view;
 	Vector3<double>	v(-sin(mg->tilt_axis), cos(mg->tilt_axis), 0);
 	double			a, d(1e30);
 	if ( v[0] && d > fabs(pnu->sizeX()*0.5/v[0]) ) d = fabs(pnu->sizeX()*0.5/v[0]);
@@ -2332,9 +2332,9 @@ int			project_clear_extraneous_areas(Bproject* project, long thickness, double w
 			mg->fmg = newfile;
 //			micrograph_clear_extraneous_areas(mg, p, thickness, width);
 			p->origin(mg->origin);
-			p->image->view(View(mg->matrix));
+			p->image->view(View2<double>(mg->matrix));
 			img_clear_extraneous_areas(p, mg->tilt_axis, mg->tilt_angle, thickness, width);
-/*			view = View(mg->matrix);
+/*			view = View2<double>(mg->matrix);
 			if ( verbose ) 
 				cout << "Micrograph " << nmg+1 << ": " << mg->fmg << endl;
 			if ( !p )
@@ -2347,7 +2347,7 @@ int			project_clear_extraneous_areas(Bproject* project, long thickness, double w
 			pnu->replace(nmg, p);
 			pnu->image[nmg] = p->image[0];
 			pnu->image[nmg].origin(mg->origin);
-			pnu->image[nmg].view(View(mg->matrix));
+			pnu->image[nmg].view(View2<double>(mg->matrix));
 			delete p;
 		}
 		write_img(field->mg->fmg, pnu, 0);

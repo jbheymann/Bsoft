@@ -3,7 +3,7 @@
 @brief	Selection of single particles for 3D reconstruction
 @author Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20210517
+@date	Modified: 20240315
 **/
 
 #include "mg_processing.h"
@@ -19,6 +19,8 @@
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
+
+int			write_particle_views(string filename, Bproject* project, Bsymmetry& sym, double angle_step);
 
 // Usage assistance
 const char* use[] = {
@@ -143,7 +145,7 @@ int			main(int argc, char** argv)
 	int				use_rec(0);					// Flag to process reconstructions
 	int				split(0);					// Output one big STAR file
 	int				symmetry_asu(0);			// Set views to the asymmetric unit
-	Bstring			symmetry_string("C1");		// Point group string
+	Bsymmetry		sym("C1");					// Point group symmetry
 	int 			renumber(0);				// Flag to renumber particles
 	double			max_def_dev(0);				// Maximum defocus deviation allowed
 	int 			all(0);						// Flag to reset selection
@@ -165,7 +167,7 @@ int			main(int argc, char** argv)
 	double			reselect_max(1e37);			// Reselection maximum
 	Vector3<double>	origin;						// Nominal origin
 	double			dev_origin(0);				// Maximum distance to accept
-	View			view;						// View to select around
+	View2<double>	view;						// View to select around
 	double			dev_angle(0);				// Angle from view
 	double			side_angle(0);				// Angle from side view
 	double			euler[6] = {0,0,0,0,0,0};	// Euler angle ranges
@@ -223,7 +225,7 @@ int			main(int argc, char** argv)
 		if ( curropt->tag == "mgselect" ) mgselect = curropt->value;
 		if ( curropt->tag == "setasu" ) {
 			symmetry_asu = 1;
-			symmetry_string = curropt->symmetry_string();
+			sym = curropt->symmetry();
 		}
 		if ( curropt->tag == "fixdefocus" ) {
 			if ( ( max_def_dev = curropt->value.real() ) < 0.001 )
@@ -408,7 +410,7 @@ int			main(int argc, char** argv)
 			}
 		}
 		if ( curropt->tag == "symmetry" )
-			symmetry_string = curropt->symmetry_string();
+			sym = curropt->symmetry();
 		if ( curropt->tag == "index" ) {
 			if ( ( fom_index = curropt->value.integer() ) < 0 )
 				cerr << "-index: A FOM index must be specified!" << endl;
@@ -476,8 +478,6 @@ int			main(int argc, char** argv)
 	
 	if ( use_rec ) project->select = 1;
 	
-	Bsymmetry		sym(symmetry_string);
-
 	if ( renumber ) project_renumber_particles(project);
 	
 	if ( all ) part_reset_selection(project, all);
@@ -503,7 +503,7 @@ int			main(int argc, char** argv)
 		part_reselect(project, tag_reselect, reselect_min, reselect_max);
 	
 	if ( symmetry_asu )
-		project_set_particle_asu_views(project, symmetry_string);
+		project_set_particle_asu_views(project, sym);
 
 	if ( max_def_dev )
 		part_fix_defocus(project, max_def_dev);
@@ -627,9 +627,13 @@ int			main(int argc, char** argv)
 		ps_part_fom_histogram(FOMps, project);
 	
 	if ( viewps.length() ) {
-		title = "Particle view distributions";
-		ps_particle_views_origins(viewps, title, symmetry_string, project, -1);
-//		ps_particle_phi_theta(viewps, title, project, -1);
+		if ( viewps.contains("bild") ) {
+			write_particle_views(viewps.c_str(), project, sym, M_PI/30);
+		} else {
+			title = "Particle view distributions";
+			ps_particle_views_origins(viewps, title, sym, project, -1);
+//			ps_particle_phi_theta(viewps, title, project, -1);
+		}
 	}
 	
 	if ( mgps.length() ) {
@@ -663,9 +667,60 @@ int			main(int argc, char** argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);
 }
 
+/**
+@brief 	Writes selected particle views into a Chimera BILD file.
+@param 	filename	output file name.
+@param 	*project	project structure.
+@param	&sym		symmetry structure.
+@param	angle_step	angular step size between views.
+@return long			particles written.
+**/
+int			write_particle_views(string filename, Bproject* project, Bsymmetry& sym, double angle_step)
+{
+	if ( verbose & VERB_PROCESS )
+		cout << "Writing " << filename << " with particle views" << endl << endl;
+
+	vector<View2<double>>	views = sym.asymmetric_unit_views(angle_step, angle_step, 1);
+	
+	vector<long>			num(views.size(),0);
+
+	Bfield*			field;
+	Bmicrograph*	mg;
+	Bparticle*		part;
+	
+	for ( field = project->field; field; field = field->next )
+		for ( mg = field->mg; mg; mg = mg->next )
+			for ( part = mg->part; part; part = part->next )
+				if ( part->sel )
+					num[part->view2().find_closest(views)]++;
+
+	ofstream		fbld(filename);
+
+	long			nsel(0);
+	double			radius(2);
+	Vector3<double>	start, end;
+	RGB<float> 		rgb(1,0,0);
+	
+	for ( long i=0; i<views.size(); ++i ) {
+		nsel += num[i];
+		start = views[i].vector3();
+		end = start*(num[i]+0.1);
+		start *= 100;
+		end += start;
+		rgb.spectrum(num[i], 0, 10);
+		fbld << ".color " << rgb[0] << " " << rgb[1] << " " << rgb[2] << endl;
+		fbld << ".cylinder " << start[0] << " " << start[1] << " " << start[2]
+			<< " " << end[0] << " " << end[1] << " " << end[2]
+			<< " " << radius << endl;
+	}
+	
+	fbld.close();
+	
+	return nsel;
+}

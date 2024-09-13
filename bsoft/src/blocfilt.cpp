@@ -52,7 +52,7 @@ int 		main(int argc, char **argv)
 	Bstring			locresfile;					// Local resolution file name
 	int				mask_level(-1);				// Mask level (-1 => all but zero)
 	int				setimg(-1);					// Select all images
-	Bstring			symmetry_string;			// Point group
+	string			symmetry_string;			// Point group
 
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -159,7 +159,7 @@ int 		main(int argc, char **argv)
 	delete p1;
 	delete p;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

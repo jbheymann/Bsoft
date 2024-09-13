@@ -18,6 +18,6 @@ Bmolecule*	mol_generate_one_water(Bmolecule** mollist, char* watername, Vector3<
 Bmolgroup*	molgroup_generate_regular_water(Vector3<double> size, int type);
 Bmolgroup*	molgroup_generate_random_water(Vector3<double> size);
 Bbond*		water_bond_list(Bmolgroup* molgroup);
-Bangle*		water_angle_list(Bmolgroup* molgroup);
+//Bangle*		water_angle_list(Bmolgroup* molgroup);
 int			molgroup_calc_water_rdf(Bmolgroup* molgroup, double interval, double cutoff);
 

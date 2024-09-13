@@ -3,11 +3,12 @@
 @brief	Functions for reading and writing GRD files
 @author Bernard Heymann
 @date	Created: 19990410
-@date 	Modified: 20210304
+@date 	Modified: 20221103
 **/
 
 #include "rwGRD.h"
 #include "file_util.h"
+#include "timer.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -110,10 +111,15 @@ int 	readGRD(Bimage *p, int readdata, int img_select)
 		int 	extent = GRDSIZE;	// Swap whole header
     	for ( i=0; i<extent; i+=4 ) swapbytes(b+i, 4);
     }
-    
+
 	// Map the parameters
-	p->size(header->nx, header->ny, header->nz);
 	p->images(header->nn);
+	if ( img_select > -1 ) {
+		p->images(1);
+		if ( img_select >= header->nn ) img_select = header->nn - 1;
+	}
+
+	p->size(header->nx, header->ny, header->nz);
 	p->channels(header->channels);
 	p->sampling(header->ux, header->uy, header->uz);
 	
@@ -142,6 +148,8 @@ int 	readGRD(Bimage *p, int readdata, int img_select)
 		}
 	} else {
 		p->compound_type(CompoundType(header->mode/100));
+		if ( p->compound_type() == TComplex )
+			p->fourier_type(Standard);
 		p->data_type(DataType(header->mode%100));
 	}
 	
@@ -174,7 +182,7 @@ int 	readGRD(Bimage *p, int readdata, int img_select)
 		delete[] ext_header;
 	}
 	
-	tm*			t = p->get_localtime();
+	tm*			t = p->get_local_time();
 	sscanf(header->datetime, "%4d%2d%2d%2d%2d%2d",
 			&t->tm_year, &t->tm_mon, &t->tm_mday, 
 			&t->tm_hour, &t->tm_min, &t->tm_sec);
@@ -185,9 +193,8 @@ int 	readGRD(Bimage *p, int readdata, int img_select)
 	p->symmetry(header->symmetry);
 	p->label(header->label);
 	
-	if ( img_select < 0 ) img_select = 0;
-
 	long			readsize = p->alloc_size();
+	if ( img_select < 0 ) img_select = 0;
 		
 	if ( readdata ) {
 		p->data_alloc();
@@ -327,15 +334,14 @@ int 	writeGRD(Bimage *p, int flags)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG writeGRD: bkg=" << header->bkg << endl;
 	
-	tm*			t = p->get_localtime();
-	snprintf(header->datetime, 16, "%4d%02d%02d%02d%02d%02d", t->tm_year+1900,
-			t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-	
+	tm*			t = p->get_local_time();
+//	tm*			t = get_local_time();
+  	strftime (header->datetime, 16, "%Y%m%d%H%M%S", t);
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG writeGRD: datetime=" << header->datetime << endl;
-	
-	strncpy(header->symmetry, p->symmetry().c_str(), 30);
-	strncpy(header->label, p->label().c_str(), 200);
+
+	p->label().copy(header->label, 200);
+	p->symmetry().copy(header->symmetry, 30);
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG writeGRD: label=" << header->label << endl;

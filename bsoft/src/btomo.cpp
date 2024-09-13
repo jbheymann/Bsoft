@@ -15,7 +15,6 @@
 #include "matrix_linear.h"
 #include "rwimg.h"
 #include "qsort_functions.h"
-#include "linked_list.h"
 #include "random_numbers.h"
 #include "file_util.h"
 #include "utilities.h"
@@ -297,7 +296,7 @@ int			main(int argc, char** argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

@@ -257,7 +257,7 @@ Bimage*		Bimage::gradient()
 	if ( verbose & VERB_PROCESS )
 		cout << "Calculating a central difference gradient" << endl << endl;
 	
-	Bimage*			pg = new Bimage(Float, TVector3, size(), 1);
+	Bimage*			pg = new Bimage(Float, TVector3, size(), n);
 	pg->sampling(sampling(0));
 	pg->origin(image->origin());
 
@@ -287,16 +287,16 @@ Bimage*		Bimage::gradient()
 Vector3<double>	Bimage::gradient_voxel(long i)
 {
 	long			xx, yy, zz, iz, iy, ix, jx, jy, jz;
-	long			xy(x*y);
+	long			xy(x*y), xyz(xy*z), nn(i/xyz);
 	double			len, v(0);
 	Vector3<double>	g, w;
-	Vector3<long>	coor = coordinates(i);
+	Vector3<long>	coor = coordinates(i%xyz);
 	Vector3<long>	coor2;
 	
 	zz = (coor[2])? -1: 0;
 	for ( iz=coor[2]+zz; iz<z && zz<2; ++zz, ++iz ) {
 		coor2[2] = zz;
-		jz = iz*xy;
+		jz = iz*xy + nn*xyz;
 		yy = (coor[1])? -1: 0;
 		for ( iy=coor[1]+yy; iy<y && yy<2; ++yy, ++iy ) {
 			coor2[1] = yy;
@@ -329,13 +329,13 @@ Vector3<double>	Bimage::gradient_voxel(long i)
 @brief 	Calculates the difference gradient image in a 3x3 kernel.
 @return Bimage*		an image with 3-value gradient vectors.
 
-	The central differences are calculated in the three orthogonal
-	directions and written into 3-value vectors.
+	For each voxel, calculates a vector within a 3x3(x3) kernel:
+		g = sum(value*kernel_coor)/sum(|kernel_coor|)
 
 **/
 Bimage*		Bimage::gradient3x3()
 {
-	Bimage*			pg = new Bimage(Float, TVector3, size(), 1);
+	Bimage*			pg = new Bimage(Float, TVector3, size(), n);
 	pg->sampling(sampling(0));
 	pg->origin(image->origin());
 
@@ -343,12 +343,12 @@ Bimage*		Bimage::gradient3x3()
 		cout << "Calculating a 3x3 kernel gradient" << endl << endl;
 
 #ifdef HAVE_GCD
-	dispatch_apply(image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
+	dispatch_apply(n*image_size(), dispatch_get_global_queue(0, 0), ^(size_t i){
 		pg->set(i, gradient_voxel(i));
 	});
 #else
 #pragma omp parallel for
-	for ( long i=0; i<image_size(); ++i ) {
+	for ( long i=0; i<n*image_size(); ++i ) {
 		pg->set(i, gradient_voxel(i));
 	}
 #endif

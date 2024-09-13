@@ -1,7 +1,7 @@
 /**
 @file	model_poly.cpp
 @brief	Functions to manipulate polyhedral coordinate files
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010828
 @date	Modified: 20150208
 **/
@@ -17,7 +17,7 @@
 #include "random_numbers.h"
 #include "symmetry.h"
 #include "Vector3.h"
-#include "linked_list.h"
+#include "string_util.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -202,8 +202,8 @@ int			model_poly_generate(Bmodel* model)
 	// Generate the polygon list
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
 		poly_list_kill(mp->poly);
-		mp->poly = NULL;
-		poly = (Bpolygon *) add_item((char **) &mp->poly, sizeof(Bpolygon));
+		mp->poly = new Bpolygon();
+//		poly = (Bpolygon *) add_item((char **) &mp->poly, sizeof(Bpolygon));
 		for ( n=0, comp = mp->comp; comp; comp = comp->next ) {
 			for ( i=n=0; i<comp->link.size() && comp->link[i]; i++ ) {
 				if ( verbose & VERB_DEBUG )
@@ -212,7 +212,8 @@ int			model_poly_generate(Bmodel* model)
 				if ( verbose & VERB_DEBUG )
 					cout << "\tn=" << n << endl;
 				if ( n > 2 && n < MAXLINK )
-					poly = (Bpolygon *) add_item((char **) &poly, sizeof(Bpolygon));
+//					poly = (Bpolygon *) add_item((char **) &poly, sizeof(Bpolygon));
+					poly = poly->add();
 				else
 //					for ( j=0; j<poly->comp.size(); j++ ) poly->comp[j] = NULL;
 					poly->comp.clear();
@@ -314,7 +315,7 @@ int			model_poly_generate(Bmodel* model)
 int			model_vertex_types(Bmodel* model)
 {
 	int				i, j;
-	Bstring			id;
+	string			id;
 	Bmodel*			mp;
 	Bcomponent*		comp;
 	Bpolygon*		poly;
@@ -335,13 +336,13 @@ int			model_vertex_types(Bmodel* model)
 		for ( comp = mp->comp; comp; comp = comp->next ) {
 //			comp->type = 0;
 //			for ( i=0; i<MAXLINK && comp->link[i]; i++ )
-//				comp->type += Bstring(comp->flag[i], "%d");
+//				comp->type += string(comp->flag[i], "%d");
 //			comp->type = comp->type.canonical(1);
 //			comp->type = model_add_type_by_id(mp, comp->type);
-			id = 0;
+			id = "";
 			for ( i=0; i<comp->link.size() && comp->link[i]; i++ )
-				id += Bstring(comp->flag[i], "%d");
-			id = id.canonical(1);
+				id += to_string(comp->flag[i]);
+			id = canonical(id,1);
 //			comp->type = model_add_type_by_id(mp, id);
 			comp->type(mp->add_type(id));
 		}
@@ -350,12 +351,12 @@ int			model_vertex_types(Bmodel* model)
 	return 0;
 }
 
-Bstring		component_6digit_type(Bcomponent* comp)
+string		component_6digit_type(Bcomponent* comp)
 {
 	int				i, j, t;
 	double			a;
 	Vector3<double>	v;
-	Bstring			id;
+	string			id;
 	
 	if ( !comp->link[2] ) return 0;
 	
@@ -372,12 +373,12 @@ Bstring		component_6digit_type(Bcomponent* comp)
 	
 //	comp->type = 0;
 //	for ( i=0; comp->link[i]; i++, j+=t )
-//		comp->type += Bstring(comp->flag[j]/100, "%d") +  Bstring(comp->flag[j]%10, "%d");
+//		comp->type += string(comp->flag[j]/100, "%d") +  string(comp->flag[j]%10, "%d");
 //	comp->type = comp->type.canonical(2);
-	id = 0;
+	id = "";
 	for ( i=0; i<comp->link.size() && comp->link[i]; i++, j+=t )
-		id += Bstring(comp->flag[j]/100, "%d") +  Bstring(comp->flag[j]%10, "%d");
-	id = id.canonical(2);
+		id += to_string(comp->flag[j]/100) +  to_string(comp->flag[j]%10);
+	id = canonical(id,2);
 	
 	return id;
 }
@@ -402,7 +403,7 @@ int			model_extended_vertex_types(Bmodel* model)
 	Bcomponent*		comp;
 	Bcomponent*		comp2;
 	Bpolygon*		poly;
-	Bstring			id;
+	string			id;
 	
 	if ( !model->poly ) model_poly_generate(model);
 
@@ -458,14 +459,14 @@ Bmodel*		model_poly_dual(Bmodel* model, int order)
 {
 	long			i, n(0);
 	double			side, rad, length(0);
-	Bstring			id;
+	string			id;
 	Bmodel*			mp;
 	Bpolygon*		poly = NULL;
 	Bcomponent*		comp = NULL;
 	Bmodel*			model_new = NULL;
 	Bmodel*			mp_new = NULL;
 
-	Bstring			ctstr[10];
+	string			ctstr[10];
 	ctstr[0] = "VER";
 	ctstr[1] = "MON";
 	ctstr[2] = "DI";
@@ -491,7 +492,7 @@ Bmodel*		model_poly_dual(Bmodel* model, int order)
 		comp = NULL;
 		for ( n=0, poly = mp->poly; poly; poly = poly->next )
 				if ( poly->closed() && ( order < 3 || poly->size() == order ) ) {
-//			id = Bstring(++n, "%d");
+//			id = string(++n, "%d");
 //			comp = component_add(&comp, id);
 //			if ( !mp_new->comp ) mp_new->comp = comp;
 			if ( comp ) comp = comp->add(++n);
@@ -582,19 +583,8 @@ int			model_poly_analyze(Bmodel* model)
 	
 	model_poly_planarity(model);
 
-//	Vector3<double>	pax = model_principal_axes(model, NULL);
 	model_principal_axes(model);
-/*
-	double			Ap, As, Vs, g=GOLDEN;
-	Vs = (M_PI*4.0/3.0)*pax.volume();
-	Ap = 4.0*M_PI*pow((pow((double)pax[0]*pax[1],g)+pow((double)pax[0]*pax[2],g)+pow((double)pax[1]*pax[2],g))/3.0, 1/g);
-	As = pow(M_PI, 1.0/3.0) * pow(6*Vs, 2.0/3.0);
-	cout << "Ellipsoid volume:               " << Vs << " A3" << endl;
-//	cout << "Polyhedral volume:              " << Vp << " A3" << endl;
-	cout << "Sphericity:                     " << As/Ap << endl;
-	cout << "Axes ratio:                     " << pax[0]/pax[2] << endl;
-	cout << "Oblateness:                     " << (pax[1] - pax[2])/(pax[0] - pax[2]) << endl << endl;
-*/
+
 	return 0;
 }
 
@@ -655,7 +645,8 @@ int			model_poly_links(Bmodel* model)
 int			model_poly_angles(Bmodel* model)
 {
 	int					i, n, nc, na[10], mna;
-	double				a, a2, pavg, pstd, avg[10], std[10], mavg, mstd, aavg(0), astd(0);
+//	double				a, a2, pavg, pstd, avg[10], std[10], mavg, mstd, aavg(0), astd(0);
+	double				a, a2, pavg, pstd, avg[10], std[10], mavg, mstd;
 	Vector3<double>		dcen, polycen;
 	Bmodel*				mp;
 	Bpolygon*			poly;
@@ -703,8 +694,8 @@ int			model_poly_angles(Bmodel* model)
 				else pstd = 0;
 			}
 		}
-		aavg += mavg;
-		astd += mstd;
+//		aavg += mavg;
+//		astd += mstd;
 		if ( mna ) {
 			mavg /= mna;
 			mstd = mstd/mna - mavg*mavg;
@@ -761,7 +752,7 @@ double		model_poly_regularity(Bmodel* model)
 {
 	int					i, n, mn;
 	double				d, davg, mavg, ds, dc, dr, dr_all(0);
-	double				dstd, mstd, dstd_all(0), A, Ap(0), Vp(0);
+	double				dstd, mstd, dstd_all(0), A, Vp(0);
 	Vector3<double>		dcen, polycen;
 	Bmodel*				mp;
 	Bpolygon*			poly;
@@ -793,7 +784,6 @@ double		model_poly_regularity(Bmodel* model)
 			dc = dcen.length();
 			ds /= i + poly->closed() - 1;
 			A = i*(ds*ds/4)*sqrt((1+cos(TWOPI/i))/(1-cos(TWOPI/i)));	// Polygon area
-			Ap += A;
 			Vp += A*dc/3;	// Contribution to polyhedral volume
 			for ( i=0; i<poly->comp.size() && poly->comp[i]; i++ ) {
 				d = polycen.distance(poly->comp[i]->location());
@@ -1093,7 +1083,7 @@ int			model_poly_pentagon_adjacency(Bmodel* model)
 @brief 	Finds the symmetry axes associated with polyhedral elements.
 @param 	*model		model structure.
 @param 	threshold	cutoff to flag a symmetry axis.
-@return Bstring		symmetry string.
+@return string		symmetry string.
 
 	Symmetry axes are associated with specific elements:
 		link		reflection and 2-fold axis.
@@ -1102,9 +1092,9 @@ int			model_poly_pentagon_adjacency(Bmodel* model)
 	Only the first model in the list is processed.
 
 **/
-Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
+string		model_poly_find_symmetry(Bmodel* model, double threshold)
 {
-	Bstring				sym_label("C1");
+	string				sym_label("C1");
 	if ( !model ) return sym_label;
 	
 	if ( !model->poly ) model_poly_generate(model);
@@ -1254,7 +1244,7 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 	for ( i=0; i<ns; i++ ) op[i].normalize();
 	
 	double			a, maxang = M_PI/18.0;
-	int				na(0);
+//	int				na(0);
 	vector<int>		nord(NSMAX,0);
 	
 	// Eliminate redundant axes
@@ -1284,8 +1274,8 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 		cout << endl;
 	}
 	
-	for ( i=1; i<NSMAX; i++ )
-		if ( nord[i] ) na += nord[i];
+//	for ( i=1; i<NSMAX; i++ )
+//		if ( nord[i] ) na += nord[i];
 
 	Vector3<double>		vecz(0,0,1), vecx(1,0,0);
 
@@ -1330,7 +1320,7 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 		}
 	} else if ( nord[2] > 1 ) {
 		for ( order=0, i=2; i<NSMAX; i++ ) if ( nord[i] ) order = i;
-		sym_label = Bstring(order, "D%d");
+		sym_label = "D" + to_string(order);
 		// D2 is special because it can be oriented 3 different ways
 		if ( order == 2 && nord[1] ) {
 			for ( j=0; j<ns && op[j].order() != 1; j++ ) ;
@@ -1350,11 +1340,11 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 		if ( nord[1] ) {
 			for ( j=0; j<ns; j++ ) if ( op[j].order() == 1 )
 				if ( fabs(M_PI_2 - vecz.angle(op[j].axis())) < maxang )
-					sym_label = Bstring(order, "D%dd");
+					sym_label = "D" + to_string(order) + "d";
 			for ( j=0; j<ns; j++ ) if ( op[j].order() == 1 ) {
 				a = fabs(vecz.angle(op[j].axis()));
 				if ( a < maxang || fabs(M_PI - a) < maxang )
-					sym_label = Bstring(order, "D%dh");
+					sym_label = "D" + to_string(order) + "h";
 			}
 		}
 	} else {
@@ -1362,7 +1352,7 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 		for ( order=0, i=1; i<NSMAX; i++ ) if ( nord[i] ) order = i;
 		if ( order ) {
 			if ( order == 1 ) sym_label = "Cs";
-			else sym_label = Bstring(order, "C%d");
+			else sym_label = "C" + to_string(order);
 			for ( i=0; i<ns && op[i].order() != order; i++ ) ;
 			if ( op[i].order() ) {
 				vecx = op[i].axis().cross(vecz);
@@ -1373,13 +1363,13 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 					for ( j=0; j<ns; j++ ) if ( op[j].order() == 1 ) {
 						if ( fabs(M_PI_2 - vecz.angle(op[j].axis())) < maxang ) {
 							vecx = op[j].axis();
-							sym_label = Bstring(order, "C%dv");
+							sym_label = "C" + to_string(order) + "v";
 						}
 					}
 					for ( j=0; j<ns; j++ ) if ( op[j].order() == 1 ) {
 						a = fabs(vecz.angle(op[j].axis()));
 						if ( a < maxang || fabs(M_PI - a) < maxang )
-							sym_label = Bstring(order, "C%dh");
+							sym_label = "C" + to_string(order) + "h";
 					}
 				}
 			}
@@ -1400,7 +1390,7 @@ Bstring		model_poly_find_symmetry(Bmodel* model, double threshold)
 	
 	delete[] op;
 	
-	string			symstr(sym_label.str());
+	string			symstr(sym_label);
 	regex			rmstr("[svdh]");
 	model->symmetry(symstr);
 	
@@ -1456,12 +1446,16 @@ int			model_poly_hand(Bmodel* model)
 	
 	if ( ncomp < 2 ) return 0;
 	
-	Matrix			a = model_adjacency_matrix(model);
+	Matrix			a;
+	
+	a = model_adjacency_matrix(model);
 
 	vector<double>	d = a.jacobi_rotation();
 	a.eigen_sort(d);
 	
-	Matrix			a2 = model_adjacency_matrix(model);
+	Matrix			a2;
+	
+	a2 = model_adjacency_matrix(model);
 
 	double				R;
 	Vector3<double>		v1, v2;
@@ -1526,7 +1520,8 @@ int			model_poly_compare(Bmodel* model, Bmodel* refmodel)
 	vector<vector<double>>	vr(nref);
 	
 	for ( i = 0, mp_ref = refmodel; mp_ref; mp_ref = mp_ref->next ) if ( mp_ref->select() ) {
-		nr[i] = count_list((char *)mp_ref->comp);
+//		nr[i] = count_list((char *)mp_ref->comp);
+		nr[i] = mp_ref->component_count();
 		vr[i] = model_poly_eigenvalues(mp_ref, 0);
 		mp_ref->FOM(0);
 		i++;
@@ -1534,7 +1529,8 @@ int			model_poly_compare(Bmodel* model, Bmodel* refmodel)
 	
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
 		mp_pick = NULL;
-		n = count_list((char *)mp->comp);
+//		n = count_list((char *)mp->comp);
+		n = mp->component_count();
 		if ( n ) {
 			model_poly_find_symmetry(mp, 0.1);
 			vector<double>	v = model_poly_eigenvalues(mp, 0);
@@ -1602,7 +1598,9 @@ vector<double>	model_poly_eigenvalues(Bmodel* model, int show)
 	
 	if ( ncomp < 1 ) return d;
 	
-	Matrix			a = model_adjacency_matrix(model);
+	Matrix			a;
+	
+	a = model_adjacency_matrix(model);
 
 	d = a.jacobi_rotation();
 	a.eigen_sort(d);
@@ -1680,7 +1678,9 @@ vector<double>	model_poly_sphere_coor(Bmodel* model)
 	
 	for ( ncomp = 0, comp = model->comp; comp; comp = comp->next ) ncomp++;
 	
-	Matrix			a = model_adjacency_matrix(model);
+	Matrix			a;
+	
+	a = model_adjacency_matrix(model);
 
 	vector<double>	d = a.jacobi_rotation();
 	a.eigen_sort(d);
@@ -1700,12 +1700,6 @@ vector<double>	model_poly_sphere_coor(Bmodel* model)
 		}
 	}
 	
-	if ( verbose & VERB_FULL ) {
-		cout << "Eigenvectors used:";
-		for ( i=0; i<3; i++ ) cout << tab << p[i];
-		cout << endl;
-	}
-	
 	for ( i=0; i<3; i++ ) s[i] = 1/sqrt(d[0] - d[p[i]]);
 	
 	for ( i=0, comp = model->comp; comp; comp = comp->next, i++ )
@@ -1718,6 +1712,21 @@ vector<double>	model_poly_sphere_coor(Bmodel* model)
 	
 	for ( comp = model->comp; comp; comp = comp->next )
 		comp->scale(len);
+
+	if ( verbose & VERB_FULL ) {
+		cout << "Calculating coordinates from spherical harmonics" << endl;
+		cout << "Eigenvectors:";
+		for ( i=0; i<3; i++ ) cout << tab << p[i];
+		cout << endl;
+		cout << "Eigenvalues:";
+		for ( i=0; i<3; i++ ) cout << tab << d[p[i]];
+		cout << endl;
+		cout << "Average link length: " << len << endl << endl;
+	}
+
+	if ( verbose & VERB_DEBUG )
+		for ( i=0, comp = model->comp; comp; comp = comp->next, i++ )
+			cout << i << tab << comp->identifier() << tab << comp->location() << endl;
 
 	return d;
 }

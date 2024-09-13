@@ -124,7 +124,7 @@ int 	readPNG(Bimage* p, int readdata)
 	p->origin(png_get_x_offset_pixels(png_ptr, info_ptr), 
 		png_get_y_offset_pixels(png_ptr, info_ptr), 0.0);
 
-	tm*				t = p->get_localtime();
+	tm*				t = p->get_local_time();
 	png_time*		modtime;
 	png_get_tIME(png_ptr, info_ptr, &modtime);
 //	t->tm_year = modtime->year - 1900;
@@ -234,7 +234,7 @@ int 	writePNG(Bimage* p)
 		bit_depth, color_type, interlace_type,
 		PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 	
-	tm*				t = p->get_localtime();
+	tm*				t = p->get_local_time();
 	png_time		modtime;
 	png_convert_from_struct_tm(&modtime, t);
 //	png_convert_from_time_t(&modtime, p->time);	// Converts to GM time

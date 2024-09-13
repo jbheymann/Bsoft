@@ -30,7 +30,7 @@ const char* use[] = {
 "-blue -4.5,88.3          Convert a grayscale range to blue.",
 "-spectrum 1,22.4         Convert a grayscale range to a spectral colour scale.",
 "-rwb 0,56,167,245        Convert a grayscale range to a red, white and blue image.",
-"-phases                  Colour the phases in a polar map or complex transform.",
+"-phases 1.5,1            Colour the phases in a complex image: scale and phase shift flag.",
 "-intensities             Calculates the intensities without colours.",
 "-pure                    Calculates pure colours without intensity.",
 "-alpha                   Add an alpha (transparency) channel.",
@@ -71,7 +71,8 @@ int 		main(int argc, char **argv)
 	int				setalpha(0);				// No alpha channel change
 	int				to_cmyk(0);
 	int				to_rgb(0);
-	int 			colour_phases(0);
+	double 			colour_phases(0);
+	bool			phase_shift(0);
 	int				calcintensity(0);
 	int				calcpure(0);
 	int				split(0);
@@ -122,7 +123,8 @@ int 		main(int argc, char **argv)
 				setrwb = 1;
 		}
 		if ( curropt->tag == "phases" )
-        	colour_phases = 1;
+			if ( curropt->values(colour_phases, phase_shift) < 1 )
+				cerr << "-phases: A scale must be specified!" << endl;
 		if ( curropt->tag == "intensities" )
         	calcintensity = 1;
 		if ( curropt->tag == "pure" )
@@ -201,7 +203,7 @@ int 		main(int argc, char **argv)
 			pscale = p->red_white_blue(red_min, white_min, white_max, blue_max);
 	
 		if ( colour_phases ) {
-			p2 = p->intensities_phase_colored(0);
+			p2 = p->intensities_phase_colored(colour_phases, phase_shift);
 			if ( p2 ) {
 				delete p;
 				p = p2;
@@ -242,7 +244,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

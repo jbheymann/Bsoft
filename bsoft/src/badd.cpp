@@ -55,8 +55,8 @@ int 		main(int argc, char **argv)
 {
 	// Initialize variables
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
-	Vector3<double>	sam;				// Units for the three axes (A/pixel)
-	Vector3<double>	origin;			// New image origin
+	Vector3<double>	sam;						// Units for the three axes (A/pixel)
+	Vector3<double>	origin;						// New image origin
 	int				set_origin(0);				// Flag to set origin
 	Bstring			sumfile("sum.map");			// Default output image file name
 	double			nuavg(0), nustd(0); 		// Average and standard deviation for rescaling
@@ -116,17 +116,13 @@ int 		main(int argc, char **argv)
 	}
 	
 	// Set up image file names and weights
-	long			nfiles(0);
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) {
-		string_add(&file_list, argv[optind++]);
-		nfiles++;
-	}
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
 	
 	vector<double>	weight;
 	if ( setweigh ) {
 		weight = weight_string.split_into_doubles(",");
-		if ( weight.size() < nfiles ) {
+		if ( weight.size() < file_list.size() ) {
 			cerr << "Error: The number of weights must equal the number of input files" << endl;
 			bexit(-1);
 		} 
@@ -150,9 +146,8 @@ int 		main(int argc, char **argv)
 		write_img(fomfile, psum->next, 0);
 	
 	delete psum;
-	string_kill(file_list);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

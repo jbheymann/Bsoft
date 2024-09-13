@@ -3,7 +3,7 @@
 @brief	Manipulates models.
 @author Bernard Heymann
 @date	Created: 20060908
-@date 	Modified: 20190125
+@date 	Modified: 20230703
 **/
 
 #include "rwmodel.h"
@@ -32,6 +32,7 @@ const char* use[] = {
 "-addnumber               Add numbers to the model id's.",
 "-merge                   Merge models in different files rather than concatenate.",
 "-all                     Reset selection to all models and components before other selections.",
+"-type 1                  Component type designation: 0=from file, 1=elements, 2=atoms.",
 " ",
 "Selections:",
 "-select #232@14          Select models and components.",
@@ -69,6 +70,7 @@ const char* use[] = {
 "-setasu D8               Set components to within an asymmetric unit.",
 "-apply C5                Apply point group symmetry.",
 "-symmetrize C5           Symmetrize for a point group symmetry.",
+"-thickness               Calculate effective thickness from z coordinates.",
 " ",
 "Actions for finishing:",
 "-reset                   Reset selection to all components before other selections.",
@@ -101,6 +103,7 @@ int 	main(int argc, char **argv)
 	int 			num_id(0);					// Flag to add numbers to model id's
 	int 			all(0);						// Keep selection as read from file
 	int 			reset(0);					// Keep selection as ouput
+	int				type_select(0);				// Component type designation
 	Bstring			mod_select;					// Model and component selection
 	int				list_models(0);				// List model information in table form
 	int				list_comps(0);				// List model information in table form
@@ -113,7 +116,6 @@ int 	main(int argc, char **argv)
 	int				fullerene(0);				// Flag to select fullerenes
 	Bstring			comp_delete;				// Component type selection for deletion
 	double			setfom = -1;				// Value to set FOM to
-	int				center(0);					// Flag to center the structure
 	long			average(0);					// Number of sequential components to average
 	double			fom_cutoff(0);				// No selection based on FOM
 	double			fom_step(0);				// Histogram step size
@@ -134,16 +136,17 @@ int 	main(int argc, char **argv)
 	double			linklength(0);				// Link length for generating links
 	Bstring			link_type1, link_type2;		// Component type IDs for specifying links
 	int				link_closest(0);			// Only generate one link per first component
+	bool			center(0);					// Flag to center model
     Transform		t;							// Transformation details
 	Vector3<double>	shift;						// Translate
 	Vector3<double>	scale;						// Scale around origin
 	Vector3<double>	reflect;					// Mirror plane normal
-	View			ref_view;					// Reference view
+	View2<double>	ref_view;					// Reference view
 	string			asu_sym;					// Set coordinates within the ASU
 	string			symmetry_apply_string;		// Point group string
 	string			symmetrize_string;			// Point group string
-    Bstring    		atom_select("all");
-	Bstring			paramfile;					// Input parameter file name
+	bool			eff_thick(0);				// Flag for effective thickness calculation
+	string			paramfile;					// Input parameter file name
 //	Bstring			reffile;					// Reference file name 
 	Bstring			outfile;					// Output parameter file name
 	Bstring			coorfile;					// Output coordinates file name
@@ -156,6 +159,16 @@ int 	main(int argc, char **argv)
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "addnumber" ) num_id = 1;
 		if ( curropt->tag == "all" ) all = 1;
+//		if ( curropt->tag == "type" )
+//			if ( ( type_select = curropt->value.integer() ) < 1 )
+//				cerr << "-type: A type designation must be specified!" << endl;
+		if ( curropt->tag == "type" ) {
+			if ( curropt->value[0] == 'e' ) type_select = 1;
+			else if ( curropt->value[0] == 'a' ) type_select = 2;
+			else type_select = curropt->value.integer();
+			if ( type_select < 0 ) type_select = 0;
+			if ( type_select > 2 ) type_select = 0;
+		}
 		if ( curropt->tag == "merge" ) merge = 1;
 		if ( curropt->tag == "reset" ) reset = 1;
 		if ( curropt->tag == "select" )
@@ -179,7 +192,6 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "setfom" )
 			if ( ( setfom = curropt->value.real() ) < 0.001 )
 				cerr << "-setfom: A FOM value must be specified!" << endl;
-		if ( curropt->tag == "center" ) center = 1;
 		if ( curropt->tag == "average" )
 			if ( ( average = curropt->value.integer() ) < 1 )
 				cerr << "-average: A number of components must be specified!" << endl;
@@ -218,7 +230,8 @@ int 	main(int argc, char **argv)
 			astr = curropt->value;
 			associate_type = astr.pre(',');
 			astr = astr.post(',');
-			associate_mass = get_option_mass(astr);
+//			associate_mass = get_option_mass(astr);
+			associate_mass = curropt->real_unit(astr);
 			astr = 0;
 		}
 		if ( curropt->tag == "settype" )
@@ -227,6 +240,7 @@ int 	main(int argc, char **argv)
 			t.origin = curropt->origin();
 		if ( curropt->tag == "reference" )
 			ref_view = curropt->view();
+		if ( curropt->tag == "center" ) center = 1;
 		if ( curropt->tag == "translate" ) {
 			shift = curropt->vector3();
         	if ( shift.length() < 0.1 )
@@ -281,13 +295,14 @@ int 	main(int argc, char **argv)
 			if ( ( linkrad = curropt->value.real() ) < 1 )
 				cerr << "-linkradius: A radius must be specified!" << endl;
 		if ( curropt->tag == "parameters" )
-			paramfile = curropt->filename();
+			paramfile = curropt->filename().str();
 		if ( curropt->tag == "setasu" )
-			asu_sym = curropt->symmetry_string().str();
+			asu_sym = curropt->symmetry_string();
 		if ( curropt->tag == "apply" )
-			symmetry_apply_string = curropt->symmetry_string().str();
+			symmetry_apply_string = curropt->symmetry_string();
 		if ( curropt->tag == "symmetrize" )
-			symmetrize_string = curropt->symmetry_string().str();
+			symmetrize_string = curropt->symmetry_string();
+		if ( curropt->tag == "thickness" ) eff_thick = 1;
 		if ( curropt->tag == "output" )
 			outfile = curropt->filename();
 		if ( curropt->tag == "split" ) {
@@ -305,15 +320,14 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*			model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*			model = read_model(file_list, paramfile, type_select);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -335,23 +349,23 @@ int 	main(int argc, char **argv)
 
 	if ( list_comps ) model_list_comp(model);
 	
-	if ( model_id.length() ) model->identifier(model_id);
+	if ( model_id.length() ) model->identifier(model_id.str());
 	
 	if ( map_name.length() ) {
 		model->mapfile(map_name.str());
 		model->image_number(img_num);
-		model_check(model, map_path);
+		model_check(model, map_path.str());
 	} else if ( map_path.length() ) {
-		model_check(model, map_path);
+		model_check(model, map_path.str());
 	}
 
-	if ( set_type.length() ) model_set_type(model, set_type);
+	if ( set_type.length() ) model_set_type(model, set_type.str());
 	
 	if ( associate_file.length() )
-		model_associate(model, associate_type, associate_file);
+		model_associate(model, associate_type.str(), associate_file.str());
 	
 	if ( associate_mass > 0 )
-		model_associate_mass(model, associate_type, associate_mass);
+		model_associate_mass(model, associate_type.str(), associate_mass);
 	
 	if ( ncomp_min ) model_select_number_of_components(model, ncomp_min, ncomp_max);
 
@@ -359,23 +373,23 @@ int 	main(int argc, char **argv)
 
 	if ( fullerene ) model_select_fullerene(model);
 	
-	if ( comp_delete.length() ) model_delete_comp_type(model, comp_delete);
+	if ( comp_delete.length() ) model_delete_comp_type(model, comp_delete.str());
 	
 	if ( setfom >= 0 ) model->set_component_fom(setfom);
 	
-	if ( linklength > 0 ) model_link_list_generate(model, linklength, link_type1, link_type2, link_closest);
+	if ( linklength > 0 ) model_link_list_generate(model, linklength, link_type1.str(), link_type2.str(), link_closest);
 //	if ( linklength > 0 ) model_link_list_generate(model, linklength);
 	
 	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
 
 	if ( linkrad > 0 ) models_process(model, linkrad, model_set_link_radius);
 
-	if ( center ) models_process(model, model_center);
+	if ( center ) model_center(model);
 
 	if ( fom_cutoff > 0 ) model_fom_deselect(model, fom_cutoff);
 
 	if ( average > 0 ) model_average_components(model, average);
-	
+		
 	if ( shift.length() ) model_shift(model, shift);
 
 	if ( t.angle ) model_rotate(model, t);
@@ -406,17 +420,20 @@ int 	main(int argc, char **argv)
 
 	if ( show_axes ) model_principal_axes(model);
 	
+	if ( eff_thick )
+		cout << "Effective thickness:            " << model_effective_thickness(model) << endl << endl;
+	
 	if ( reset ) models_process(model, model_reset_selection);
 
 	model_selection_stats(model);
 	
 	// Write an output parameter format file if a name is given
     if ( model && ( outfile.length() || split == 9 ) )
-		write_model(outfile, model, split);
+		write_model(outfile.str(), model, split);
 
 	model_kill(model);
 		
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

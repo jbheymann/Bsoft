@@ -1,6 +1,5 @@
 var struct_bmolgroup =
 [
-    [ "angle", "struct_bmolgroup.html#a9e65abb8fbdfe617c4c6988913b8aabb", null ],
     [ "bond", "struct_bmolgroup.html#a2788edff92304731e3ccdccfa2d3473c", null ],
     [ "box", "struct_bmolgroup.html#a095410254647f38a085a74350b7207c2", null ],
     [ "comment", "struct_bmolgroup.html#a971b6200f3c53842826f04f1762cca84", null ],

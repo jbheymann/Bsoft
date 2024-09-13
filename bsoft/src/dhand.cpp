@@ -308,7 +308,7 @@ int   main(int argc, char* argv[])
 	delete penantiomer;
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(handedness);

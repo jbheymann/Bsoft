@@ -26,7 +26,7 @@ Bmodel*		model_delta_create_tube_old(int radius, int height)
 	string			id("Tube");
 	Bmodel*			model = new Bmodel(id);
 	
-	Bstring			hextype("HEX");
+	string			hextype("HEX");
 	int				i, nv;
 	double			a, sa, ea;
 	int				c = (int) (TWOPI*radius + 0.5);
@@ -51,7 +51,7 @@ Bmodel*		model_delta_create_tube_old(int radius, int height)
 		for ( a=sa; a<ea; a+=da ) {
 			loc[0] = radius*cos(a);
 			loc[1] = radius*sin(a);
-//			id = Bstring(++nv, "%d");
+//			id = string(++nv, "%d");
 //			comp = component_add(&comp, id);
 //			if ( !model->comp ) model->comp = comp;
 			if ( comp ) comp = comp->add(++nv);
@@ -82,10 +82,10 @@ Bmodel*		model_delta_create_tube(int h, int k, int height)
 {
 	if ( height < 1 ) height = 1;
 	
-	Bstring			id("Tube");
+	string			id("Tube");
 	Bmodel*			model = new Bmodel(id);
 	
-	Bstring			hextype("HEX");
+	string			hextype("HEX");
 	int				nv(0), close;
 	double			c = sqrt(h*h + h*k + k*k);
 	double			rad = c/TWOPI;
@@ -120,7 +120,7 @@ Bmodel*		model_delta_create_tube(int h, int k, int height)
 				for ( close=0, comp2 = model->comp; comp2 && !close; comp2 = comp2->next )
 					if ( comp2->location().distance(loc) < 0.5 ) close = 1;
 				if ( !close ) {
-//					id = Bstring(++nv, "%d");
+//					id = string(++nv, "%d");
 //					comp = component_add(&comp, id);
 //					if ( !model->comp ) model->comp = comp;
 					if ( comp ) comp = comp->add(++nv);
@@ -162,13 +162,13 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 	int				order = 6;
 	if ( type & 2 ) order = 5;
 	
-	Bstring			id("Cylinder");
+	string			id("Cylinder");
 	Bmodel*			model = new Bmodel(id);
 	model->symmetry("D6");
 	if ( type & 2 ) model->symmetry("D5");
 	
-	Bstring			pentype("PEN");
-	Bstring			hextype("HEX");
+	string			pentype("PEN");
+	string			hextype("HEX");
 	int				i, nv(0);
 	double			a, sa(0), ea, f;
 	double			da = TWOPI/(1.0L*order);
@@ -197,7 +197,7 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 				vec[0] = i*cos(a+da) - start[0];
 				vec[1] = i*sin(a+da) - start[1];
 				for ( f=0; f<0.95; f+=1.0L/i ) {
-//					id = Bstring(++nv, "%d");
+//					id = string(++nv, "%d");
 //					comp = component_add(&comp, id);
 					comp = comp->add(++nv);
 //					if ( i == radius && f == 0 ) comp->type = model_add_type_by_id(model, pentype);
@@ -235,7 +235,7 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 				}
 			}
 			for ( f=0; f<0.95; f+=1.0L/radius ) {
-//				id = Bstring(++nv, "%d");
+//				id = string(++nv, "%d");
 //				comp = component_add(&model->comp, id);
 				comp = comp->add(++nv);
 //				comp->type = model_add_type_by_id(model, hextype);
@@ -257,7 +257,7 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 				vec[0] = i*cos(a+da) - start[0];
 				vec[1] = i*sin(a+da) - start[1];
 				for ( f=0; f<0.95; f+=1.0L/i ) {
-//					id = Bstring(++nv, "%d");
+//					id = string(++nv, "%d");
 //					comp = component_add(&comp, id);
 					comp = comp->add(++nv);
 //					if ( i == radius && f == 0 ) comp->type = model_add_type_by_id(model, pentype);
@@ -270,7 +270,7 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 			}
 		}
 
-//		id = Bstring(++nv, "%d");
+//		id = string(++nv, "%d");
 //		comp = component_add(&comp, id);	
 		comp = comp->add(++nv);
 //		if ( order == 5 )  comp->type = model_add_type_by_id(model, pentype);

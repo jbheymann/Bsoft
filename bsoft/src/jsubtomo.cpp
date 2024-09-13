@@ -29,7 +29,6 @@
 #include "rwmg.h"
 #include "ps_micrograph.h"
 #include "Matrix.h"
-#include "linked_list.h"
 #include "file_util.h"
 #include "options.h"
 #include "utilities.h"
@@ -140,7 +139,7 @@ int 		main(int argc, char **argv)
 	double			shiftlimit(-1);			// Use default search radius
 	double			shiftlimitz(0);			
 	double			shiftlimitxy(0);			
-	View			ref_view;				// Reference view
+	View2<double>	ref_view;				// Reference view
 	Quaternion		quat;					
 	int				applytransform(0);		// Rotate and shift in extraction (default not)
 	int				extractparticle(1);		// 0 = template, 1 = particle
@@ -725,8 +724,8 @@ int 		main(int argc, char **argv)
 		// Discard particles with too similar views
 		Vector3<double>	part_view;
 		Vector3<double>	part2_view;
-		View		view;
-		View		view2;
+		View2<double>	view;
+		View2<double>	view2;
 
 		if ( minangledif >  0 ) {
 
@@ -739,8 +738,8 @@ int 		main(int argc, char **argv)
 					part2 = part->next;			
 					while ( part2 ) {
 						if ( part2->sel != 0 ) {
-							view = part->view;
-							view2 = part2->view;
+							view = part->view2();
+							view2 = part2->view2();
 
 							part_view = Vector3<double>(view[0],view[1],view[2]);
 							part2_view = Vector3<double>(view2[0],view2[1],view2[2]);
@@ -1028,7 +1027,7 @@ int 		main(int argc, char **argv)
 
 	project_kill(project);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

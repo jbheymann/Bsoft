@@ -4,6 +4,7 @@ var globals_vars =
     [ "b", "globals_vars_b.html", null ],
     [ "c", "globals_vars_c.html", null ],
     [ "d", "globals_vars_d.html", null ],
+    [ "e", "globals_vars_e.html", null ],
     [ "g", "globals_vars_g.html", null ],
     [ "h", "globals_vars_h.html", null ],
     [ "i", "globals_vars_i.html", null ],

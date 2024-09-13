@@ -88,7 +88,7 @@ int 		main(int argc, char **argv)
 	int				com_origin(0);		// Flag to set the center-of-mass as origin of rotation
     Vector3<double>	point;				// Inversion point
     Transform		t;					// Transformation details
-	View			view;				// View to rotate to
+	View2<double>	view;				// View to rotate to
 	int 			rot_from(0); 		// Rotation from view flag
 	Vector3<double>	min(-1e6,-1e6,-1e6); // Coordinate minima
 	Vector3<double>	max(1e6,1e6,1e6);	// Coordinate maxima
@@ -354,13 +354,15 @@ int 		main(int argc, char **argv)
 			molgroup_kill(molgroup2);
 		}
 	}
+	
+	Matrix	mat;
 
 	if ( distfile.length() ) {
 		molgroup2 = read_molecule(distfile, atom_select, paramfile);
 		if ( !molgroup2 ) {
 			cerr << "Error: Template file not read!" << endl;
 		} else {
-			Matrix	mat = mol_distance_matrix(molgroup->mol, molgroup2->mol);
+			mat = mol_distance_matrix(molgroup->mol, molgroup2->mol);
 			molgroup_kill(molgroup2);
 			if ( matfile.length() && mat.rows() )
 				mat.write(matfile);
@@ -382,7 +384,7 @@ int 		main(int argc, char **argv)
 
 	molgroup_kill(molgroup);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

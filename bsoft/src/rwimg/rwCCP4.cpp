@@ -160,7 +160,6 @@ int 	readCCP4(Bimage* p, int readdata)
 		p->sampling(header->a/header->mx, header->b/header->my, header->c/header->mz);
 	p->space_group(header->ispg);
 	UnitCell	uc(header->a, header->b, header->c, header->alpha, header->beta, header->gamma);
-	uc.degrees_to_radians();
 	p->unit_cell(uc);
 	p->label(header->labels);
 	
@@ -302,7 +301,7 @@ int 	writeCCP4(Bimage* p)
 		cout << "DEBUG rwCCP4: Writing labels" << endl;
 
 	header->nlabl = 10;
-	strncpy(header->labels, p->label().c_str(), 799);
+	p->label().copy(header->labels, 799);
 	header->labels[799] = 0;
 	
 	if ( verbose & VERB_DEBUG ) {
@@ -312,7 +311,7 @@ int 	writeCCP4(Bimage* p)
 	}
 	
 	int				nsym(0);
-	Bstring			temp;
+	string			temp;
 	char*			symop = NULL;
 	
 #ifndef NOSYMOP
@@ -339,7 +338,8 @@ int 	writeCCP4(Bimage* p)
 	
 	fimg.write((char *)header, CCP4SIZE);
 	
-	if ( header->nsymbt ) fimg.write((char *)symop, header->nsymbt);
+	if ( header->nsymbt )
+		fimg.write(symop, header->nsymbt);
 	
 	if ( p->data_pointer() ) {
 		if ( p->compound_type() < TComplex ) {
@@ -354,7 +354,6 @@ int 	writeCCP4(Bimage* p)
 	
 	fimg.close();
 	
-	if ( symop ) delete[] symop;
 	delete header;
 		
 	if ( verbose & VERB_DEBUG )

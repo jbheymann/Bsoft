@@ -214,7 +214,7 @@ Bmodel*		model_generate_from_plane_guide(Bmodel* guide, double separation, doubl
 	
 	model_rotate(model, mat, origin, shift);
 	
-	View2<float>	view(eigenvec[2][0], eigenvec[2][1], eigenvec[2][2], 0);
+	View2<double>	view(eigenvec[2][0], eigenvec[2][1], eigenvec[2][2], 0);
 	model_set_views(model, view);
 	
 	delete[] eigenvec;

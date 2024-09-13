@@ -6,7 +6,7 @@
 @author	Bernard Heymann
          Rm 1515, 50 South Dr., NIH, Bethesda, MD, 20892, USA
 @date	Created: 2001 05 19
-@date	Modified: 20160728 (BH)
+@date	Modified: 20230526 (BH)
 **/
 
 #include "kernlut.h"
@@ -21,7 +21,6 @@
 #include "Bimage.h"
 #include "symmetry.h"
 #include "Matrix.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -358,8 +357,7 @@ img_radon_reconstruction (Bproject * project, Bsymmetry& sym, Bstring& file_mask
   Vector3<double> d;
   Bimage *prad;
   Euler euler;
-  View *view, *v;
-//  int nview = sym.order();
+  vector<View2<double>>		views;
 
   for (field = project->field; field; field = field->next)
     {
@@ -398,11 +396,11 @@ img_radon_reconstruction (Bproject * project, Bsymmetry& sym, Bstring& file_mask
 		  delete p;
 
 			prad->reslice(order);
-		  view = symmetry_get_all_views (sym, part->view);
+		  views = sym.get_all_views (part->view2());
 
-		for ( v=view; v; v=v->next )
+		for ( auto& v: views )
 		    {
-		      euler = Euler(*v);
+		      euler = Euler(v);
 		      for (i = 0; i < ntheta / 2; i++)
 			{
 			  t1 = (float) i *2. * M_PI / ntheta;	// sinogram step //
@@ -419,7 +417,6 @@ img_radon_reconstruction (Bproject * project, Bsymmetry& sym, Bstring& file_mask
 			}
 		    }
 		  delete prad;
-		  kill_list((char *) view, sizeof(View));
 		}
 	    }
 	}

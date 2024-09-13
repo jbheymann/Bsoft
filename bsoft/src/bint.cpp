@@ -94,10 +94,10 @@ int 		main(int argc, char **argv)
 	Vector3<double>	translate;
 	double			angle(0);						// Rotation angle
 	Vector3<double>	axis(0.0,0.0,1.0);				// Rotation axis
-	View			view;							// View to rotate to
+	View2<double>	view;							// View to rotate to
 	Euler			euler;							// Euler angles
-	UnitCell		uc(0,0,0,M_PI_2,M_PI_2,M_PI_2);
-	int				compression(0);				// Output compression type
+	UnitCell		uc;
+	int				compression(0);					// Output compression type
 	
 	int				i, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -294,7 +294,7 @@ int 		main(int argc, char **argv)
 			mat = uc.skew_rotation(set_skew==-1);
 		} else if ( rotate ) {
 			if ( view[2] < 1 || view.angle() != 0 ) {
-				if ( p->sizeZ() < 2 ) view = View(0, 0, 1, view.angle());
+				if ( p->sizeZ() < 2 ) view = View2<double>(0, 0, 1, view.angle());
 				mat = view.matrix();
 				if ( backward )
 					mat = mat.transpose();
@@ -306,7 +306,7 @@ int 		main(int argc, char **argv)
 				mat = Matrix3(axis, angle);
 //				cout << mat << endl;
 			}
-			view = View(mat.transpose());
+			view = View2<double>(mat.transpose());
 			if ( verbose & VERB_FULL )
 				cout << "View: " << view << endl;
 		}
@@ -352,7 +352,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

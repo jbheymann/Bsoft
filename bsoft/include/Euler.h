@@ -3,7 +3,7 @@
 @brief	Euler object
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20150106
+@date	Modified: 20230622
 **/
 
 #ifndef _Euler_
@@ -12,7 +12,7 @@
 #include "Vector3.h"
 #include "Matrix3.h"
 #include "Quaternion.h"
-#include "View.h"
+#include "View2.h"
 #include "utilities.h"
 
 /************************************************************************
@@ -37,7 +37,14 @@ public:
 	Euler(const double psi, const double theta, const double phi) {
 		data[0] = psi; data[1] = theta; data[2] = phi;
 	}
-	Euler(View& v) {
+/*	Euler(View& v) {
+		data[1] = acos(v[2]);
+		if ( fabs(v[0]) > 1e-6 || fabs(v[1]) > 1e-6 )
+		data[2] = atan2(v[1], v[0]);
+		data[0] = angle_set_negPI_to_PI(v.angle() - data[2]);
+		if ( fabs(data[0]) < TRIGPRECISION )  data[0] = 0.0L;
+	}*/
+	Euler(View2<double>& v) {
 		data[1] = acos(v[2]);
 		if ( fabs(v[0]) > 1e-6 || fabs(v[1]) > 1e-6 )
 		data[2] = atan2(v[1], v[0]);
@@ -45,7 +52,7 @@ public:
 		if ( fabs(data[0]) < TRIGPRECISION )  data[0] = 0.0L;
 	}
 	Euler(Matrix3& m) {
-		View		v = View(m);
+		View2<double>		v = View2<double>(m);
 		*this = Euler(v);
 	}
 	Euler operator=(const Euler& e) {
@@ -59,8 +66,13 @@ public:
 	void	psi(const double d)		{ data[0] = d; }
 	void	theta(const double d)	{ data[1] = d; }
 	void	phi(const double d)		{ data[2] = d; }
-	View	view() {
-		View		v(cos(data[2])*sin(data[1]), sin(data[2])*sin(data[1]), 
+//	View	view() {
+//		View		v(cos(data[2])*sin(data[1]), sin(data[2])*sin(data[1]),
+//					cos(data[1]), angle_set_negPI_to_PI(data[0] + data[2]));
+//		return v;
+//	}
+	View2<double>	view() {
+		View2<double>	v(cos(data[2])*sin(data[1]), sin(data[2])*sin(data[1]),
 					cos(data[1]), angle_set_negPI_to_PI(data[0] + data[2]));
 		return v;
 	}

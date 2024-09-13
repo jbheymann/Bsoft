@@ -1,7 +1,7 @@
 /**
 @file	mg_pick.cpp
 @brief	Functions for picking single particle images from a micrograph.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20000505
 @date	Modified: 20210510
 **/
@@ -898,13 +898,13 @@ long		project_pick_background(Bproject* project, long number,
 	return npart;
 }
 
-Bparticle*	part_pick_sym_axis(Bparticle* part, Bsymmetry& sym, View& refview, Vector3<double> refori, double axis_dist)
+Bparticle*	part_pick_sym_axis(Bparticle* part, Bsymmetry& sym, View2<double>& refview, Vector3<double> refori, double axis_dist)
 {
-	long				j, g, s;
+	long				i, j, g;
 	Bparticle*			nupart_list = NULL;
 	Bparticle*			nupart = NULL;
-	View				vr;
-	View*				views, *v;
+	View2<double>		vr;
+	vector<View2<double>>	views;
 	Quaternion			qr, qp;
 	Vector3<double>		tr;
 
@@ -912,21 +912,20 @@ Bparticle*	part_pick_sym_axis(Bparticle* part, Bsymmetry& sym, View& refview, Ve
 		
 	for ( j=0, g=1; part; part = part->next, ++g ) {
 		tr = part->ori - refori + part->loc; 
-		views = symmetry_get_all_views(sym, part->view);
-		for ( s=1, v = views; v; v = v->next, ++s ) {
-			qp = v->quaternion();
-			vr = View(qr*qp);
+		views = sym.get_all_views(part->view2());
+		for ( i=0; i<views.size(); ++i ) {
+			qp = views[i].quaternion();
+			vr = View2<double>(qr*qp);
 			nupart = particle_add(&nupart, ++j);
 			if ( !nupart_list ) nupart_list = nupart;
 			nupart->group = g;
-			nupart->sel = s;
-			nupart->view = vr;
+			nupart->sel = i;
+			nupart->view2(vr);
 			nupart->loc = tr + vr.backward().vector3() * axis_dist;
 			if ( part->loc[2] < 1 ) nupart->loc[2] = 0;	// for micrographs
 			if ( verbose & VERB_FULL )
 				cout << j << tab << nupart->view << endl;
 		}
-		kill_list((char *) views, sizeof(View));
 	}
 
 	return nupart_list;
@@ -950,19 +949,19 @@ long		project_pick_sym_axis(Bproject* project, Bsymmetry& sym, int sym_axis, dou
 	Bmicrograph*		mg;
 	Breconstruction*	rec;
 	Bparticle*			part;
-	View				refview;
+	View2<double>		refview;
 	Vector3<double>		refori;
 
 	if ( sym_axis == 2 ) {
 		if ( sym.point() > 200 && sym.point() < 300 ) {	// Dihedral
-			refview = View(1, 0, 0, 0);
+			refview = View2<double>(1, 0, 0, 0);
 		} else if ( sym.point() == 432 ) {				// Octahedral
-			refview = View(1, -1, 0, 0);
+			refview = View2<double>(1, -1, 0, 0);
 		}
 	} else if ( sym_axis == 3 && sym.point() > 300 ) {	// Tetra-, Octa-, Icosahedral
-		refview = View(1, 1, 1, 0);
+		refview = View2<double>(1, 1, 1, 0);
 	} else if ( sym_axis == 5 && sym.point() == 532 ) {	// Icosahedral
-		refview = View(0, 1.0L/GOLDEN, 1, 0);
+		refview = View2<double>(0, 1.0L/GOLDEN, 1, 0);
 	}
 	
 	if ( verbose ) {
@@ -1014,7 +1013,7 @@ Bimage*		img_prepare_projections(Bstring& tempfile, Bsymmetry& sym, double hires
 	ptemp->check_resolution(hires);
 	
 	double			angle(hires/ptemp->real_size()[0]);
-	View*			views = NULL;
+	vector<View2<double>>	views;
 	Bimage*			proj = NULL;
 	FSI_Kernel*		kernel = NULL;
 
@@ -1025,11 +1024,10 @@ Bimage*		img_prepare_projections(Bstring& tempfile, Bsymmetry& sym, double hires
 			cout << "Angle step size:                " << angle*180.0/M_PI << endl;
 		}
 		kernel = new FSI_Kernel(8, 2);
-		views = asymmetric_unit_views(sym, angle, angle, angle, 1);
-		proj = ptemp->project(views, hires, kernel);
+		views = sym.asymmetric_unit_views(angle, angle, angle, 1);
+		proj = ptemp->project(views, hires, kernel, 0, 0, 1, Real);
 		delete ptemp;
 		ptemp = proj;
-		if ( views ) kill_list((char *) views, sizeof(View));
 		if ( kernel ) delete kernel;
 		if ( verbose ) 
 			cout << "Number of projections:          " << ptemp->images() << endl;
@@ -1083,15 +1081,13 @@ Bimage*		img_prepare_orientations(Bstring& tempfile, Bsymmetry& sym, double hire
 		cout << "Angle step size:                " << angle*180.0/M_PI << endl;
 	}
 	
-	View*			views = asymmetric_unit_views(sym, angle, angle, angle, 1);
+	vector<View2<double>>	views = sym.asymmetric_unit_views(angle, angle, angle, 1);
 
 	Bimage*			pmt = ptemp->orient(views);
 	delete ptemp;
 	
 	ptemp = pmt;
 	
-	if ( views ) kill_list((char *) views, sizeof(View));
-
 	if ( verbose ) 
 			cout << "Number of orientations:         " << ptemp->images() << endl;
 

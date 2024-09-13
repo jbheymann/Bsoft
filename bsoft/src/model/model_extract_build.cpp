@@ -10,7 +10,6 @@
 #include "model_extract_build.h"
 #include "model_util.h"
 #include "file_util.h"
-#include "linked_list.h"
 #include "random_numbers.h"
 #include "utilities.h"
 
@@ -225,9 +224,8 @@ int		component_refine(Bcomponent* comp, Bimage* p, Bimage* ptemp, Bimage* pmask,
 	Vector3<double>	comp_shift;
 	Vector3<double>	shift;
 	
-	View2<float>	comp_view(comp->view());
-	list<View2<float>>	views;
-//	View*			v;
+	View2<double>	comp_view(comp->view());
+	vector<View2<double>>	views;
 	
 	double			tol(1e-6);
 	if ( viewstep && accuracy > viewstep ) accuracy = viewstep;
@@ -235,20 +233,18 @@ int		component_refine(Bcomponent* comp, Bimage* p, Bimage* ptemp, Bimage* pmask,
 
 	int				notdone(1);
 	for ( itm=0; notdone; itm++ ) {
-		views = views_within_limits2(comp_view, viewstep, viewstep, rotstep, viewmax, rotmax);
-//		for ( v = views; v; v = v->next ) {
-		for ( auto v = views.begin(); v != views.end(); ++v ) {
-			shift = component_find_shift2(comp, p, ptemp, pmask, pfsmask, *v, hires, lores,
+		views = views_within_limits(comp_view, viewstep, viewstep, rotstep, viewmax, rotmax);
+		for ( auto v: views ) {
+			shift = component_find_shift2(comp, p, ptemp, pmask, pfsmask, v, hires, lores,
 					shift_limit, shift_flag, planf, planb);
 			cc = comp->FOM();
 			if ( ccmax < cc ) {
 				ccmax = cc;
 				imax = comp->select() - 1;
 				comp_shift = shift;						// Shift in voxels
-				comp_view = *v;
+				comp_view = v;
 			}
 		}
-//		kill_list((char *) views, sizeof(View));
 		if ( fabs(ccp - ccmax) < tol ) {
 			viewstep /= 2;			// Contract around best point
 			rotstep /= 2;
@@ -352,11 +348,11 @@ int			model_refine_components(Bmodel* model, Bstring* ct_names, Bimage* ptemp,
 				if ( ct->select() < 0 ) {
 					if ( ct == model->type ) {
 						model->type = ct2 = ct->next;
-						comp_type_kill(ct);
+						delete ct;
 						ct = ct2;
 					} else {
 						ct2->next = ct->next;
-						comp_type_kill(ct);
+						delete ct;
 						ct = ct2->next;
 					}
 				} else {
@@ -388,11 +384,9 @@ int			model_refine_components(Bmodel* model, Bstring* ct_names, Bimage* ptemp,
 	
 	double			radius = ptemp->sizeX()/2;
 
-	View2<float>	ref_view;
-	list<View2<float>>	views = views_within_limits2(ref_view, viewstep, viewstep, rotstep, max_view_angle, max_rot_angle);
+	View2<double>	ref_view;
+	vector<View2<double>>	views = views_within_limits(ref_view, viewstep, viewstep, rotstep, max_view_angle, max_rot_angle);
 	long			nv = views.size();
-//	long			nv = count_list((char *) views);
-//	kill_list((char *) views, sizeof(View));
 
 	if ( verbose ) {
 		cout << "Refining component positions and views:" << endl;
@@ -790,7 +784,7 @@ Bimage*		model_average_component_density(Bmodel* model, Vector3<long> size, Vect
 			mat = comp->view().matrix();
 			loc = imgori + comp->location()/p->sampling(0);
 			comp->density(p->density(0, loc, radius));
-			pone = p->extract(0, loc, size, origin, View(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
+			pone = p->extract(0, loc, size, origin, View2<double>(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
 			for ( i=n*imgsize, j=0; j<imgsize; i++, j++ ) {
 				pcomp->add(i, (*pone)[j]);
 				fom[i] += (*pone)[j]*(*pone)[j];
@@ -883,7 +877,7 @@ Bimage*		model_extract_component_densities(Bmodel* model, Vector3<long> size, Ve
 		Bcomponent*		comp = carr[i];
 		Vector3<double>	loc(comp->location()/p->sampling(0) + imgori);
 		comp->density(p->density(0, loc, radius));
-		Bimage*			pone = p->extract(0, loc, size, origin, View(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
+		Bimage*			pone = p->extract(0, loc, size, origin, View2<double>(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
 		pcomp->replace(i, pone);
 		delete pone;
 		if ( verbose & VERB_PROCESS )
@@ -895,7 +889,7 @@ Bimage*		model_extract_component_densities(Bmodel* model, Vector3<long> size, Ve
 		Bcomponent*		comp = carr[i];
 		Vector3<double>	loc(comp->location()/p->sampling(0) + imgori);
 		comp->density(p->density(0, loc, radius));
-		Bimage*			pone = p->extract(0, loc, size, origin, View(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
+		Bimage*			pone = p->extract(0, loc, size, origin, View2<double>(comp->view()[0],comp->view()[1],comp->view()[2],comp->view()[3]));
 		pcomp->replace(i, pone);
 		delete pone;
 		if ( verbose & VERB_PROCESS )

@@ -1,8 +1,6 @@
 var rwmodel__param_8h =
 [
     [ "Bmodparam", "class_bmodparam.html", "class_bmodparam" ],
-    [ "Bmaterial", "class_bmaterial.html", "class_bmaterial" ],
-    [ "_Bmaterial_", "rwmodel__param_8h.html#aecca7bd9888687356e6b82557b75a4d1", null ],
     [ "ANGLEMAT_ANGLE", "rwmodel__param_8h.html#a977f87fd418be40e08661cce42212b43", null ],
     [ "ANGLEMAT_COMPTYPE1", "rwmodel__param_8h.html#a326716cdd8b82ef8801f07a473d5bbfd", null ],
     [ "ANGLEMAT_COMPTYPE2", "rwmodel__param_8h.html#acc854ac5fbdae72e16814630f8f9dcf6", null ],
@@ -15,16 +13,16 @@ var rwmodel__param_8h =
     [ "DISTMAT_KL", "rwmodel__param_8h.html#ab30523009496d2b2784b921f3e2d9e84", null ],
     [ "DISTMAT_LLEN", "rwmodel__param_8h.html#a3b172492e7b0dd9dd2be3d025fa6e9d3", null ],
     [ "DISTMAT_POTTYPE", "rwmodel__param_8h.html#a68c15f3405430e41743d999609ded8f1", null ],
-    [ "MATERIAL_DENS_UNIT", "rwmodel__param_8h.html#abf3fd20311d035d732828eecfdf37beb", null ],
-    [ "MATERIAL_DENSITY", "rwmodel__param_8h.html#a439f88fa0813cba027d2b5d6aa98b314", null ],
-    [ "MATERIAL_NAME", "rwmodel__param_8h.html#ae5475db684f782c7c84d23aa0ab7a4f1", null ],
+    [ "material_from_model", "rwmodel__param_8h.html#acdf8dc08a4565add25077062a8e6b358", null ],
     [ "model_param_generate", "rwmodel__param_8h.html#ae900f41ca71eb66aa03acc60e21579ed", null ],
     [ "model_param_generate", "rwmodel__param_8h.html#a25b0d81f58e52671f75789521bb1202d", null ],
     [ "model_param_set_type_indices", "rwmodel__param_8h.html#a11558e7b3c08feafe5167c92a96ff242", null ],
-    [ "read_atom_properties", "rwmodel__param_8h.html#aa2354dc926b2b7baaa9ef6aa75831baf", null ],
-    [ "read_dynamics_parameters", "rwmodel__param_8h.html#a84dd6f185b8a5b304288409f88aa60ae", null ],
-    [ "read_material_properties", "rwmodel__param_8h.html#a4478aca7214ff83ccde4c51058f17b27", null ],
-    [ "update_dynamics_parameters", "rwmodel__param_8h.html#a3fcbcbcff9070dfa1a2d4abe6d027aba", null ],
-    [ "write_dynamics_parameters", "rwmodel__param_8h.html#a01807d6670aa2ea133625e38a154f6a2", null ],
-    [ "write_material_properties", "rwmodel__param_8h.html#a9e68f97fbf05898df750952e412a34bd", null ]
+    [ "model_update_reference_parameters", "rwmodel__param_8h.html#a558a28ed7a20f84dee1e3876542ec783", null ],
+    [ "read_atom_properties", "rwmodel__param_8h.html#af4bf7acb8a388dc05dbe9fbc2c305ce3", null ],
+    [ "read_dynamics_parameters", "rwmodel__param_8h.html#a2649bc96ed1fe9c87605a76946cf9986", null ],
+    [ "read_material_properties", "rwmodel__param_8h.html#a669497850e7234825c80519349e2c04a", null ],
+    [ "read_material_properties", "rwmodel__param_8h.html#ab9b96b0bae26822d0516945ec24d3548", null ],
+    [ "update_dynamics_parameters", "rwmodel__param_8h.html#a27bfa34bc3f29d33873f3de93cfc298c", null ],
+    [ "write_dynamics_parameters", "rwmodel__param_8h.html#ad7568324dbe6f92a8a020fa2001791c0", null ],
+    [ "write_material_properties", "rwmodel__param_8h.html#a0d540f4a46598bb036938c39122bb7a9", null ]
 ];

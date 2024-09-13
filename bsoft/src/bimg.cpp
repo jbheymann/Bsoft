@@ -341,7 +341,7 @@ int 		main(int argc, char **argv)
 	delete p;
 	order = 0;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

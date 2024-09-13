@@ -3,7 +3,7 @@
 @brief	Generates and manipulates projects for multislice calculations 
 @author	Bernard Heymann
 @date	Created: 20030805
-@date	Modified: 20160604
+@date	Modified: 20240905
 **/
 
 #include "mg_processing.h"
@@ -13,7 +13,6 @@
 #include "mol_edit.h"
 #include "Complex.h"
 #include "Vector3.h"
-#include "linked_list.h"
 #include "random_numbers.h"
 #include "utilities.h"
 
@@ -26,40 +25,33 @@ extern int 	verbose;		// Level of output to the screen
 @param 	sam			pixel size in x and y, slice thickness in z.
 @param 	thickness	slice thickness (in angstrom).
 @param 	volt		acceleration voltage (volt).
-@param 	resolution	resolution limit (angstrom).
 @return Bimage*	 	wave propagation function image.
 **/
 Bimage*		img_calc_wave_propagator(Vector3<long> size, Vector3<double> sam,
-				double thickness, double volt, double resolution)
+				double thickness, double volt)
 {
 	Bimage*			p = new Bimage(Float, TComplex, size[0], size[1], 1, 1);
 	p->sampling(sam);
-	if ( resolution < sam[0] || resolution > 1000 )
-		resolution = sam[0];
 	
 	long			i, h, k, x, y;
 	double			wavelength = electron_wavelength(volt);
-	double			arg, sx2, sy2, s2;
+	double			arg, sx2, sy2;
 	double			afactor = M_PI*wavelength*thickness;
-	double			nfactor = 1.0/(p->sizeX()*p->sizeY());	// Normalization for passing through FFT's
-	double			resmax2 = 1.0/(resolution*resolution);
+//	double			nfactor = 1.0/(p->sizeX()*p->sizeY());	// Normalization for passing through FFT's
 	double			xscale2 = 1.0/(p->sizeX()*p->sizeX()*sam[0]*sam[0]);
 	double			yscale2 = 1.0/(p->sizeY()*p->sizeY()*sam[1]*sam[1]);
 	
-	for ( y=0; y<p->sizeY(); y++ ) {
+	for ( i=y=0; y<p->sizeY(); ++y ) {
 		k = y;
 		if ( k > (p->sizeY()-1)/2 ) k -= p->sizeY();
 		sy2 = k*k*yscale2;
-		if ( sy2 <= resmax2 ) for ( x=0; x<p->sizeX(); x++ ) {
+		for ( x=0; x<p->sizeX(); ++x, ++i ) {
 			h = x;
 			if ( h > (p->sizeX()-1)/2 ) h -= p->sizeX();
 			sx2 = h*h*xscale2;
-			s2 = sx2 + sy2;
-			if ( s2 <= resmax2 ) {
-				i = y*p->sizeX() + x;
-				arg = afactor*s2;
-				p->set(i, Complex<double>(cos(arg), sin(arg)) * nfactor);
-			}
+			arg = afactor*(sx2 + sy2);
+//			p->set(i, Complex<double>(cos(arg), sin(arg)) * nfactor);
+			p->set(i, Complex<double>(cos(arg), sin(arg)));
 		}
 	}
 	
@@ -71,10 +63,10 @@ Bimage*		img_calc_wave_propagator(Vector3<long> size, Vector3<double> sam,
 /**
 @brief 	Simulates the electron imaging process using a multi-slice approach.
 @param 	*pgrate			phase grating multi-image.
-@param 	thickness			slice thickness (in angstrom).
-@param 	volt	 			acceleration voltage (volt).
-@param 	resolution		resolution limit (angstrom).
-@return Bimage*	 				simulated projection image transform.
+@param 	thickness		slice thickness (in angstrom).
+@param 	volt	 		acceleration voltage (volt).
+@param	norm			flag to normalize accross slices.
+@return Bimage*	 		simulated projection image transform.
 
 	The passage of the electron beam is simulated as the interaction of
 	a planar wave with successive planar phase gratings spaced at regular 
@@ -86,40 +78,94 @@ Bimage*		img_calc_wave_propagator(Vector3<long> size, Vector3<double> sam,
 		Elsevier Science, Amsterdam.
 
 **/
-Bimage*		img_calc_multi_slice(Bimage* pgrate, double thickness, double volt, double resolution)
+Bimage*		img_calc_multi_slice(Bimage* pgrate, double thickness, double volt, bool norm)
 {
 	Vector3<long>	size(pgrate->size());
 	
 	// wavelength & size - loop one slice -> propagator (one 2D image)
-	Bimage*			prop = img_calc_wave_propagator(size, pgrate->sampling(0), thickness, volt, resolution);
+	Bimage*			prop = img_calc_wave_propagator(size, pgrate->sampling(0), thickness, volt);
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Multislice simulation:" << endl;
+		cout << "Acceleration voltage:           " << volt << " V" << endl;
+		cout << "Slice thickness:                " << thickness << " A" << endl;
+//		cout << "Normalization:                  " << norm << endl << endl;
+	}
 	
 	// For all slices: Multiply previous exitwave with phasegrating - FFT - 
 	// multiply with propagator - FFT-1 - next slice -> exitwave (one 2D image)
-	long   i;
+	long   			n;
 	Bimage*			p = new Bimage(Float, TComplex, size[0], size[1], 1, 1);
 	p->label(pgrate->label());
 	p->fourier_type(NoTransform);
 	p->origin(pgrate->image->origin());
 	p->sampling(pgrate->sampling(0));
 	
-	long	slice_size = size[0]*size[1];
-	Complex<double>	cv(1);
-	for ( i=0; i<slice_size; i++ ) p->set(i, cv);
+	long			slice_size(size[0]*size[1]);
+	Complex<double>	cv(1,0);
+	for ( n=0; n<slice_size; ++n ) p->set(n, cv);
 	
 	Bimage* 		ptemp;
-	for ( i=0; i<pgrate->images(); i++ ) {
-		ptemp = pgrate->extract(i);					// Get phase grating slice
-		p->complex_product(ptemp);				// Multiply with current wave
+	for ( n=0; n<pgrate->images(); ++n ) {
+//		cout << n << endl;
+		ptemp = pgrate->extract(n);			// Get phase grating slice
+		p->complex_product(ptemp);			// Multiply with current wave
 		delete ptemp;
-		p->fft(FFTW_FORWARD, 0);		// Normalization in propagator
-		if ( i < pgrate->images()-1 ) {
-			p->complex_product(prop);			// Multiply with propagator
-			p->fft(FFTW_BACKWARD, 0);	// Normalization in propagator
+//		p->fft(FFTW_FORWARD, 0);			// Normalization in propagator
+		p->fft();
+		if ( n < pgrate->images()-1 ) {
+			p->complex_product(prop);		// Multiply with propagator
+//			p->fft(FFTW_BACKWARD, 0);		// Normalization in propagator
+			p->fft(FFTW_BACKWARD, 1);
 		}
 	}
 	
 	delete prop;
 	
+//	if ( norm ) p->multiply(1.0/n);
+
+	return p;
+}
+
+Bimage*		img_project_multi_slice(Bimage* pgrate, double thickness, double volt)
+{
+	Vector3<long>	size(pgrate->size());
+	
+	Bimage*			prop = img_calc_wave_propagator(size, pgrate->sampling(0), thickness, volt);
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Projection multislice simulation:" << endl;
+		cout << "Acceleration voltage:           " << volt << " V" << endl;
+		cout << "Slice thickness:                " << thickness << " A" << endl;
+	}
+	
+	long   			n;
+	Bimage*			p = new Bimage(Float, TComplex, size[0], size[1], 1, 1);
+	p->label(pgrate->label());
+	p->fourier_type(Standard);
+	p->origin(pgrate->image->origin());
+	p->sampling(pgrate->sampling(0));
+	
+	Bimage*			prop2 = prop->copy();
+	Bimage* 		ptemp;
+	for ( n=0; n<pgrate->images(); ++n ) {
+		ptemp = pgrate->extract(n);			// Get phase grating slice
+		ptemp->fft();
+		if ( n ) {
+			ptemp->complex_product(prop2);	// Multiply with propagator
+			prop2->multiply(prop); 
+		}
+		p->add(ptemp);						// Add to current wave
+		delete ptemp;
+	}
+	
+	delete prop;
+	delete prop2;
+	
+	p->multiply(1.0/n);
+
+//	p->fft(FFTW_BACKWARD, 1);
+
 	return p;
 }
 
@@ -140,8 +186,8 @@ Bimage*		img_calc_potential(Bmolgroup* molgroup, Vector3<long> size, Vector3<dou
 				Vector3<double> sam, double thickness, double resolution, double Bfactor,
 				Bstring& paramfile, int type)
 {
-	// Atoms & scat cross-sections - Loop slices - calc 2D reciprocal space structure factors 
-	long			i, j, k;
+	// Atoms & scat cross-sections - Loop slices - calc 2D reciprocal space structure factors
+	long			i;
 	int				nslices(0);
 	Bmolgroup**		slice_molgroup = molgroup_split_into_slices(molgroup, thickness, nslices);
 	
@@ -152,7 +198,6 @@ Bimage*		img_calc_potential(Bmolgroup* molgroup, Vector3<long> size, Vector3<dou
 	UnitCell		unit_cell(sam[0]*size[0],sam[1]*size[1],sam[2]*size[2],M_PI_2,M_PI_2,M_PI_2);
 	Bimage*			ptemp = NULL;
 	Bimage*			p = new Bimage(Float, TComplex, size[0], size[1], 1, nslices);
-	long   imgsize = p->sizeX()*p->sizeY()*p->channels();
 	p->label(molgroup->comment.str());
 	p->unit_cell(unit_cell);
 	p->sampling(sam[0], sam[1], thickness);
@@ -164,7 +209,6 @@ Bimage*		img_calc_potential(Bmolgroup* molgroup, Vector3<long> size, Vector3<dou
 			size[2] = (int) (thickness/sam[2] + 1);
 			ptemp = img_from_molecule(slice_molgroup[i], origin, size, sam, 
 					resolution, 0.001, 0, 2 - type, spacegroup, unit_cell);
-//			img_project(ptemp);
 			ptemp->project('z', 1);
 			ptemp->simple_to_complex();
 		} else {
@@ -177,7 +221,7 @@ Bimage*		img_calc_potential(Bmolgroup* molgroup, Vector3<long> size, Vector3<dou
 					resolution, spacegroup, unit_cell, 2, Bfactor, paramfile);
 			ptemp->fft(FFTW_BACKWARD, 0);	// No normalization - get actual potential at the beam
 		}
-		for ( j=0, k=i*imgsize; j<imgsize; j++, k++ ) p->set(k, (*ptemp)[j]);
+		p->replace(i, ptemp);
 		delete ptemp;
 		p->origin(i, origin);
 		if ( verbose )
@@ -196,26 +240,32 @@ Bimage*		img_calc_potential(Bmolgroup* molgroup, Vector3<long> size, Vector3<dou
 
 /**
 @brief 	Calculates the phase grating approximation from the atomic potential.
+@param 	*p				atomic potential image (modified).
+@param 	volt			acceleration voltage (volt).
+@param	norm			flag to normalize accross slices.
+@return int 				0.
 
 	All calculations are complex.
 
-@param 	*p				atomic potential image (modified).
-@param 	volt				acceleration voltage (volt).
-@return int 					0.
 **/
-int			img_calc_phase_grating(Bimage* p, double volt)
+int			img_calc_phase_grating(Bimage* p, double volt, bool norm)
 {
 	p->simple_to_complex();
 	
-	long   i, j, n;
-	long   imgsize = p->sizeX()*p->sizeY();
-	double			wavelength = electron_wavelength(volt);	
+	long   			i, j, n;
+	long   			imgsize = p->sizeX()*p->sizeY();
 	double			arg;
-	double			sigma = 0.0208886 * wavelength * 
-						sqrt(1 + 5.8886579e-4/(wavelength*wavelength));	// According to Roar Kilaas
-	
-	if ( verbose & VERB_FULL )
+
+//	double			wavelength = electron_wavelength(volt);
+//	double			sigma = 0.0208886 * wavelength *
+//						sqrt(1 + 5.8886579e-4/(wavelength*wavelength));	// According to Roar Kilaas
+	double			sigma = 1e-10*TWOPI*ECHARGE/(PLANCK*LIGHTSPEED*beta(volt));
+		
+//	if ( verbose & VERB_FULL )
+	if ( verbose )
 		cout << "Sigma (interaction factor):     " << sigma << endl;
+
+	if ( norm ) sigma /= p->images();
 
 	for ( i=n=0; n<p->images(); n++ ) {
 		for ( j=0; j<imgsize; i++, j++ ) {
@@ -229,40 +279,21 @@ int			img_calc_phase_grating(Bimage* p, double volt)
 
 /**
 @brief 	Applies a complex CTF function to a Fourier transform.
-@param 	*p				complex Fourier transform (modified).
-@param 	def_avg			defocus minimum (angstrom).
-@param 	def_dev			defocus maximum (angstrom).
-@param 	ast_angle 		astigmatism angle (radians).
-@param 	volts 			acceleration voltage (volts).
-@param 	Cs				spherical aberration (angstrom).
-@param 	Cc				chromatic aberration (angstrom).
-@param 	amp_shift		amplitude contrast phase shift (radian).
-@param 	alpha			beam source size (radians).
-@param 	energy_spread	effective energy spread (fraction: typically 10^-5)
+@param 	*p			complex Fourier transform (modified).
+@param 	&cp			CTF parameters.
 @return int 			0.
 
 
-	The CTF is applied as a multiplication with a complex number:
-		new_datum.re = datum.re*amp_fac*cos(dphi) - datum.im*phi_fac*sin(dphi)
-		new_datum.re = datum.re*phi_fac*sin(dphi) + datum.im*amp_fac*cos(dphi)
+	The CTF is applied as a multiplication with a complex number.
 	Both input and output are complex transforms.
 
 
 **/
-int			img_apply_complex_CTF(Bimage* p, double def_avg, double def_dev, double ast_angle,
-				double volts, double Cs, double Cc, double amp_shift, double alpha, double energy_spread)
+int			img_apply_complex_CTF(Bimage* p, CTFparam& cp)
 {
 	
-	long	i, n, x, y, z;
-	double			xx, yy, zz, sx2, sy2, sz2, s, s2, defocus, dphi, env, arg;
-//	double			phi_fac = sqrt(1-amp_fac*amp_fac);
-    double			lambda = electron_wavelength(volts);
-	double			hpil3Cs = M_PI_2*lambda*lambda*lambda*Cs;
-	double			pil = M_PI*lambda;
-	double			pialf = M_PI*alpha;
-	double			Csl2 = Cs*lambda*lambda;
-	double			focus_spread = Cc*energy_spread;
-	double			pi2l2df2 = M_PI*M_PI*lambda*lambda*focus_spread*focus_spread/(16.0*log(2.0));
+	long			i, n, x, y, z;
+	double			xx, yy, zz, sx2, sy2, sz2, s2, env;
 	Complex<double>	ctf;
 	Vector3<double>	freq_scale(1.0/p->real_size());
 	
@@ -270,15 +301,7 @@ int			img_apply_complex_CTF(Bimage* p, double def_avg, double def_dev, double as
 		cout << "Applying a CTF to a complex Fourier transform" << endl;
 
 	if ( verbose & VERB_PROCESS ) {
-		cout << "Defocus average & deviation:    " << def_avg << " A " << def_dev << " A" << endl;
-		cout << "Astigmatism angle:              " << ast_angle*180/M_PI << " degrees" << endl;
-		cout << "Voltage:                        " << volts << " V" << endl;
-		cout << "Wavelength:                     " << lambda << endl;
-		cout << "Cs:                             " << Cs << " A" << endl;
-		cout << "Cc:                             " << Cc << " A" << endl;
-		cout << "Amplitude contrast phase shift: " << amp_shift << endl;
-		cout << "Beam source size:               " << alpha << " radians" << endl;
-		cout << "Energy spread (focus spread):   " << energy_spread << " (" << focus_spread << " A)" << endl << endl;
+		cp.show();
 	}
 	
 	for ( i=n=0; n<p->images(); n++ ) {
@@ -298,15 +321,8 @@ int			img_apply_complex_CTF(Bimage* p, double def_avg, double def_dev, double as
 					sx2 = freq_scale[0]*xx;
 					sx2 *= sx2;
 					s2 = sx2 + sy2 + sz2;
-					s = sqrt(s2);
-					defocus = def_avg + def_dev*cos(2*(atan2(yy,xx)-ast_angle));
-	    		    dphi = (hpil3Cs*s2 - pil*defocus)*s2 - amp_shift;
-					arg = pialf*(Csl2*s2 - defocus)*s;
-//					arg = pialf*defocus*s;
-					arg = arg*arg + pi2l2df2*s2*s2;
-					env = exp(-arg);
-					//env=1;//dphi -= arg*arg;
-					ctf = Complex<double>(cos(dphi), sin(dphi));
+					ctf = cp.calculate_complex(sqrt(s2), atan2(yy,xx));
+					env = cp.partial_coherence_and_energy_spread(s2);
 					p->set(i, ((*p)[i] * ctf) * env);
 				}
 			}
@@ -323,12 +339,7 @@ int			img_apply_complex_CTF(Bimage* p, double def_avg, double def_dev, double as
 @param 	npart			number of particles per micrograph.
 @param 	pixel_size		micrograph pixel size.
 @param 	img_origin		image origin within the simulation box.
-@param 	volt			acceleration voltage (volts).
-@param 	Cs				spherical aberration coefficient (angstrom).
-@param 	Cc				chromatic aberration coefficient (angstrom).
-@param 	alpha			beam divergence angle (radians).
-@param 	energy_spread	energy spread (relative units).
-@param 	amp_shift		amplitude contribution phase shift (radian).
+@param 	cp				CTF parameters).
 @param 	def_min			defocus minimum (angstrom).
 @param 	def_max			defocus maximum (angstrom).
 @param 	dose			electron dose (e/angstrom^2).
@@ -339,12 +350,11 @@ int			img_apply_complex_CTF(Bimage* p, double def_avg, double def_dev, double as
 @param 	fieldnumber		field-of-view number.
 @param 	mgnumber		micrograph number.
 @param 	partnumber		particle number.
-@return Bproject*		project structure.
+@return Bproject*			project structure.
 **/
 Bproject*	project_generate(int nfield, int nmg, int npart,
 				Vector3<double> pixel_size, double img_origin,
-				double volt, double Cs, double Cc, double alpha, double energy_spread,
-				double amp_shift, double def_min, double def_max, double dose, 
+				CTFparam& cp, double def_min, double def_max, double dose,
 				double tsigma, Bstring& fieldbase, Bstring& mgbase, Bstring& partbase,
 				int fieldnumber, int mgnumber, int partnumber)
 {
@@ -356,7 +366,7 @@ Bproject*	project_generate(int nfield, int nmg, int npart,
 	int				i, j, k, block = 0;
 	double			irm = 1.0/get_rand_max(), irm2 = 2*irm;
 	Vector3<float>	t;
-	View*			v = new View[npart];
+	vector<View2<double>>	v(npart);
 	Bproject*		project = new Bproject;
 	Bfield* 		field = NULL;
 	Bmicrograph*	mg = NULL;
@@ -375,7 +385,7 @@ Bproject*	project_generate(int nfield, int nmg, int npart,
 		if ( project->field ) field = field_add(&field, field_id);
 		else field = field_add(&project->field, field_id);
 		for ( k=0; k<npart; k++ ) {
-			v[k] = View(random()*irm2 - 1, random()*irm2 - 1, random()*irm2 - 1, M_PI*(random()*irm2 - 1));
+			v[k] = View2<double>(random()*irm2 - 1, random()*irm2 - 1, random()*irm2 - 1, M_PI*(random()*irm2 - 1));
 			v[k].normalize();
 		}
 		for ( j=0; j<nmg; j++ ) {
@@ -386,13 +396,8 @@ Bproject*	project_generate(int nfield, int nmg, int npart,
 			block++;
 			mg->fpart = partbase + Bstring(fieldnumber, "_%03d") + Bstring(mgnumber, "_%03d.spi");
 			if ( !mg->ctf ) mg->ctf = new CTFparam;
+			mg->ctf->update(cp);
 			mg->ctf->defocus_average(def_range*random()*irm + def_min);
-			mg->ctf->volt(volt);
-			mg->ctf->Cs(Cs);
-			mg->ctf->Cc(Cc);
-			mg->ctf->alpha(alpha);
-			mg->ctf->dE(energy_spread);
-			mg->ctf->amp_shift(amp_shift);
 			mg->pixel_size = pixel_size;
 			mg->dose = dose;
 			mg->box_size[0] = mg->box_size[1] = (int) (2*img_origin);
@@ -405,7 +410,7 @@ Bproject*	project_generate(int nfield, int nmg, int npart,
 				if ( mg->part ) part = particle_add(&part, k+partnumber);
 				else part = particle_add(&mg->part, k+partnumber);
 				if ( tsigma > 0 ) t = vector3_xy_random_gaussian(0.0, (double)tsigma);
-				part->view = v[k];
+				part->view2(v[k]);
 				part->loc[0] = part->loc[1] = img_origin;
 				part->ori = t + img_origin;
 				part->ori[2] = 0;
@@ -415,35 +420,27 @@ Bproject*	project_generate(int nfield, int nmg, int npart,
 		fieldnumber++;
 	}	
 	
-	delete[] v;
-	
 	return project;
 }
 
 /**
 @brief 	Generates a project for multislice calculations of an asymmetric unit.
 @param 	&symmetry_string   symmetry designation.
-@param 	pixel_size			micrograph pixel size.
-@param 	img_origin			image origin within the simulation box.
-@param 	theta_step			step size in theta (radians).
-@param 	phi_step			step size in phi (radians).
-@param 	volt				acceleration voltage (volts).
-@param 	Cs					spherical aberration coefficient (angstrom).
-@param 	Cc					chromatic aberration coefficient (angstrom).
-@param 	alpha				beam divergence angle (radians).
-@param 	energy_spread		energy spread (relative units).
-@param 	amp_shift			amplitude contribution (fraction).
-@param 	defocus				defocus minimum (angstrom).
-@param 	dose				electron dose (e/angstrom^2).
-@param 	&mgbase				micrograph base name.
-@param 	&partbase			particle image base name.
-@return Bproject*					project structure.
+@param 	pixel_size		micrograph pixel size.
+@param 	img_origin		image origin within the simulation box.
+@param 	theta_step		step size in theta (radians).
+@param 	phi_step		step size in phi (radians).
+@param 	cp				CTF parameters).
+@param 	defocus			defocus minimum (angstrom).
+@param 	dose			electron dose (e/angstrom^2).
+@param 	&mgbase			micrograph base name.
+@param 	&partbase		particle image base name.
+@return Bproject*			project structure.
 **/
-Bproject*	project_generate_asu(Bstring& symmetry_string,
+Bproject*	project_generate_asu(string& symmetry_string,
 				Vector3<double> pixel_size, double img_origin,
 				double theta_step, double phi_step,
-				double volt, double Cs, double Cc, double alpha, double energy_spread,
-				double amp_shift, double defocus, double dose, Bstring& mgbase, Bstring& partbase)
+				CTFparam& cp, double defocus, double dose, Bstring& mgbase, Bstring& partbase)
 {
 	int				k, npart;
 	Bproject*		project = new Bproject;
@@ -451,35 +448,27 @@ Bproject*	project_generate_asu(Bstring& symmetry_string,
 	Bmicrograph*	mg = NULL;
 	Bparticle*		part = NULL;
 
-	Bsymmetry 	sym(symmetry_string);
-	View*		view = asymmetric_unit_views(sym, theta_step, phi_step, 0);
-	View*		v;
-	for ( v=view, npart=0; v; v=v->next ) npart++;
+	Bsymmetry 		sym(symmetry_string);
+	vector<View2<double>>	view = sym.asymmetric_unit_views(theta_step, phi_step, 0);
+	npart = view.size();
 
 	field = field_add(&project->field, mgbase);
 	mg = micrograph_add(&field->mg, mgbase);
 	mg->block = 0;
 	mg->fpart = partbase + ".spi";
 	if ( !mg->ctf ) mg->ctf = new CTFparam;
+	mg->ctf->update(cp);
 	mg->ctf->defocus_average(defocus);
-	mg->ctf->volt(volt);
-	mg->ctf->Cs(Cs);
-	mg->ctf->Cc(Cc);
-	mg->ctf->alpha(alpha);
-	mg->ctf->dE(energy_spread);
-	mg->ctf->amp_shift(amp_shift);
 	mg->pixel_size = pixel_size;
 	mg->dose = dose;
 	mg->box_size[0] = mg->box_size[1] = (int) (2*img_origin);
 	mg->box_size[2] = 1;
-	for ( k=0, v=view; k<npart && v; k++, v=v->next ) {
+	for ( k=0; k<npart; ++k ) {
 		if ( mg->part ) part = particle_add(&part, k+1);
 		else part = particle_add(&mg->part, k+1);
-		part->view = *v;
+		part->view2(view[k]);
 		part->loc = part->ori = Vector3<float>(img_origin, img_origin, 0);
 	}
-	
-	kill_list((char *) view, sizeof(View));
 	
 	return project;
 }
@@ -564,7 +553,7 @@ int			project_generate_potential(Bmolgroup* molgroup, Bmolgroup* water, Bproject
 						cout << "Calculating potentials for particle " << part->id << endl;
 					t = (part->ori - part->loc) * sampling3;
 //					cout << "origin=" << origin << " shift=" << t << endl;
-					mol_rot = molgroup_rotate_from_view(molgroup, part->view, rot_ori, t);
+					mol_rot = molgroup_rotate_from_view(molgroup, part->view2(), rot_ori, t);
 					if ( water ) {
 						mol_sim = molgroup_copy(water);
 						molgroup_coor_shift_PBC(mol_sim, vector3_random(-ranshift, ranshift));
@@ -615,7 +604,7 @@ int			project_generate_image(Bproject* project, double thickness, double resolut
 	if ( resolution < 2*project->field->mg->pixel_size[0] )
 		resolution = 2*project->field->mg->pixel_size[0];
 	
-	long	i, j, k, npart;
+	long			i, j, k, npart;
 	Bfield* 		field = NULL;
 	Bmicrograph*	mg = NULL;
 	Bparticle*		part = NULL;
@@ -643,17 +632,16 @@ int			project_generate_image(Bproject* project, double thickness, double resolut
 				potname = potname.pre_rev('.') + Bstring(part->id, "_%03d.") + potname.post_rev('.');
 				ppot = read_img(potname, 1, -1);
 				ppot->simple_to_complex();
-				img_calc_phase_grating(ppot, mg->ctf->volt());
-				pone = img_calc_multi_slice(ppot, thickness, mg->ctf->volt(), resolution);
+				img_calc_phase_grating(ppot, mg->ctf->volt(), 0);
+				pone = img_calc_multi_slice(ppot, thickness, mg->ctf->volt(), 0);
 				for ( j=i*imgsize, k=0; k<imgsize; j++, k++ ) p->set(j, (*pone)[k]);
 				p->image[i] = ppot->image[0];
 				delete ppot;
 				delete pone;
 			}
 			if ( mg->ctf->defocus_average() )
-				img_apply_complex_CTF(p, mg->ctf->defocus_average(), mg->ctf->defocus_deviation(), mg->ctf->astigmatism_angle(),
-					mg->ctf->volt(), mg->ctf->Cs(), mg->ctf->Cc(), mg->ctf->amp_shift(), mg->ctf->alpha(), mg->ctf->dE());
-			p->fft(FFTW_BACKWARD, 2);
+				img_apply_complex_CTF(p, *mg->ctf);
+			p->fft(FFTW_BACKWARD, 2, Real);
 			p->complex_to_intensities();
 			p->statistics();
 			write_img(mg->fpart, p, 0);
@@ -688,7 +676,7 @@ int			project_apply_distortions(Bproject* project, int poisson, double gauss, do
 				cout << "Applying distortions to micrograph " << mg->id << endl;
 			p = read_img(mg->fpart, 1, -1);
 			if ( p->compound_type() == TComplex ) {
-				p->fft(FFTW_BACKWARD, 2);
+				p->fft(FFTW_BACKWARD, 2, Real);
 				p->complex_to_intensities();
 			} else {
 				p->change_type(Float);

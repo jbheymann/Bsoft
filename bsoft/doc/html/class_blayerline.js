@@ -1,6 +1,7 @@
 var class_blayerline =
 [
     [ "Blayerline", "class_blayerline.html#a47274c5f9f6f5c87a2331136dae77ee5", null ],
+    [ "count", "class_blayerline.html#ac3b1a46fdde21282b04bc19a48224069", null ],
     [ "amp", "class_blayerline.html#ad659e6ad60ea6ebb5df50a23e57eea32", null ],
     [ "distance", "class_blayerline.html#a533e818447d74899e16a4d546a5c3156", null ],
     [ "fom", "class_blayerline.html#a40e1e289bf0c467af4c173baa29823b0", null ],

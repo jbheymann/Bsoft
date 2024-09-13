@@ -1,24 +1,51 @@
 /**
 @file	rwmodel_param.cpp
 @brief	Library routines to read and write model dynamics parameters in STAR format
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20100305
-@date	Modified: 20210326
+@date	Modified: 20230717
 **/
 
 #include "rwmodel_param.h"
 #include "rwmodel_star.h"
-#include "rwstar.h"
 #include "star.h"
 #include "json.h"
 #include "model_tags.h"
 #include "mol_tags.h"
-#include "linked_list.h"
+#include "file_util.h"
 #include "string_util.h"
 #include "utilities.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
+
+
+/**
+@brief 	Generates material from a model file.
+@param 	*model			linked list of models.
+@return Bmodparam*		new model parameter structure.
+**/
+Bmaterial	material_from_model(Bmodel* model)
+{
+	Bmaterial				material(model->identifier());
+	map<string,Bcomptype>&	types = material.composition();
+	material.density(RHO, DA_A3);
+	
+	Bmodel*				mp;
+	Bcomponent*			comp;
+	string				el;
+
+    for ( mp = model; mp; mp = mp->next )
+		for( comp = mp->comp; comp; comp = comp->next ) {
+			el = comp->element();
+			if ( types.find(el) != types.end() )
+					types[el].component_count_increment();
+				else
+					types[el].component_count(1);
+		}
+	
+	return material;
+}
 
 
 /**
@@ -43,10 +70,10 @@ Bmodparam	model_param_generate(Bmodel* model)
 
 int			model_param_generate(Bmodparam& md, Bmodel* model)
 {
-	int				i, j, k, l1, l2, num, n;
+	int				i, j, k, l1, l2, num(0), n;
 	double			d, a;
 	string			id;
-	Bmodel*			m;
+	Bmodel*			mp;
 	Bcomptype*		c;
 	Bcomponent*		comp1;
 	Bcomponent*		comp2;
@@ -54,7 +81,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	Vector3<float>	v1, v2;
 	
 	if ( verbose )
-		cout << "Generating a distance parameter matrix from " << model->identifier() << endl << endl;
+		cout << "Generating a component distance matrix from " << model->identifier() << endl << endl;
 	
 	map<string,Bcomptype>&		ct = md.comptype;
 	ct.clear();
@@ -67,8 +94,8 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	
 	vector<string>				ids;
 	
-	for ( num=0, m = model; m; m = m->next ) {
-		for ( c = m->type; c; c = c->next ) {
+	for ( num=0, mp = model; mp; mp = mp->next ) {
+		for ( c = mp->type; c; c = c->next ) {
 			id = c->identifier();
 			if ( ct.find(id) == ct.end() ) {
 				c->index(num);
@@ -80,7 +107,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	}
 	
 	if ( verbose )
-		cout << "Number of component types found: " << num << endl << endl;
+		cout << "Number of component types:      " << num << endl << endl;
 
 	lt.resize(num);
 	for ( i=0; i<num; ++i ) {
@@ -95,7 +122,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	}
 	
 	if ( verbose )
-		cout << "Link arrays set up: " << lt.size() << endl;
+		cout << "Link arrays set up:             " << lt.size() << endl;
 
 	at.resize(num);
 	for ( i=0; i<num; ++i ) {
@@ -113,22 +140,22 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	}
 
 	if ( verbose )
-		cout << "Angle arrays set up: " << at.size() << endl;
+		cout << "Angle arrays set up:            " << at.size() << endl;
 
 	// Set up link lengths and distances to the shortest for each link or pair
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG model_param_generate: Setting up link parameters" << endl;
-	for ( n=0, m = model; m; m = m->next ) if ( m->comp ) {
+	for ( n=0, mp = model; mp; mp = mp->next ) if ( mp->comp ) {
 //		cout << "model " << m->identifier() << endl;
-		for ( comp1 = m->comp; comp1->next; comp1 = comp1->next ) {
+		for ( comp1 = mp->comp; comp1->next; comp1 = comp1->next ) {
 			if ( !comp1->type() ) {
-				cerr << "Error: Type not defined! model = " << m->identifier() << ":" << comp1->identifier() << endl;
+				cerr << "Error: Type not defined! model = " << mp->identifier() << ":" << comp1->identifier() << endl;
 				bexit(-1);
 			}
 			i = comp1->type()->index();
 			for ( comp2 = comp1->next; comp2; comp2 = comp2->next ) {
 				if ( !comp2->type() ) {
-					cerr << "Error: Type not defined! model = " << m->identifier() << ":" << comp2->identifier() << endl;
+					cerr << "Error: Type not defined! model = " << mp->identifier() << ":" << comp2->identifier() << endl;
 					bexit(-1);
 				}
 				j = comp2->type()->index();
@@ -136,6 +163,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 //				cout << i << tab << j << tab << d << endl;
 				Blinktype&	lt1 = lt[i][j];
 				if ( comp1->find_link_exists(comp2) ) {
+					cout << i << tab << j << tab << d << endl;
 					if ( lt1.length() > d ) lt1.length(d);
 					n++;
 				} else {
@@ -147,14 +175,14 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	}
 
 	if ( verbose )
-		cout << "Link reference distances set up: " << n << endl;
+		cout << "Link reference distances:       " << n << endl;
 
 	// Set up angles to the smallest for each triplet of component types
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG model_param_generate: Setting up angle parameters" << endl;
-	for ( n=0, m = model; m; m = m->next ) if ( m->comp ) {
+	for ( n=0, mp = model; mp; mp = mp->next ) if ( mp->comp ) {
 //		cout << "model " << m->identifier() << endl;
-		for ( comp1 = m->comp; comp1->next; comp1 = comp1->next ) {
+		for ( comp1 = mp->comp; comp1->next; comp1 = comp1->next ) {
 			for ( l1=1; l1<comp1->link.size(); l1++ ) {
 				comp2 = comp1->link[l1];
 				v1 = comp2->location() - comp1->location();
@@ -166,7 +194,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 					k = comp3->type()->index();
 					Bangletype&	at1 = at[i][j][k];
 					a = v1.angle(v2);
-					if ( at1.angle() < 0.001 || at1.angle() > a ) {
+					if ( a > M_PI/4 && ( at1.angle() < 0.001 || at1.angle() > a ) ) {
 						at1.angle(a);
 						Bangletype&	at2 = at[i][k][j];
 						at2.angle(a);
@@ -178,7 +206,7 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	}
 
 	if ( verbose )
-		cout << "Angle references set up: " << n << endl;
+		cout << "Angle references:               " << n << endl;
 
 //	cout << "model_param_generate done" << endl;
 	
@@ -219,10 +247,93 @@ int			model_param_set_type_indices(Bmodel* model, Bmodparam& md)
 	return 0;
 }
 
-Bstar2			read_parameter_file(Bstring& filename)
+/**
+@brief 	Updates model reference parameters from dynamics parameters.
+@param 	*model		linked list of models.
+@param 	&md			model parameter structure.
+@return int			0.
+**/
+int			model_update_reference_parameters(Bmodel* model, Bmodparam& md)
 {
-	Bstring			atfile;
-	Bstring			propfile;
+	long			i, j, k, n(md.comptype.size());
+	Bcomptype*		ct;
+	Bcomponent*		comp;
+	Blink*			link;
+	Bangle*			angle;
+	
+	if ( verbose )
+		cout << "Updating reference parameters" << endl << endl;
+	
+	for ( ; model; model = model->next ) {
+		for ( ct = model->type; ct; ct = ct->next ) {
+			ct->index(-1);
+			for ( auto cts: md.comptype )
+				if ( cts.first == ct->identifier() ) {
+					Bcomptype&		ctr = cts.second;
+					ct->index(ctr.index());
+					if ( ctr.mass() ) ct->mass(ctr.mass());
+					if ( ctr.charge() ) ct->charge(ctr.charge());
+					if ( ctr.radius() ) ct->radius(ctr.radius());
+				}
+			if ( ct->index() < 0 )
+				cerr << "Error: Component type " << ct->identifier() << " not found!" << endl;
+			if ( verbose & VERB_DEBUG )
+				cout << "DEBUG model_update_reference_parameters: " << ct->identifier() << " " << ct->index() << endl;
+		}
+		if ( model->link ) {
+			if ( verbose )
+				cerr << "Warning: Deleting original link list!" << endl;
+			model->clear_links();
+		}
+		for ( comp = model->comp; comp; comp = comp->next ) {
+			for ( auto& l: comp->link ) {
+				link = model->add_link(comp, l);
+				link->select(md.distancetype);
+				i = comp->type()->index();
+				if ( i<0 || i>=n )
+					cerr << "Component type index " << i << " not found!" << endl;
+				j = l->type()->index();
+				if ( j<0 || j>=n )
+					cerr << "Component type index " << j << " not found!" << endl;
+				if ( i>=0 && j>=0 && i<n && j<n )
+					link->length(md.linktype[i][j].length());
+			}
+		}
+		if ( model->angle ) {
+			if ( verbose )
+				cerr << "Warning: Deleting original angle list!" << endl;
+			model->clear_angles();
+		}
+		for ( comp = model->comp; comp; comp = comp->next ) {
+			i = comp->type()->index();
+			if ( i<0 || i>=n )
+				cerr << "Component type index " << i << " not found!" << endl;
+			for ( auto& l1: comp->link ) {
+				j = l1->type()->index();
+				if ( j<0 || j>=n )
+					cerr << "Component type index " << j << " not found!" << endl;
+				for ( auto& l2: comp->link ) {
+					if ( l1->identifier() < l2->identifier() ) {
+						k = l2->type()->index();
+						if ( k<0 || k>=n )
+							cerr << "Component type index " << k << " not found!" << endl;
+						if ( i>=0 && j>=0 && k>=0 && i<n && j<n && k<n ) {
+							angle = model->add_angle(comp, l1, l2);
+							angle->angle(md.angletype[i][j][k].angle());
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return 0;
+}
+
+Bstar		read_parameter_file(string& filename)
+{
+	string			atfile;
+	string			propfile;
 	if ( filename.length() ) atfile = filename;
 	else atfile = "atom_prop.star";
 	
@@ -238,9 +349,9 @@ Bstar2			read_parameter_file(Bstring& filename)
 		bexit(-1);
 	}
 	
- 	Bstar2					star;
+ 	Bstar					star;
 	
- 	if ( star.read(filename.str()) < 0 )
+ 	if ( star.read(filename) < 0 )
 		error_show(filename.c_str(), __FILE__, __LINE__);
 	
 	if ( star.blocks().size() < 0 )
@@ -249,7 +360,7 @@ Bstar2			read_parameter_file(Bstring& filename)
 	return star;
 }
 
-map<string,Bcomptype> 	read_atom_properties(Bstar2& star)
+map<string,Bcomptype> 	read_atom_properties(Bstar& star)
 {
 	map<string,Bcomptype>	ct;
 
@@ -295,23 +406,28 @@ map<string,Bcomptype> 	read_atom_properties(Bstar2& star)
 				if ( ( k = il.find(ATOM_TYPE_SCAT_C) ) >= 0 ) coef[10] = to_real(ir[k]);
 				c.coefficients(coef);
 				ct[symbol] = c;
+//				cout << symbol << tab << c.index() << endl;
+//				c.show();
 			}
 		}
 	}
 	
+	if ( verbose & VERB_PROCESS )
+		cout << "Number of atom parameters read: " << ct.size() << endl;
+	
 	return ct;
 }
 
-map<string,Bcomptype> 	read_atom_properties(Bstring& filename)
+map<string,Bcomptype> 	read_atom_properties(string& filename)
 {
-	Bstar2				star = read_parameter_file(filename);
+	Bstar				star = read_parameter_file(filename);
 
 	return read_atom_properties(star);
 }
 
-map<string,Bmaterial> 	read_material_star(Bstring& filename)
+map<string,Bmaterial> 	read_material_star(string& filename)
 {
-	Bstar2				star = read_parameter_file(filename);
+	Bstar				star = read_parameter_file(filename);
 	
 	map<string,Bmaterial>	material;
 
@@ -335,10 +451,10 @@ map<string,Bmaterial> 	read_material_star(Bstring& filename)
 		return material;
 	}
 
-	Bstring 				atompropfile;		// Atom properties file
+	string 				atompropfile;		// Atom properties file
 	map<string,Bcomptype>	atompar = read_atom_properties(atompropfile);
 
-	if ( verbose )
+	if ( verbose & VERB_FULL )
 		cout << "Converting material parameters" << endl;
 	
 	string				symbol;
@@ -350,8 +466,8 @@ map<string,Bmaterial> 	read_material_star(Bstring& filename)
 		Bmaterial		m;
 		string			name(ib.at(MATERIAL_NAME));
 		m.identifier(name);
-//		m.density(stod(ib.at(MATERIAL_DENSITY)), 0);	// Units = g/cm3
-		m.density(ib.real(MATERIAL_DENSITY), 0);	// Units = g/cm3
+//		m.density(to_real(ib.at(MATERIAL_DENSITY)), 0);	// Units = g/cm3
+		m.density(ib.real(MATERIAL_DENSITY), G_CM3);	// Units = g/cm3
 		m.select(1);
 		for ( auto il: ib.loops() ) {
 //			il.show_tags();
@@ -369,19 +485,19 @@ map<string,Bmaterial> 	read_material_star(Bstring& filename)
 		n++;
 	}
 	
-	if ( verbose )
-		cout << "Materials converted: " << n << endl;
+	if ( verbose & VERB_FULL )
+		cout << "Materials converted: " << n << endl << endl;
 
 	if ( verbose & VERB_FULL )
 		for ( auto m: material )
-			cout << m.second.identifier() << tab << m.second.density(1) << endl;
+			cout << m.second.identifier() << tab << m.second.density(DA_A3) << endl;
 
 	return material;
 }
 
-map<string,Bmaterial> 	read_material_json(Bstring& filename)
+map<string,Bmaterial> 	read_material_json(string filename)
 {
-	JSvalue			js = JSparser(filename.str()).parse();
+	JSvalue			js = JSparser(filename).parse();
 	
 	map<string,Bmaterial>	material;
 
@@ -401,7 +517,7 @@ map<string,Bmaterial> 	read_material_json(Bstring& filename)
 		return material;
 	}
 
-	Bstring 				atompropfile;		// Atom properties file
+	string 				atompropfile;		// Atom properties file
 	map<string,Bcomptype>	atompar = read_atom_properties(atompropfile);
 
 	if ( verbose )
@@ -415,7 +531,7 @@ map<string,Bmaterial> 	read_material_json(Bstring& filename)
 		Bmaterial		m;
 		string			name(jm[MATERIAL_NAME].value());
 		m.identifier(name);
-		m.density(jm[MATERIAL_DENSITY].real(), 0);	// Units = g/cm3
+		m.density(jm[MATERIAL_DENSITY].real(), G_CM3);	// Units = g/cm3
 		m.select(1);
 		for ( auto ja: jm[ATOM_TYPE].array() ) {
 			if ( ja.exists(ATOM_TYPE_SYMBOL) ) {
@@ -436,9 +552,9 @@ map<string,Bmaterial> 	read_material_json(Bstring& filename)
 	return material;
 }
 
-map<string,Bmaterial> 	read_material_properties(Bstring& filename)
+map<string,Bmaterial> 	read_material_properties(string& filename)
 {
-	Bstring			ext = filename.extension();
+	string			ext = extension(filename);
 	
 	if ( verbose )
 		cout << "Reading " << filename << endl << endl;
@@ -454,10 +570,61 @@ map<string,Bmaterial> 	read_material_properties(Bstring& filename)
 	return map<string,Bmaterial>();
 }
 
-int			write_material_star(Bstring& filename, map<string,Bmaterial> material)
+/**
+@brief 	Reads material properties from multiple files.
+@param 	file_list		list of file names.
+@param	paramfile		atom properties file name.
+@param	flags			1=addhydrogens
+@return FileType			enumerated file type.
+
+	The file extension is the main determinant of the file type.
+	Flags:
+		1	add hydrogens to model files.
+
+**/
+map<string,Bmaterial> 	read_material_properties(vector<string> file_list, string paramfile, int flags)
 {
-	Bstring			id("Material_parameters");
- 	Bstar2			star;
+	FileType				ft;
+	string					ext;
+	map<string,Bmaterial>	material;
+
+	for ( auto filename: file_list ) {
+		ft = file_type(filename);
+		ext = extension(filename);
+		if ( verbose )
+			cout << "Reading " << filename << endl;
+		if ( ft == Material ) {
+			map<string,Bmaterial>	m = read_material_properties(filename);
+			material.insert(m.begin(), m.end());
+		} else if ( ft == Model || ft == Molecule ) {
+			Bmodel*	model = read_model(filename, paramfile);
+			Bmaterial	m = material_from_model(model);
+			model_kill(model);
+			if ( flags & 1 ) material_protein_add_hydrogens(m);
+			material[filename] = m;
+		} else {
+			cerr << "Error: Material properties file extension " << ext << " not supported!" << endl;
+		}
+	}
+	
+	map<string,Bcomptype>	atompar = read_atom_properties(paramfile);
+
+	for ( auto& m: material ) {
+		Bmaterial&		m1 = m.second;
+		if ( m1.density(DA_A3) < 0.01 ) m1.density(RHO, DA_A3);
+		m1.unit(DA_A3);					// Convert the density to Da/A3
+		m1.update_parameters(atompar);
+		if ( verbose & VERB_FULL )
+			m1.show();
+	}
+
+	return material;
+}
+
+int			write_material_star(string filename, map<string,Bmaterial> material)
+{
+	string			id("Material_parameters");
+ 	Bstar			star;
 	
 	star.line_length(200);
 	
@@ -480,10 +647,10 @@ int			write_material_star(Bstring& filename, map<string,Bmaterial> material)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_material_star: " << filename << endl;
 
-	return star.write(filename.str());
+	return star.write(filename);
 }
 
-int			write_material_json(Bstring& filename, map<string,Bmaterial> material)
+int			write_material_json(string filename, map<string,Bmaterial> material)
 {
 	JSvalue			js(JSarray);
 	
@@ -506,14 +673,14 @@ int			write_material_json(Bstring& filename, map<string,Bmaterial> material)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_material_json: " << filename << endl;
 
-	js.write(filename.str());
+	js.write(filename);
 	
 	return 0;
 }
 
-int			write_material_properties(Bstring& filename, map<string,Bmaterial> material)
+int			write_material_properties(string filename, map<string,Bmaterial> material)
 {
-	Bstring			ext = filename.extension();
+	string			ext = extension(filename);
 	
 	if ( verbose )
 		cout << "Writing " << filename << endl << endl;
@@ -531,13 +698,13 @@ int			write_material_properties(Bstring& filename, map<string,Bmaterial> materia
 
 /**
 @brief 	Reads a model parameter file.
-@param 	&filename		file name.
+@param 	filename		file name.
 @return Bmodparam		new model parameter structure.
 
 	The only format supported is a STAR format.
 
 **/
-Bmodparam 	read_dynamics_parameters(Bstring& filename)
+Bmodparam 	read_dynamics_parameters(string filename)
 {
 	Bmodparam					md;
 	update_dynamics_parameters(md, filename);
@@ -547,17 +714,17 @@ Bmodparam 	read_dynamics_parameters(Bstring& filename)
 /**
 @brief 	Updates model parameters from a parameter file.
 @param 	&md				model parameters.
-@param 	&filename		file name.
+@param 	filename		file name.
 @return int				0.
 
 	The only format supported is a STAR format.
 
 **/
-int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
+int			update_dynamics_parameters(Bmodparam& md, string filename)
 {
 	// Atom parameter file
-	Bstring			atfile;
-	Bstring			propfile;
+	string			atfile;
+	string			propfile;
 	if ( filename.length() ) atfile = filename;
 	else atfile = "atom_prop.star";
 	
@@ -582,22 +749,32 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 		bexit(-1);
 	}
 	
- 	Bstar2					star;
+ 	Bstar					star;
 	
- 	if ( star.read(filename.str()) < 0 ) {
+ 	if ( star.read(filename) < 0 ) {
 		error_show(filename.c_str(), __FILE__, __LINE__);
 		return -1;
 	}
-
+	
+	if ( verbose )
+		cout << "Reading parameter file " << filename << endl << endl;
+	
 	BstarBlock			block = star.block(0);
 	BstarLoop			loop = block.loop(0);
 
 	// Check if it contains atom or component parameters
-	if ( loop.find(ATOM_TYPE_SYMBOL) < 0 && loop.find(COMPTYPE_ID) < 0 ) {
-		cerr <<  "Error: Star to component properties conversion unsuccessful!" << endl;
-		return -1;
-	}
-	
+//	if ( loop.find(ATOM_TYPE_SYMBOL) < 0 && loop.find(COMPTYPE_ID) < 0 ) {
+//		cerr <<  "Error: Star to component properties conversion unsuccessful!" << endl;
+//		return -1;
+//	}
+
+	string				atompropfile;
+	long				ctmx(0);
+	if ( loop.find(ATOM_TYPE_SYMBOL) < 0 && loop.find(COMPTYPE_ID) < 0 )
+		ct = read_atom_properties(atompropfile);
+		
+	for ( auto& c: ct ) if ( ctmx < c.second.index() ) ctmx = c.second.index();
+
 	string				symbol;
 	long				n(0), i, j, k;
 	vector<double>		coef(11,0);
@@ -612,24 +789,26 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 			for ( auto ir: il.data() ) {
 				symbol = ir[j];
 				Bcomptype	c(symbol);
+				if ( ctmx < n ) ctmx = n;
 				c.index(n++);
 				if ( ( k = il.find(COMPTYPE_FILENAME) ) >= 0 ) c.file_name(ir[k]);
-				if ( ( k = il.find(COMPTYPE_NUMBER) ) >= 0 ) c.image_number(stol(ir[k]));
-				if ( ( k = il.find(COMPTYPE_MASS) ) >= 0 ) c.mass(stod(ir[k]));
-				if ( ( k = il.find(COMPTYPE_FOM) ) >= 0 ) c.FOM(stod(ir[k]));
-				if ( ( k = il.find(COMPTYPE_SELECT) ) >= 0 ) c.select(stol(ir[k]));
+				if ( ( k = il.find(COMPTYPE_NUMBER) ) >= 0 ) c.image_number(to_integer(ir[k]));
+				if ( ( k = il.find(COMPTYPE_MASS) ) >= 0 ) c.mass(to_real(ir[k]));
+				if ( ( k = il.find(COMPTYPE_CHARGE) ) >= 0 ) c.charge(to_real(ir[k]));
+				if ( ( k = il.find(COMPTYPE_FOM) ) >= 0 ) c.FOM(to_real(ir[k]));
+				if ( ( k = il.find(COMPTYPE_SELECT) ) >= 0 ) c.select(to_integer(ir[k]));
 				ct[symbol] = c;
 			}
 			if ( verbose & VERB_FULL )
 				cout << "Number of component types = " << ct.size() << endl;
 		}
 
-		if ( ( j = il.find(ATOM_TYPE_SYMBOL) ) >= 0 ) {
-			ct = read_atom_properties(star);
-		}
+//		if ( ( j = il.find(ATOM_TYPE_SYMBOL) ) >= 0 ) {
+//			ct = read_atom_properties(star);
+//		}
 		
-		lt.resize(ct.size());
-		for ( auto &ltr: lt ) ltr.resize(ct.size());
+		lt.resize(ctmx+1);
+		for ( auto &ltr: lt ) ltr.resize(ctmx+1);
 
 		if ( ( j = il.find(LINKTYPE_ID1) ) >= 0 ) {
 			for ( auto ir: il.data() ) {
@@ -637,17 +816,17 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 				if ( ( k = il.find(LINKTYPE_ID1) ) >= 0 ) b.identifier(ir[k],0);
 				if ( ( k = il.find(LINKTYPE_ID2) ) >= 0 ) b.identifier(ir[k],1);
 				if ( ( k = il.find(LINKTYPE_LENGTH) ) >= 0 ) b.length(to_real(ir[k]));
-				if ( ( k = il.find(LINKTYPE_DISTANCE) ) >= 0 ) b.distance(stod(ir[k]));
+				if ( ( k = il.find(LINKTYPE_DISTANCE) ) >= 0 ) b.distance(to_real(ir[k]));
 				if ( ( k = il.find(LINKTYPE_KLENGTH) ) >= 0 ) b.Klength(to_real(ir[k]));
-				if ( ( k = il.find(LINKTYPE_KDISTANCE) ) >= 0 ) b.Kdistance(stod(ir[k]));
-				if ( ( k = il.find(LINKTYPE_FOM) ) >= 0 ) b.FOM(stod(ir[k]));
-				if ( ( k = il.find(LINKTYPE_SELECT) ) >= 0 ) b.select(stol(ir[k]));
+				if ( ( k = il.find(LINKTYPE_KDISTANCE) ) >= 0 ) b.Kdistance(to_real(ir[k]));
+				if ( ( k = il.find(LINKTYPE_FOM) ) >= 0 ) b.FOM(to_real(ir[k]));
+				if ( ( k = il.find(LINKTYPE_SELECT) ) >= 0 ) b.select(to_integer(ir[k]));
 //				cout << "link " << b.identifier(0) << tab << b.identifier(1) << endl;
 //				cout << "indices " << ct[b.identifier(0)].index() << tab << ct[b.identifier(1)].index() << endl;
 				i = ct[b.identifier(0)].index();
 				j = ct[b.identifier(1)].index();
 //				cout << lt.size() << tab << lt[0].size() << endl;
-				lt[i][j] = b;
+				lt[i][j] = lt[j][i] = b;
 			}
 			if ( verbose & VERB_FULL )
 				cout << "Number of link types = " << lt.size()*lt.size() << endl;
@@ -659,10 +838,17 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 				if ( ( k = il.find(BOND_TYPE_SYMBOL1) ) >= 0 ) b.identifier(ir[k],0);
 				if ( ( k = il.find(BOND_TYPE_SYMBOL2) ) >= 0 ) b.identifier(ir[k],1);
 				if ( ( k = il.find(BOND_TYPE_LENGTH) ) >= 0 ) b.length(to_real(ir[k]));
+				if ( ( k = il.find(BOND_TYPE_VDWDIST) ) >= 0 ) b.distance(to_real(ir[k]));
 				i = ct[b.identifier(0)].index();
 				j = ct[b.identifier(1)].index();
-				lt[i][j] = b;
+				lt[i][j] = lt[j][i] = b;
 			}
+		}
+
+		at.resize(ctmx+1);
+		for ( auto &atr: at ) {
+			atr.resize(ctmx+1);
+			for ( auto &atr2: atr ) atr2.resize(ctmx+1);
 		}
 
 		if ( ( j = il.find(ANGLETYPE_ID1) ) >= 0 ) {
@@ -673,19 +859,13 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 				if ( ( k = il.find(ANGLETYPE_ID3) ) >= 0 ) a.identifier(ir[k],2);
 				if ( ( k = il.find(ANGLETYPE_ANGLE) ) >= 0 ) a.angle(to_real(ir[k])*M_PI/180.0);
 				if ( ( k = il.find(ANGLETYPE_KANGLE) ) >= 0 ) a.Kangle(to_real(ir[k]));
-				if ( ( k = il.find(ANGLETYPE_FOM) ) >= 0 ) a.FOM(stod(ir[k]));
-				if ( ( k = il.find(ANGLETYPE_SELECT) ) >= 0 ) a.select(stol(ir[k]));
+				if ( ( k = il.find(ANGLETYPE_FOM) ) >= 0 ) a.FOM(to_real(ir[k]));
+				if ( ( k = il.find(ANGLETYPE_SELECT) ) >= 0 ) a.select(to_integer(ir[k]));
 				i = ct[a.identifier(0)].index();
 				j = ct[a.identifier(1)].index();
 				k = ct[a.identifier(2)].index();
-				at[i][j][k] = a;
+				at[i][j][k] = at[i][k][j] = a;
 			}
-		}
-
-		at.resize(ct.size());
-		for ( auto &atr: at ) {
-			atr.resize(ct.size());
-			for ( auto &atr2: atr ) atr2.resize(ct.size());
 		}
 
 		if ( ( j = il.find(ANGLE_TYPE_SYMBOL1) ) >= 0 ) {
@@ -694,11 +874,11 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 				if ( ( k = il.find(ANGLE_TYPE_SYMBOL1) ) >= 0 ) a.identifier(ir[k],0);
 				if ( ( k = il.find(ANGLE_TYPE_SYMBOL2) ) >= 0 ) a.identifier(ir[k],1);
 				if ( ( k = il.find(ANGLE_TYPE_SYMBOL3) ) >= 0 ) a.identifier(ir[k],2);
-				if ( ( k = il.find(ANGLE_TYPE_ANGLE) ) >= 0 ) a.angle(to_real(ir[k]));
+				if ( ( k = il.find(ANGLE_TYPE_ANGLE) ) >= 0 ) a.angle(to_real(ir[k])*M_PI/180.0);
 				i = ct[a.identifier(0)].index();
 				j = ct[a.identifier(1)].index();
 				k = ct[a.identifier(2)].index();
-				at[i][j][k] = a;
+				at[i][j][k] = at[i][k][j] = a;
 			}
 		}
 	}
@@ -716,17 +896,17 @@ int			update_dynamics_parameters(Bmodparam& md, Bstring& filename)
 
 /**
 @brief 	Writes a model parameter file.
-@param 	&filename	file name.
+@param 	filename	file name.
 @param 	&md			model parameter structure.
 @return int			0.
 
 The only format supported is a STAR format.
 
 **/
-int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md)
+int		 	write_dynamics_parameters(string filename, Bmodparam& md)
 {
-	Bstring			id("Model_parameters");
- 	Bstar2			star;
+	string			id("Model_parameters");
+ 	Bstar			star;
 
 	md.comment += command_line_time2();
 	star.comment(md.comment);
@@ -734,19 +914,20 @@ int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md)
 //	star.comment(model->comment().str());
 	star.line_length(200);
 	
-	BstarBlock&		block = star.add_block(id.str());
+	BstarBlock&		block = star.add_block(id);
 
 	if ( md.comptype.size() ) {
 		BstarLoop&			loop = block.add_loop();
 		loop.tags() = comptype_tags();
 		for ( auto ct: md.comptype ) {
-			vector<string>&	vs = loop.add_row(6);
+			vector<string>&	vs = loop.add_row();
 			vs[0] = ct.second.identifier();
 			vs[1] = ct.second.file_name();
 			vs[2] = to_string(ct.second.image_number());
 			vs[3] = to_string(ct.second.mass());
-			vs[4] = to_string(ct.second.FOM());
-			vs[5] = to_string(ct.second.select());
+			vs[4] = to_string(ct.second.charge());
+			vs[5] = to_string(ct.second.FOM());
+			vs[6] = to_string(ct.second.select());
 		}
 	}
 	
@@ -754,8 +935,8 @@ int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md)
 		BstarLoop&			loop = block.add_loop();
 		loop.tags() = linktype_tags();
 		for ( auto r: md.linktype ) {
-			for ( auto lt: r ) if ( lt.distance() < 20 ) {
-				vector<string>&	vs = loop.add_row(8);
+			for ( auto lt: r ) if ( lt.length() < 20 || lt.distance() < 20 ) {
+				vector<string>&	vs = loop.add_row();
 				vs[0] = lt.identifier(0);
 				vs[1] = lt.identifier(1);
 				vs[2] = to_string(lt.length());
@@ -774,7 +955,7 @@ int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md)
 		for ( auto r1: md.angletype ) {
 			for ( auto r2: r1 ) {
 				for ( auto at: r2 ) if ( at.angle() > 0 ) {
-					vector<string>&	vs = loop.add_row(7);
+					vector<string>&	vs = loop.add_row();
 					vs[0] = at.identifier(0);
 					vs[1] = at.identifier(1);
 					vs[2] = at.identifier(2);
@@ -790,7 +971,7 @@ int		 	write_dynamics_parameters(Bstring& filename, Bmodparam& md)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_model_star: " << filename << endl;
 
-	int		err = star.write(filename.str());
+	int		err = star.write(filename);
 	
 	if ( err < 0 ) return err;
 	

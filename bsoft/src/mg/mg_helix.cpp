@@ -374,7 +374,8 @@ int			project_filament_powerspectrum(Bproject* project, int pad, int rotated, Bs
 **/
 Bimage*		project_filament_density(Bproject* project, int filament_width)
 {
-	long				nfil(0), nspline, width(3*filament_width);
+//	long				nfil(0);
+	long				nspline, width(3*filament_width);
 	Bfield*				field;
 	Bmicrograph*		mg;
 //	Breconstruction*	rec;
@@ -406,7 +407,7 @@ Bimage*		project_filament_density(Bproject* project, int filament_width)
 							cout << fil->id << tab << gauss[1] << tab << gauss[2] << endl;
 						delete[] spline;
 						delete pfil;
-						nfil++;
+//						nfil++;
 						if ( pi ) { pi->next = pd; pi = pd; }
 						else { plist = pi = pd; }
 					}

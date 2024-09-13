@@ -6,7 +6,7 @@
 @date	Modified: 20141008
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes
 Vector3<double>	model_fit_plane(Bmodel* model);

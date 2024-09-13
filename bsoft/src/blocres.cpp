@@ -79,7 +79,7 @@ int 		main(int argc, char **argv)
 	int				maxrad(0);					// Maximum radius for shell resolution
 	int				setimg(-1);					// Select all images
 	long			step(1);					// Sampling step
-	Bstring			symmetry_string;			// Point group
+	string			symmetry_string;			// Point group
 	double			fill(0);					// Background fill value
 	Bstring			maskfile;					// Input mask file name
 	int				mask_level(-1);				// Mask level (-1 => all but zero)
@@ -241,7 +241,7 @@ int 		main(int argc, char **argv)
 	delete p2;
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

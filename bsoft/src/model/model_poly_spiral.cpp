@@ -15,7 +15,6 @@
 #include "model_util.h"
 #include "Matrix.h"
 #include "math_util.h"
-#include "linked_list.h"
 #include "Vector3.h"
 #include "utilities.h"
 
@@ -40,8 +39,8 @@ int			polygon_add(int n, int valence, Bmodel* model)
 {
 	int				i, j, mid(0), unsat, nsat;
 	int				sat(valence - 1);
-	Bstring			id;
-	Bstring			comptype = "VER";
+	string			id;
+	string			comptype = "VER";
 	Bcomponent*		comp = model->comp;
 	Bcomponent*		comp2 = NULL;
 	Bcomponent*		comp3 = NULL;
@@ -50,7 +49,10 @@ int			polygon_add(int n, int valence, Bmodel* model)
 
 	if ( verbose & VERB_PROCESS )
 		cout << "Adding polygon: " << n << ":" << endl;
-	Bpolygon*		poly = (Bpolygon *) add_item((char **) &model->poly, sizeof(Bpolygon));
+	Bpolygon*		poly;
+//	Bpolygon*		poly = (Bpolygon *) add_item((char **) &model->poly, sizeof(Bpolygon));
+	if ( model->poly ) poly = model->poly->add();
+	else poly = model->poly = new Bpolygon();
 	
 	poly->select(1);
 
@@ -60,7 +62,7 @@ int			polygon_add(int n, int valence, Bmodel* model)
 	
 	if ( !model->comp ) {		// Create the first polygon
 		for ( i=mid=0; i<n; i++ ) {
-//			id = Bstring(++mid, "%d");
+//			id = string(++mid, "%d");
 //			comp = component_add(&comp, id);
 //			if ( !model->comp ) model->comp = comp;
 			if ( comp ) comp = comp->add(++mid);
@@ -154,7 +156,7 @@ int			polygon_add(int n, int valence, Bmodel* model)
 				cout << endl;
 			comp3 = comp;
 			for ( ; i<n; i++ ) {				// New vertices
-//				id = Bstring(++mid, "%d");
+//				id = string(++mid, "%d");
 //				comp3 = component_add(&comp3, id);
 				comp3 = comp3->add(++mid);
 				comp3->type(model->add_type(comptype));
@@ -194,7 +196,7 @@ int			polygon_add(int n, int valence, Bmodel* model)
 	return nsat;
 }
 
-int			seq_count_adj_pentagons(Bstring& seq)
+int			seq_count_adj_pentagons(string& seq)
 {
 	int				i, j, adj(0);
 	
@@ -258,7 +260,7 @@ int			model_adjacent_pentagons_in_first_polygons(Bmodel* model, int npoly)
 
 /**
 @brief 	Generates a polyhedron using the spiral algorithm.
-@param 	&seq			polygon sequence.
+@param 	seq				polygon sequence.
 @param 	valence			vertex valence.
 @param 	requirements	polyhedron requirements.
 @return Bmodel*			new model, NULL if generation failed.
@@ -272,7 +274,7 @@ int			model_adjacent_pentagons_in_first_polygons(Bmodel* model, int npoly)
 	or some of the vertices have incorrect valency.
 
 **/
-Bmodel*		model_poly_spiral(Bstring& seq, int valence, int requirements)
+Bmodel*		model_poly_spiral(string seq, int valence, int requirements)
 {
 	int				npoly = seq.length();
 	int				vertices = 20 + 2*(npoly - 12);
@@ -394,7 +396,7 @@ int			model_polyhedron_check(Bmodel* model, int valence)
 
 /**
 @brief 	Generates a polyhedron using a given sequence.
-@param 	&seq			polygon sequence.
+@param 	seq				polygon sequence.
 @param 	valence			vertex valence.
 @param 	enantiomorph	flag to generate enantiomorphs.
 @param 	requirements	polyhedron requirements.
@@ -404,7 +406,7 @@ int			model_polyhedron_check(Bmodel* model, int valence)
 	A single model is generated based on the sequence.
 
 **/
-Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, int requirements, int nm)
+Bmodel*		model_poly_gen_sequence(string seq, int valence, int enantiomorph, int requirements, int nm)
 {
 	vector<double>	table;
 
@@ -413,7 +415,7 @@ Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, in
 
 /**
 @brief 	Generates a polyhedron using a given sequence.
-@param 	&seq			polygon sequence.
+@param 	seq				polygon sequence.
 @param 	valence			vertex valence.
 @param 	enantiomorph	flag to generate enantiomorphs.
 @param 	requirements	polyhedron requirements.
@@ -426,16 +428,16 @@ Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, in
 	to avoid generating redundant models.
 
 **/
-Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, int requirements, int nm, vector<double>& table)
+Bmodel*		model_poly_gen_sequence(string seq, int valence, int enantiomorph, int requirements, int nm, vector<double>& table)
 {
 	int				j(0), k;
 	int				d(1), enant(1);
 	Vector3<double>	origin, normal(1,0,0);
-	Bstring			sym_label("C1");
+	string			sym_label("C1");
 	
 	int				vertices = 20 + 2*(seq.length() - 12);
 
-	Bstring			id = Bstring(vertices, "%d_");
+	string			id = "_" + to_string(vertices);
 
 	if ( verbose & VERB_PROCESS )
 		cout << nm+1 << ": " << seq << endl;
@@ -453,7 +455,7 @@ Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, in
 		if ( d ) for ( k=0; k<vertices; j++, k++ )
 			table[j] = eigval[k];
 		else
-			id += Bstring(j/vertices, "%04d");
+			id += to_string(j/vertices);
 	}
 	
 	if ( !d ) {
@@ -464,8 +466,9 @@ Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, in
 		return NULL;
 	}
 	
-	id = Bstring(count_list((char *)model->comp), "%d_");
-	Bstring			id2(++nm, "%04d");
+//	id = string(count_list((char *)model->comp), "%d_");
+	id = to_string(model->component_count());
+	string			id2 = to_string(++nm);
 	id2 = id + id2;
 	model->identifier(id2);
 	model->model_type(model->identifier());
@@ -478,16 +481,18 @@ Bmodel*		model_poly_gen_sequence(Bstring& seq, int valence, int enantiomorph, in
 	model_set_component_radius(model, 0.1);
 	model_set_link_radius(model, 0.1);
 	
-	Bstring			filename = "temp/" + model->identifier() + ".cmm";
+	string			filename = "temp/" + model->identifier() + ".cmm";
 	write_model(filename, model);
 	
 	if ( enantiomorph ) {
-		if ( sym_label.contains("s") || sym_label.contains("v") || 
-				sym_label.contains("d") || sym_label.contains("h") ) enant = 0;
+		if ( sym_label.find("s") != string::npos
+			|| sym_label.find("v") != string::npos
+			|| sym_label.find("d") != string::npos
+			|| sym_label.find("h") != string::npos ) enant = 0;
 		if ( enant ) {
 //			model->next = model_copy(model);
 			model->next = model->copy();
-			id2 = id + Bstring(++nm, "%04d");
+			id2 = id + to_string(++nm);
 			model->next->identifier(id2);
 			model_reflect(model->next, normal, origin);
 		}
@@ -517,7 +522,7 @@ Bmodel*		model_poly_gen_permutations(int vertices, int valence, int enantiomorph
 	
 	int				i, np(1), nm(0);
 	vector<double>	table(nt*vertices, 0);
-	Bstring			seq = "555555555555";			// Initial sequence
+	string			seq = "555555555555";			// Initial sequence
 	for ( i=0; i<(vertices-20)/2; i++ ) seq += '6';
 //	for ( i=0; i<nt*vertices; i++ ) table[i] = 0;
 
@@ -573,9 +578,9 @@ Bmodel*		model_poly_gen_cone(int tip, int body, int base, int valence, int enant
 	if ( base < 15 ) base = 15;
 	
 	int				i;
-	Bstring			stip;
-	Bstring			sbody('6', body);
-	Bstring			sbase;
+	string			stip;
+	string			sbody('6', body);
+	string			sbase;
 
 	// Tip starting cases
 	int				type = 4;
@@ -585,12 +590,12 @@ Bmodel*		model_poly_gen_cone(int tip, int body, int base, int valence, int enant
 		case 3: stip = "56666665656565"; break;
 		case 4: stip = "665656565665"; break;	// Equivalent of 1
 		case 5: stip = "6666565656565"; break;
-		default: stip = Bstring('5', 5) + Bstring('6', tip-5);
+		default: stip = string('5', 5) + string('6', tip-5);
 	}
 	while ( stip.length() < tip ) stip += "6";
 
 	for ( i=0; i<7; i++ ) sbase += "56";
-	sbase += Bstring('6', base-14);
+	sbase += string('6', base-14);
 
 	return model_poly_gen_3part(stip, sbody, sbase, valence, enantiomorph, requirements);
 }
@@ -611,38 +616,38 @@ Bmodel*		model_poly_gen_lozenge(int ttop, int tbody, int valence, int enantiomor
 	int				dm = (5*ttop + 1)/2;
 	int				body = tbody*dm;
 	
-	Bstring			stip, sbody, sbase;
-	Bstring			stip_rpt, sbase_rpt;
-	Bstring			id, seq;
+	string			stip, sbody, sbase;
+	string			stip_rpt, sbase_rpt;
+	string			id, seq;
 	
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bmodel*			new_mp = NULL;
 	
 	for ( nm=0, nt=1, i=0; i<ttop; i++ ) {
-		stip_rpt = 0;
+		stip_rpt = "";
 		for ( k=0; k<i; k++ ) stip_rpt += "6";
 		stip_rpt += "5";
 		for ( k++; k<ttop; k++ ) stip_rpt += "6";
 		stip = "5";
-		stip += Bstring('6', top - 1 - 5*ttop);
+		stip += string('6', top - 1 - 5*ttop);
 		for ( k=0; k<5; k++ ) stip += stip_rpt;
 		for ( h=body; h<=body+2*dm; h++ ) {
-			if ( h ) sbody = Bstring('6', body+h);
+			if ( h ) sbody = string('6', body+h);
 			for ( j=0; j<ttop; j++, nt++ ) {
-				sbase_rpt = 0;
+				sbase_rpt = "";
 				for ( k=0; k<j; k++ ) sbase_rpt += "6";
 				sbase_rpt += "5";
 				for ( k++; k<ttop; k++ ) sbase_rpt += "6";
-				sbase = 0;
+				sbase = "";
 				for ( k=0; k<5; k++ ) sbase += sbase_rpt;
-				sbase += Bstring('6', top - 1 - 5*ttop);
+				sbase += string('6', top - 1 - 5*ttop);
 				sbase += "5";
 				seq = stip + sbody + sbase;
 				new_mp = model_poly_gen_sequence(seq, valence, enantiomorph, requirements, nm);
 				if ( new_mp ) {
 					vertices = 20 + 2*(seq.length() - 12);
-					id = Bstring(vertices, "%d_") + Bstring(++nm, "%04d");
+					id = to_string(vertices) + "_" + to_string(++nm);
 					new_mp->identifier(id);
 					cout << new_mp->identifier() << " " << nt << ": " << seq << ": " << new_mp->symmetry() << endl;
 					if ( mp ) mp->next = new_mp;
@@ -677,37 +682,37 @@ Bmodel*		model_poly_gen_coffin(int ttop, int tbody, int tbase, int valence, int 
 	int				body = tbody*dm;
 	int				base = 1 + 3*tbase*(tbase + 1);
 	
-	Bstring			stip, sbody, sbase;
-	Bstring			stip_rpt, sbase_rpt;
-	Bstring			id, seq;
+	string			stip, sbody, sbase;
+	string			stip_rpt, sbase_rpt;
+	string			id, seq;
 	
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bmodel*			new_mp = NULL;
 	
 	for ( nm=0, nt=1, i=0; i<ttop; i++ ) {
-		stip_rpt = 0;
+		stip_rpt = "";
 		for ( k=0; k<i; k++ ) stip_rpt += "6";
 		stip_rpt += "5";
 		for ( k++; k<ttop; k++ ) stip_rpt += "6";
 		stip = "5";
-		stip += Bstring('6', top - 1 - 5*ttop);
+		stip += string('6', top - 1 - 5*ttop);
 		for ( k=0; k<5; k++ ) stip += stip_rpt;
 		for ( h=0; h<dm; h++ ) {
-			sbody = Bstring('6', body+h);
+			sbody = string('6', body+h);
 			for ( j=0; j<tbase; j++, nt++ ) {
-				sbase_rpt = 0;
+				sbase_rpt = "";
 				for ( k=0; k<j; k++ ) sbase_rpt += "6";
 				sbase_rpt += "5";
 				for ( k++; k<tbase; k++ ) sbase_rpt += "6";
-				sbase = 0;
+				sbase = "";
 				for ( k=0; k<6; k++ ) sbase += sbase_rpt;
-				sbase += Bstring('6', base - 6*tbase);
+				sbase += string('6', base - 6*tbase);
 				seq = stip + sbody + sbase;
 				new_mp = model_poly_gen_sequence(seq, valence, enantiomorph, requirements, nm);
 				if ( new_mp ) {
 					vertices = 20 + 2*(seq.length() - 12);
-					id = Bstring(vertices, "%d_") + Bstring(++nm, "%04d");
+					id = to_string(vertices) + "_" + to_string(++nm);
 					new_mp->identifier(id);
 					cout << new_mp->identifier() << " " << nt << ": " << seq << ": " << new_mp->symmetry() << endl;
 					if ( mp ) mp->next = new_mp;
@@ -741,20 +746,20 @@ Bmodel*		model_poly_gen_coffin_loose(int ttop, int tbody, int tbase, int valence
 	int				body = tbody*(5*ttop + 6*tbase + 1)/2;
 	int				base = 1 + 3*tbase*(tbase + 1);
 	
-	Bstring			stip("5");
-	Bstring			sbody('6', body);
-	Bstring			sbase;
-	Bstring			stip_rpt("5");
-	Bstring			sbase_rpt("5");
+	string			stip("5");
+	string			sbody('6', body);
+	string			sbase;
+	string			stip_rpt("5");
+	string			sbase_rpt("5");
 	
 	for ( i=1; i<ttop; i++ ) stip_rpt += "6";
 	for ( i=1; i<tbase; i++ ) sbase_rpt += "6";
 
-	stip += Bstring('6', top - 1 - 5*ttop);
+	stip += string('6', top - 1 - 5*ttop);
 	for ( i=0; i<5; i++ ) stip += stip_rpt;
 
 	for ( i=0; i<6; i++ ) sbase += sbase_rpt;
-	sbase += Bstring('6', base - 6*tbase);
+	sbase += string('6', base - 6*tbase);
 
 	return model_poly_gen_3part(stip, sbody, sbase, valence, enantiomorph, requirements);
 }
@@ -776,22 +781,22 @@ Bmodel*		model_poly_gen_coffin_jiggle(int ttop, int tbody, int tbase, int valenc
 	int				body = tbody*(5*ttop + 6*tbase + 1)/2;
 	int				base = 1 + 3*tbase*(tbase + 1);
 	
-	Bstring			stip("5");
-	Bstring			sbody('6', body);
-	Bstring			sbase;
-	Bstring			stip_rpt("5");
-	Bstring			sbase_rpt("5");
+	string			stip("5");
+	string			sbody('6', body);
+	string			sbase;
+	string			stip_rpt("5");
+	string			sbase_rpt("5");
 	
 	for ( i=1; i<ttop; i++ ) stip_rpt += "6";
 	for ( i=1; i<tbase; i++ ) sbase_rpt += "6";
 
-	stip += Bstring('6', top - 1 - 5*ttop);
+	stip += string('6', top - 1 - 5*ttop);
 	for ( i=0; i<5; i++ ) stip += stip_rpt;
 
 	for ( i=0; i<6; i++ ) sbase += sbase_rpt;
-	sbase += Bstring('6', base - 6*tbase);
+	sbase += string('6', base - 6*tbase);
 	
-	Bstring			seq = stip + sbody + sbase;
+	string			seq = stip + sbody + sbase;
 	
 	return model_poly_gen_move_pentagons(seq, valence, enantiomorph, requirements);
 }
@@ -810,17 +815,17 @@ Bmodel*		model_poly_gen_coffin_jiggle(int ttop, int tbody, int tbase, int valenc
 	positions of pentagons in a sequence.
 
 **/
-Bmodel*		model_poly_gen_3part(Bstring stip, Bstring sbody, Bstring sbase, int valence, int enantiomorph, int requirements)
+Bmodel*		model_poly_gen_3part(string stip, string sbody, string sbase, int valence, int enantiomorph, int requirements)
 {
 	int				i, np(1), npb(1), nm(0), max(1000);
 	int				nt(1000);			// Maximum number of comparison table entries
-	Bstring			sbase_one;
+	string			sbase_one;
 	
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bmodel*			new_mp = NULL;
 
-	Bstring			seq = stip + sbody + sbase;
+	string			seq = stip + sbody + sbase;
 	int				vertices = 20 + 2*(seq.length() - 12);
 //	double*			table = new double[nt*vertices];
 	vector<double>	table(nt*vertices, 0);
@@ -864,7 +869,7 @@ Bmodel*		model_poly_gen_3part(Bstring stip, Bstring sbody, Bstring sbase, int va
 Bmodel*		move_pentagons(int len, int p[12], int n, int valence, int enantiomorph, int requirements, int* nm)
 {
 	int				i, j, pc[12];
-	Bstring			seq;
+	string			seq;
 	Bmodel*			model = NULL;
 	Bmodel*			mp = NULL;
 	Bmodel*			new_mp = NULL;
@@ -902,7 +907,7 @@ Bmodel*		move_pentagons(int len, int p[12], int n, int valence, int enantiomorph
 
 /**
 @brief 	Generates many polyhedrons using a given sequence and moving pentagons around.
-@param 	&seq			polygon sequence.
+@param 	seq				polygon sequence.
 @param 	valence			vertex valence.
 @param 	enantiomorph	flag to generate enantiomorphs.
 @param 	requirements	polyhedron requirements.
@@ -912,7 +917,7 @@ Bmodel*		move_pentagons(int len, int p[12], int n, int valence, int enantiomorph
 	positions of pentagons in a sequence.
 
 **/
-Bmodel*		model_poly_gen_move_pentagons(Bstring& seq, int valence, int enantiomorph, int requirements)
+Bmodel*		model_poly_gen_move_pentagons(string seq, int valence, int enantiomorph, int requirements)
 {
 	int				i, j, p[12], nm(0);
 	

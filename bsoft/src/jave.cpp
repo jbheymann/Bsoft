@@ -142,12 +142,8 @@ int 		main(int argc, char **argv)
 	}
 	
 	// Set up image file names
-	int			nfiles(0);
-	Bstring*	file_list = NULL;
-	while ( optind < argc ) {
-		string_add(&file_list, argv[optind++]);
-		nfiles++;
-	}
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
 
 	// calculate average
 	vector<double>	weight;
@@ -191,9 +187,8 @@ int 		main(int argc, char **argv)
 	}	
 	
 	delete psum;
-	string_kill(file_list);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

@@ -6,7 +6,7 @@
 @date	Modified: 20100329
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 
 // Function prototypes 
 int			model_poly_faces(Bmodel* model);
@@ -21,7 +21,7 @@ double		model_poly_regularity(Bmodel* model);
 double		model_poly_planarity(Bmodel* model);
 double		model_poly_energy(Bmodel* model, double angle_ref);
 int			model_poly_pentagon_adjacency(Bmodel* model);
-Bstring		model_poly_find_symmetry(Bmodel* model, double find);
+string		model_poly_find_symmetry(Bmodel* model, double find);
 int			model_poly_hand(Bmodel* model);
 int			model_poly_compare(Bmodel* model, Bmodel* refmodel);
 vector<double>	model_poly_eigenvalues(Bmodel* model, int show);

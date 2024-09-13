@@ -241,15 +241,14 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*			model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*			model = read_model(file_list, paramfile.str());		
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
@@ -316,7 +315,7 @@ int 	main(int argc, char **argv)
 		if ( type == 1 ) {
 			if ( extract_average > 0 ) {
 				pn = model_average_component_density(model, extract, origin, extract_average);
-				if ( mapout.length() ) model_set_comptype_filenames(model, mapout);
+				if ( mapout.length() ) model_set_comptype_filenames(model, mapout.str());
 			} else {
 				pn = model_extract_component_densities(model, extract, origin);
 			}
@@ -332,7 +331,7 @@ int 	main(int argc, char **argv)
 			p = pn;
 		}
 		if ( type == 1 ) {
-			if ( mapfile.length() ) model_set_comptype_filenames(model, mapfile);
+			if ( mapfile.length() ) model_set_comptype_filenames(model, mapfile.str());
 			pn = model_build_from_component_density(model, build, origin, flags);
 		} else if ( type == 2 ) {
 			pn = model_build_from_link_density(model, mapfile, build, origin, link_select, flags);
@@ -341,7 +340,7 @@ int 	main(int argc, char **argv)
 	}
 
 	if ( modelout.length() ) {
-		write_model(modelout, model);
+		write_model(modelout.str(), model);
 	}
 
 	if ( pn ) pn->calculate_background();
@@ -363,7 +362,7 @@ int 	main(int argc, char **argv)
 	delete p;
 	delete pn;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

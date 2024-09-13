@@ -3,7 +3,7 @@
 @brief	Determining orientations by maximum power of 3D reconstruction from single particle images.
 @author	Bernard Heymann
 @date	Created: 20080424
-@date	Modified: 20190516
+@date	Modified: 20230524
 **/
 
 #include "rwmg.h"
@@ -12,7 +12,6 @@
 #include "mg_particle_select.h"
 #include "mg_ctf.h"
 #include "rwimg.h"
-#include "linked_list.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -79,7 +78,7 @@ int			main(int argc, char** argv)
 	double			theta_step(M_PI_4);		// Theta angular step size.
 	double			phi_step(M_PI_4);		// Phi angular step size.
 	double			alpha_step(M_PI_4);		// Alpha angular step size (in-plane).
-	Bstring			symmetry_string;		// No symmetry specified
+	string			symmetry_string;		// No symmetry specified
 	Bstring			reffile;				// Reference image for centering
 	Bstring			maskfile;				// Mask to be applied to particles
 	Bstring			outfile;				// Output parameter file
@@ -188,14 +187,14 @@ int			main(int argc, char** argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);
 }
 
 double		img_reconstruct_one(Bimage* p, Vector3<long> size, Bsymmetry& sym,
-				View view, double hi_res, double lo_res, double scale)
+				View2<double> view, double hi_res, double lo_res, double scale)
 {
 	long 			i, n;
 	double 			fom(0);
@@ -203,7 +202,7 @@ double		img_reconstruct_one(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 	
 	Bimage*			prec = new Bimage(Float, TComplex, size, 1);
 	
-	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 1, 0);
+	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 0, 1, 0);
 
 	prec->fspace_reconstruction_weigh();
 
@@ -226,7 +225,7 @@ double		img_reconstruct_one(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 }
 
 double		img_reconstruct_one_v3(Bimage* p, Vector3<long> size, Bsymmetry& sym,
-				View view, double hi_res, double lo_res, double scale)
+				View2<double> view, double hi_res, double lo_res, double scale)
 {
 	long 			i, n;
 	double 			pwr(0), avg(0), w(0), fom(0);
@@ -234,7 +233,7 @@ double		img_reconstruct_one_v3(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 	
 	Bimage*			prec = new Bimage(Float, TComplex, size, 1);
 	
-	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 1, 0);
+	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 0, 1, 0);
 
 	float*			power = (float *) prec->next->data_pointer();
 	float* 			weight = (float *) prec->next->next->data_pointer();
@@ -259,7 +258,7 @@ double		img_reconstruct_one_v3(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 }
 
 double		img_reconstruct_one_v2(Bimage* p, Vector3<long> size, Bsymmetry& sym,
-				View view, double hi_res, double lo_res, double scale)
+				View2<double> view, double hi_res, double lo_res, double scale)
 {
 	long 			i, n;
 	double 			pwr(0), avg(0), w(0), fom(0);
@@ -267,7 +266,7 @@ double		img_reconstruct_one_v2(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 	
 	Bimage*			prec = new Bimage(Float, TComplex, size, 1);
 	
-	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 1, 0);
+	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 0, 1, 0);
 
 //	prec->fspace_reconstruction_weigh();
 
@@ -296,15 +295,15 @@ double		img_reconstruct_one_v2(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 }
 
 double		img_reconstruct_one_v1(Bimage* p, Vector3<long> size, Bsymmetry& sym,
-				View view, double hi_res, double lo_res, double scale)
+				View2<double> view, double hi_res, double lo_res, double scale)
 {
 	long 			i, n;
-	double 			pwr(0), avg(0), w(0), fom(0);
+	double 			pwr(0), avg(0), fom(0);
 	Vector3<double>	vscale(scale, scale, scale);
 	
 	Bimage*			prec = new Bimage(Float, TComplex, size, 1);
 	
-	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 1, 0);
+	prec->fspace_pack_2D(p, view, sym, hi_res, lo_res, vscale, 0, 1, 0);
 
 	prec->fspace_reconstruction_weigh();
 
@@ -315,7 +314,7 @@ double		img_reconstruct_one_v1(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 		if ( weight[i] > 1.5 ) {
 			avg += prec->complex(i).power();
 			pwr += power[i];
-			w += weight[i];
+//			w += weight[i];
 //			fom += power[i] - prec->complex(i).power();
 			n++;
 		}
@@ -365,40 +364,32 @@ double		img_find_maximum_power(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 	
 	long			iv, nviews;
 	double			fomavg, bestfom;
-	View*			v;
-	View*			view = asymmetric_unit_views(sym, theta_step, phi_step, 1);
-	View*			view2 = view_list_expand_angles(view, -M_PI, M_PI - alpha_step/2, alpha_step);
-	kill_list((char *) view, sizeof(View));
-	view = view2;
-	View			bestview;
-	
-	for ( nviews=0, v=view; v; v=v->next ) nviews++;
-	
-//	cout << "number of views = " << nviews << endl;
 
-	View*			view_arr = new View[nviews];
-	double*			fom_arr = new double[nviews];
-
-	for ( iv=0, v=view; v; v=v->next, iv++ ) view_arr[iv] = *v;
+	vector<View2<double>>	view = sym.asymmetric_unit_views(theta_step, phi_step, 1);
+	view = view_list_expand_angles(view, -M_PI, M_PI - alpha_step/2, alpha_step);
+	View2<double>			bestview;
+	nviews = view.size();
 	
 	if ( verbose & VERB_FULL )
 		cout << "x\ty\tz\ta\tFOM" << endl;
 
 #ifdef HAVE_GCD
+	__block	vector<double>	fom_arr(nviews,0);
 	dispatch_apply(nviews, dispatch_get_global_queue(0, 0), ^(size_t iv){
-		fom_arr[iv] = img_reconstruct_one(p, size, sym, view_arr[iv], hi_res, lo_res, scale);
+		fom_arr[iv] = img_reconstruct_one(p, size, sym, view[iv], hi_res, lo_res, scale);
 	});
 #else
+	vector<double>	fom_arr(nviews,0);
 #pragma omp parallel for
 	for ( iv = 0; iv < nviews; iv++ )
-		fom_arr[iv] = img_reconstruct_one(p, size, sym, view_arr[iv], hi_res, lo_res, scale);
+		fom_arr[iv] = img_reconstruct_one(p, size, sym, view[iv], hi_res, lo_res, scale);
 #endif
 
 	for ( iv = 0, bestfom = -1e30, fomavg = 0; iv < nviews; iv++ ) {
 		fomavg += fom_arr[iv];
 		if ( bestfom < fom_arr[iv] ) {
 			bestfom = fom_arr[iv];
-			bestview = view_arr[iv];
+			bestview = view[iv];
 		}
 	}
 	
@@ -406,10 +397,6 @@ double		img_find_maximum_power(Bimage* p, Vector3<long> size, Bsymmetry& sym,
 	
 	if ( verbose & VERB_FULL )
 		cout << bestview << tab << fomavg << endl;
-	
-	delete[] view_arr;
-	delete[] fom_arr;
-	kill_list((char *) view, sizeof(View));
 	
 	p->view(bestview);
 	p->image->FOM(fomavg);
@@ -472,7 +459,7 @@ double		part_find_maximum_power(Bparticle* part,
 	p->sampling(mg->pixel_size);
 
 	if ( mg->ctf && ctf_action )
-		img_ctf_apply(p, em_ctf, ctf_action, wiener, 0, hi_res);
+		img_ctf_apply(p, em_ctf, ctf_action, wiener, 0, hi_res, 0);
 
 	part->fom[0] = img_find_maximum_power(p, size, sym, theta_step, 
 			phi_step, alpha_step, hi_res, lo_res, part_scale, pad_factor);

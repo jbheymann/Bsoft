@@ -90,17 +90,17 @@ int 		main(int argc, char **argv)
 	double		ti = timer_start();
 
 	// Read all the file names
-	Bstring*		file_list = NULL;
-	while ( optind < argc - 1 ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( !file_list.size() ) {
 		cerr << "Error: No image files specified!" << endl;
 		bexit(-1);
 	}
 
 	Vector3<long>	nusize;
-	Vector3<long>	translate = {pad, pad, 0};
+	Vector3<long>	translate(pad, pad, 0);
 
-	Bstring 		rawstring;
+	string 			rawstring;
 	Bimage*			p = img_catenate(file_list, rawstring, Unknown_Type,
 							nusize, 0, fill_type, fill, 0, 0);
 	
@@ -152,7 +152,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

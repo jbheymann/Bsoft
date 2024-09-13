@@ -158,7 +158,7 @@ int 	main(int argc, char **argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

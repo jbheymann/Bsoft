@@ -3,7 +3,7 @@
 @brief	Utilities for timing functions 
 @author Bernard Heymann 
 @date	Created: 20010316
-@date	Modified: 20100726 
+@date	Modified: 20230321
 **/
  
 //#include <time.h>
@@ -11,6 +11,8 @@
 
 
 // Function prototypes 
+tm*			get_localtime();
+void		show_localtime(time_t time_sec);
 double		getwalltime();
 double		getcputime();
 double		timer_start();

@@ -1,9 +1,9 @@
 /**
 @file	Bimage_transform.cpp
 @brief	Library routines for transforming images
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19990904
-@date	Modified: 20190214
+@date	Modified: 20230526
 **/
 
 #include "Bimage.h"
@@ -158,7 +158,7 @@ Bimage*		Bimage::transform(long nn, Vector3<long> nusize, Vector3<double> scale,
 	
 	long			i, cc, xx, yy, zz;
 	Vector3<double>	old, nu, oldorigin, nuorigin;
-	View			view;
+	View2<double>	view;
 	Matrix3			viewmat;
 	Matrix3			affmat = mat/scale;
 	Vector3<double>	nusampling(sampling(0)/scale.abs()), nurealsize(nusampling*nusize);
@@ -202,6 +202,7 @@ Bimage*		Bimage::transform(long nn, Vector3<long> nusize, Vector3<double> scale,
 //					cout << old << endl;
 				for ( cc=0; cc<c; cc++, i++ )
 					pt->add(i, interpolate(cc, old, nn, fill));
+//					pt->add(i, interpolate_wrap(cc, old, nn));
 			}
 		}
 	}
@@ -226,7 +227,7 @@ Bimage*		Bimage::transform(long nn, Vector3<long> nusize, Vector3<double> scale,
 //	cout << viewmat << endl;
 	viewmat = viewmat * mat.transpose();
 //	cout << viewmat << endl;
-	view = View(viewmat);
+	view = View2<double>(viewmat);
 	pt->image->view(view);
 	
 	if ( verbose & VERB_DEBUG )
@@ -303,7 +304,7 @@ int			Bimage::rotate(Vector3<double> axis, double angle)
 
 /**
 @brief 	Rotates an image to a specified view in place.
-@param 	*view		view vector and angle.
+@param 	view		view vector and angle.
 @return 0 				error code.
 
 	An image is rotated according to the input view vector and angle. 
@@ -311,7 +312,7 @@ int			Bimage::rotate(Vector3<double> axis, double angle)
 	The rotated image is translated to the input origin.
 
 **/
-int			Bimage::rotate(View view)
+int			Bimage::rotate(View2<double> view)
 {
 	Vector3<double>	translate;
 	
@@ -321,7 +322,7 @@ int			Bimage::rotate(View view)
 /**
 @brief 	Rotates an image to a specified view in place.
 @param 	translate	translation after rotation.
-@param 	*view		view vector and angle.
+@param 	view		view vector and angle.
 @return 0 			error code.
 
 	An image is rotated according to the input view vector and angle. 
@@ -329,7 +330,7 @@ int			Bimage::rotate(View view)
 	The rotated image is translated to the input origin.
 
 **/
-int			Bimage::rotate(Vector3<double> translate, View view)
+int			Bimage::rotate(Vector3<double> translate, View2<double> view)
 {
 	Vector3<double>	scale(1,1,1);
 	Matrix3			mat = view.matrix();
@@ -440,7 +441,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, Vector3<double> axis, double angle
 /**
 @brief 	Rotates an image to a specified view.
 @param 	nusize		3-value new image size.
-@param 	*view		view vector and angle.
+@param 	view		view vector and angle.
 @return Bimage*		rotated image.
 
 	An image is rotated according to the input view vector and angle. 
@@ -448,7 +449,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, Vector3<double> axis, double angle
 	The rotated image is translated to the input origin.
 
 **/
-Bimage*		Bimage::rotate(Vector3<long> nusize, View view)
+Bimage*		Bimage::rotate(Vector3<long> nusize, View2<double> view)
 {
 	Vector3<double>	translate;
 	
@@ -459,7 +460,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, View view)
 @brief 	Rotates an image to a specified view.
 @param 	nusize		3-value new image size.
 @param 	translate	translation after rotation.
-@param 	*view		view vector and angle.
+@param 	view		view vector and angle.
 @return Bimage*		rotated image.
 
 	An image is rotated according to the input view vector and angle. 
@@ -467,7 +468,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, View view)
 	The rotated image is translated to the input origin.
 
 **/
-Bimage*		Bimage::rotate(Vector3<long> nusize, Vector3<double> translate, View view)
+Bimage*		Bimage::rotate(Vector3<long> nusize, Vector3<double> translate, View2<double> view)
 {
 	Vector3<double>	scale(1,1,1);
 	Matrix3			mat = view.matrix();
@@ -500,7 +501,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, Matrix3 mat)
 @brief 	Rotates an image to a specified view and adds it to another image.
 @param 	*p			the image to rotate and add (modified).
 @param 	origin		origin in input image.
-@param 	*view		view vector and angle.
+@param 	view		view vector and angle.
 @return int			0.
 
 	An image is rotated according to the input view vector and angle. 
@@ -509,7 +510,7 @@ Bimage*		Bimage::rotate(Vector3<long> nusize, Matrix3 mat)
 	The result is added to the current image.
 
 **/
-int			Bimage::rotate_and_add(Bimage* p, Vector3<double> origin, View view)
+int			Bimage::rotate_and_add(Bimage* p, Vector3<double> origin, View2<double> view)
 {
 	p->rotate(image->origin() - origin, view);
 	
@@ -526,12 +527,9 @@ int			Bimage::rotate_and_add(Bimage* p, Vector3<double> origin, View view)
 	Each image in a Bimage structure is rotated to the corresponding view.
 
 **/
-Bimage*		Bimage::orient(View* views)
+Bimage*		Bimage::orient(vector<View2<double>>& views)
 {
-	View*		v;
-	long		nviews(0);
-	
-	for ( v = views; v; v = v->next ) nviews++;
+	long		nviews(views.size());
 	
 	if ( nviews < 1 ) return NULL;
 	
@@ -540,14 +538,15 @@ Bimage*		Bimage::orient(View* views)
 	Bimage*		pori = copy(nviews);
 	
 	long		nn(0);
-	Bimage*		p;	
+	Bimage*		p;
 	
-	for ( v = views; v; v = v->next, ++nn ) {
-		p = rotate(size(), *v);
+	for ( auto& v: views ) {
+		p = rotate(size(), v);
 		pori->replace(nn, p);
 		delete p;
-		pori->image[nn].view(*v);
+		pori->image[nn].view(v);
 		pori->image[nn].origin(image->origin());
+		++nn;
 	}
 	
 	return pori;

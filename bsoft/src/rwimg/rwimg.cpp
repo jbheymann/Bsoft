@@ -3,7 +3,7 @@
 @brief	Library for 2D and 3D image I/O
 @author Bernard Heymann
 @date	Created: 19990321
-@date 	Modified: 20210628
+@date 	Modified: 20230426
 **/
 
 #include "rwimg.h"
@@ -29,6 +29,7 @@
 #include "rwGOODFORD.h"
 #include "rwGRD.h"
 #include "rwHKL.h"
+#include "rwIBW.h"
 #include "rwIMAGIC.h"
 #include "rwIP.h"
 #include "rwJPEG.h"
@@ -190,6 +191,8 @@ Bimage* 	read_img(string filename, int readdata, int img_select)
 		err = readHKL(p, readdata);
 	else if ( ext.find("img") != string::npos || ext.find("hed") != string::npos )
 		err = readIMAGIC(p, readdata, img_select);
+	else if ( ext.find("ibw") != string::npos )
+		err = readIBW(p, readdata);
 	else if ( ext.find("ip") != string::npos )
 		err = readIP(p, readdata);
 	else if ( ext.find("jpg") != string::npos || ext.find("jpeg") != string::npos )
@@ -382,6 +385,8 @@ int 		write_img(string filename, Bimage* p, int compression)
 		err = writeGRD(p, flags);
 	else if ( ext.find("hkl") != string::npos )
 		err = writeHKL(p);
+	else if ( ext.find("ibw") != string::npos )
+		err = writeIBW(p);
 	else if ( ext.find("img") != string::npos || ext.find("hed") != string::npos )
 		err = writeIMAGIC(p);
 	else if ( ext.find("ip") != string::npos )

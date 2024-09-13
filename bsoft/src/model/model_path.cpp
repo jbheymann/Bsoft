@@ -1,11 +1,12 @@
 /**
 @file	model_path.cpp
 @brief	Library routines used for model processing
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
 @date	Modified: 20150208
 **/
 
+#include "rwmodel.h"
 #include "model_util.h"
 #include "model_transform.h"
 #include "model_select.h"
@@ -16,7 +17,6 @@
 #include "symmetry.h"
 #include "Matrix3.h"
 #include "random_numbers.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -35,7 +35,9 @@ extern int 	verbose;		// Level of output to the screen
 **/
 Matrix		model_shortest_path(Bmodel* model)
 {
-	Matrix			mat = model_adjacency_matrix(model);
+	Matrix			mat;
+	
+	mat = model_adjacency_matrix(model);
 	
 	int				h, i, j, k, ncomp;
 	double			s = 0;

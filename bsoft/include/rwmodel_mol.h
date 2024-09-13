@@ -9,7 +9,7 @@
 #include "rwmodel.h"
 
 /* Function prototypes */
-Bmodel*		read_model_molecule(Bstring* file_list, Bstring& paramfile);
-int			write_model_molecule(Bstring& filename, Bmodel* model);
+Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile);
+int			write_model_molecule(string& filename, Bmodel* model);
 
 

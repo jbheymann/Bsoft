@@ -186,7 +186,7 @@ int main (int argc, char **argv)
 	delete pamp;
 	delete pmask;
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

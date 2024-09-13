@@ -1,12 +1,12 @@
 /**
 @file	model_compare.h
 @brief	Functions to compare models and components
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
 @date	Modified: 20161011
 **/
 
-#include "rwmodel.h"
+#include "Bmodel.h"
 #include "Matrix.h"
 
 // Function prototypes

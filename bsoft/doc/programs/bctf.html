@@ -1,10 +1,24 @@
-<HTML>
-<HEAD>
-	<meta name="Author" content="Bernard Heymann">
-	<TITLE>Bsoft: bctf </TITLE>
-	<link type="image/png" href="Bsoft_16x16.png" rel="icon">
-</HEAD>
-<BODY bgcolor="#FFFFFF">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
+<head>
+<meta name="Author" content="Bernard Heymann">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<!-- Author: Bernard Heymann -->
+<!-- Created: 20141222 -->
+<!-- Modified: 20180924 -->
+<title>Bsoft: bctf </title>
+<link href="../bsoft.css" rel="stylesheet" type="text/css" />
+<link rel="icon" href="Bsoft_16x16.png" type="image/png" />
+<link rel="icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="Bsoft_16x16.ico" type="image/x-icon" />
+<script language="JavaScript" type="text/javascript" src="../bsoft.js"></script>
+</head>
+
+<body class="bsoft_layout">
+
+<div id="content">
+
 <h2><i><font color="#000099">Bsoft program</font></i></h2>
 <center><h1><font color="#FF0000">bctf</font></h1></center>  <h3>Usage: bctf [options] input.star/input.img [input2.star/output.img]</h3>
 Applies, determines or corrects for the CTF (contrast transfer function) in electron micrographs. <br>
@@ -13,12 +27,19 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 <tr><td>-action correct</td><td>Action: 1=flip, 2=apply, 3=correct, 4=wienerfilter,</td></tr>
 <tr><td></td><td>                         5=baseline, 6=baseline2, 7=baseflip, 8=basecorrect,</td></tr>
 <tr><td></td><td>                         11=prepare, 12=fit, 13=prepfit (default 0=none).</td></tr>
+<tr><td>-contrast</td><td>Inverts contrast by negating the CTF.</td></tr>
 <tr><td>-invertaxis</td><td>Inverts the tilt axis to correct for improper setup.</td></tr>
 <tr><td>-filter</td><td>Filter extremes before doing anything with the image.</td></tr>
 <tr><td>-background</td><td>Correct background after applying CTF (default not).</td></tr>
 <tr><td>-fitastigmatism 2</td><td>Fit astigmatism for individual micrographs (1) or combined (2) (default not).</td></tr>
+<tr><td>-isotropy</td><td>Assess the power spectrum isotropy.</td></tr>
 <tr><td>-toparticle</td><td>Transfer micrograph CTF parameters to particle records (default not).</td></tr>
-<tr><td>-ctf 512,512,2</td><td>Generate a CTF image of this size with flag: 1=center, 2=power, 3=both.</td></tr>
+<tr><td>-statistics</td><td>Display CTF parameter statistics.</td></tr>
+<tr><td></td><td> </td></tr>
+<tr><td></td><td>Simulations:</td></tr>
+<tr><td>-ctf 512,512,10</td><td>Generate a CTF image of this size (z>1 for focal series).</td></tr>
+<tr><td>-center</td><td>Center the simulated image.</td></tr>
+<tr><td>-power</td><td>Convert to intensities.</td></tr>
 <tr><td>-simulate</td><td>Simulate a tilted CTF for each x or y-line.</td></tr>
 <tr><td></td><td> </td></tr>
 </tbody></table><br>
@@ -34,10 +55,10 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 <tr><td>-frames</td><td>Use micrograph frames file given in parameter file instead of particle file.</td></tr>
 <tr><td>-sampling 1.5,1.5,1.5</td><td>Sampling (angstrom/pixel, a single value sets all three).</td></tr>
 <tr><td>-resolution 27.5,125.3</td><td>Resolution limits for CTF determination and application (default 0.1,1e6).</td></tr>
-<tr><td>-wiener 0.15</td><td>Wiener factor for CTF correction (default 0.2).</td></tr>
+<tr><td>-wiener 0.15</td><td>Wiener factor for CTF correction (default 0).</td></tr>
 <tr><td></td><td> </td></tr>
 <tr><td></td><td>Microscope parameters:</td></tr>
-<tr><td>-Volt 100</td><td>Set the acceleration voltage (default 120 kV).</td></tr>
+<tr><td>-Volt 100</td><td>Set the acceleration voltage (default 300 kV).</td></tr>
 <tr><td>-Amplitude 0.07</td><td>Set the amplitude contrast (default 0.07).</td></tr>
 <tr><td>-Cs 2.0</td><td>Set the spherical aberration, Cs (default 2.0 mm).</td></tr>
 <tr><td>-Cc 2.0</td><td>Set the chromatic aberration, Cc (default 2.0 mm).</td></tr>
@@ -48,8 +69,8 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 <tr><td>-slitwidth 25</td><td>Energy filter slit width (default 0 eV - no filter).</td></tr>
 <tr><td></td><td> </td></tr>
 <tr><td></td><td>Imaging parameters:</td></tr>
-<tr><td>-Defocus 1.2,1.0,47</td><td>Defocus average & deviation, and astigmatism angle (default 2 um, 0 um, 0).</td></tr>
-<tr><td>-Astigmatism 0.3,-34</td><td>Set defocus deviation and astigmatism angle (um, degrees).</td></tr>
+<tr><td>-Defocus 1.2,1.0,47</td><td>Defocus average & deviation, and astigmatism angle (default 2 um, 0, 0).</td></tr>
+<tr><td>-Astigmatism 0.3,-34</td><td>Set defocus deviation and astigmatism angle.</td></tr>
 <tr><td>-axis 74.7</td><td>Tilt axis angle relative to x-axis (default 0 or from parameter file).</td></tr>
 <tr><td>-tilt 15</td><td>Tilt angle (default from parameter file).</td></tr>
 <tr><td>-basetype 2</td><td>Baseline type: (default 1)</td></tr>
@@ -63,7 +84,7 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 <tr><td></td><td>                         Type 2: Single gaussian with constant (3 coefficients).</td></tr>
 <tr><td></td><td>                         Type 3: Double gaussian (4 coefficients).</td></tr>
 <tr><td></td><td>                         Type 4: Double gaussian with constant (5 coefficients).</td></tr>
-<tr><td>-envelope</td><td>28,-563,0.78,-215 Envelope coefficients: Double gaussian with 4 coefficients (default 1,-10,0,0).</td></tr>
+<tr><td>-envelope 28,-563</td><td>Envelope coefficients: default 1,-10.</td></tr>
 <tr><td></td><td> </td></tr>
 <tr><td></td><td>Fitting parameters:</td></tr>
 <tr><td>-Range 0.6,3.5,0.2</td><td>Defocus minimum, maximum and increment for fitting (default 0.1,20,0.1 um).</td></tr>
@@ -71,13 +92,13 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 </tbody></table><br>
 <h3>Input:</h3>
 <table><tbody>
-<tr><td>-json file.json</td><td>Input JSON file with CTF parameters.</td></tr>
+<tr><td>-jsin file.json</td><td>Input JSON file with CTF parameters.</td></tr>
 <tr><td></td><td> </td></tr>
 </tbody></table><br>
 <h3>Output:</h3>
 <table><tbody>
 <tr><td>-output file.star</td><td>Output parameter file.</td></tr>
-<tr><td>-jsonout file.json</td><td>Output CTF parameters to a JSON file.</td></tr>
+<tr><td>-jsout file.json</td><td>Output CTF parameters to a JSON file.</td></tr>
 <tr><td>-PSaverage file.mrc</td><td>Output average power spectrum.</td></tr>
 <tr><td>-Postscript file.ps</td><td>Postscript output file name for CTF fit.</td></tr>
 <tr><td>-Histogram file.ps</td><td>Postscript output file name for defocus histogram.</td></tr>
@@ -130,11 +151,13 @@ Applies, determines or corrects for the CTF (contrast transfer function) in elec
 <tr><td></td><td>		3.	a0 + a1*e^(a2*s^0.5 + a3*s^2)</td></tr>
 <tr><td></td><td> </td></tr>
 </tbody></table>
-<br>Bsoft version 2.0.7-20200917 (64 bit)<br>
-<HR WIDTH="100%"><BR>
-Generated by bdoc.pl on Mon Oct 26 08:20:11 2020 <BR>
-<HR WIDTH="100%"><BR>
-<center><a href="bsoft.html">Back to the Bsoft home</a></center>
-<HR WIDTH="100%"><BR>
-</BODY>
-</HTML>
+<br>Bsoft version 2.2.0-20230831 (64 bit)<br>
+</div>
+
+<br/>
+
+<div id="footer">
+Generated by bprog.pl on Thu Aug 31 05:35:33 2023
+</div>
+</body>
+</html>

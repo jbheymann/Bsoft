@@ -3,7 +3,7 @@
 @brief	Program to filter images.
 @author Bernard Heymann
 @date	Created: 20040714
-@date	Modified: 20191125
+@date	Modified: 20230926
 **/
 
 #include "rwimg.h"
@@ -34,6 +34,7 @@ const char* use[] = {
 "-verbose 7               Verbosity of output.",
 "-datatype u              Force writing of a new data type.",
 "-sampling 1.5,1.5,1.5    Sampling (A/pixel; default from input file; a single value can be given).",
+"-origin 0.8,-10,15.7     Set the origin (default from input image).",
 "-resolution 15           Resolution limit (angstrom)",
 " ",
 "Input:",
@@ -51,16 +52,15 @@ Bplot*		read_rps(Bstring& filename)
 	if ( verbose & VERB_PROCESS )
 		cout << "# Reading radial power spectrum:  " << filename << endl;
 
-    ifstream			f;
-    f.open(filename.c_str());
+    ifstream			f(filename.c_str());
     if ( f.fail() ) return NULL;
 	
 	int					i, j, ncol(2), nrow(0);
-	char				aline[MAXLINELEN];
+	string				str;
     double				s, p;
     vector<double>		vs, vp;
 
-	f.getline(aline, MAXLINELEN);
+	getline(f, str);
 
  	while ( !f.eof() ) {
  		f >> s >> p;
@@ -79,7 +79,7 @@ Bplot*		read_rps(Bstring& filename)
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("s");
+	plot->page(0).column(0).label("Spatial Frequency (A)");
 	plot->page(0).column(1).label("Power");
 //	plot->page(0).axis(1).min(0);
 //	plot->page(0).axis(1).max(1/hi_res);
@@ -113,6 +113,8 @@ int 	main(int argc, char **argv)
 	int				square(0);					// Flag to weigh by squares of amplitudes
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
 	Vector3<double>	sam;						// Units for the three axes (A/pixel)
+	Vector3<double>	origin;						// New image origin
+	int				set_origin(0);				// Flag to set origin
 	double			resolution(0);				// Resolution limit
 	double			nuavg(0), nustd(0); 		// Values for rescaling
 	Bstring			rpsfile;					// Radial power spectrum
@@ -138,8 +140,16 @@ int 	main(int argc, char **argv)
 			nudatatype = curropt->datatype();
 		if ( curropt->tag == "sampling" )
 			sam = curropt->scale();
+		if ( curropt->tag == "origin" ) {
+			if ( curropt->value[0] == 'c' ) {
+				set_origin = 2;
+			} else {
+				origin = curropt->origin();
+				set_origin = 1;
+			}
+		}
 		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.1 )
+			if ( ( resolution = curropt->value.real() ) < 0.01 )
 				cerr << "-resolution: A resolution must be specified!" << endl;
 		if ( curropt->tag == "rescale" ) {
 			if ( curropt->values(nuavg, nustd) < 2 )
@@ -178,6 +188,11 @@ int 	main(int argc, char **argv)
 	
 	if ( sam.volume() > 0 ) p->sampling(sam);
 
+	if ( set_origin ) {
+		if ( set_origin == 2 ) p->origin(p->default_origin());
+		else p->origin(origin);
+	}
+	
 	if ( setinvert ) p->invert();
 	
 	Bplot*		plot = NULL;
@@ -187,12 +202,17 @@ int 	main(int argc, char **argv)
 			cerr << "Error: The FSC file " << fscfile << " was not read!" << endl;
 			bexit(-1);
 		}
-	} else if ( rpsfile.length() ) {
+	} else {
+		if ( rpsfile.length() < 1 )
+			rpsfile = parameter_file_path("rps_ref2.txt");
 		plot = read_rps(rpsfile);
 		if ( !plot ) {
 			cerr << "Error: The RPS file " << rpsfile << " was not read!" << endl;
 			bexit(-1);
 		}
+//	} else {
+//		Bstring		paramfile = parameter_file_path("rps_ref2.txt");
+//		plot = new Bplot(paramfile, 0, 1);
 	}
 	
 	Bimage*		pref = NULL;
@@ -217,7 +237,8 @@ int 	main(int argc, char **argv)
 	} else if ( plot ) {
 		if ( fscfile.length() )
 			p->fspace_weigh_FSC_curve(plot, resolution);
-		else if ( rpsfile.length() )
+//		else if ( rpsfile.length() )
+		else
 			p->fspace_weigh_RPS_curve(plot, resolution);
 	} else if ( weigh_dose ) {
 		p->fspace_weigh_dose(weigh_dose);
@@ -247,7 +268,7 @@ int 	main(int argc, char **argv)
 	fftwf_cleanup_threads();
 #endif
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

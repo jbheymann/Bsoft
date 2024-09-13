@@ -1,12 +1,19 @@
 var searchData=
 [
-  ['white_9915',['white',['../struct_b_i_o_r_a_dhead.html#ac0853b2b12f5f43c04a9445682696213',1,'BIORADhead']]],
-  ['white2_9916',['white2',['../struct_b_i_o_r_a_dhead.html#a438bedc799f54de4497fb1308fee2c99',1,'BIORADhead']]],
-  ['whitelevel_9917',['whitelevel',['../struct_i_m_o_d.html#acc69d387ff55091f9a836e73d085b9b4',1,'IMOD']]],
-  ['width_9918',['width',['../struct_d_m_machead.html#aac19cd9a9d7cfc3cc3265c7a5fd8f549',1,'DMMachead']]],
-  ['widthin_9919',['widthIn',['../structelectron_setter_delta.html#afb0c1bcb22493cd5b943e1732273bea7',1,'electronSetterDelta::widthIn()'],['../structelectron_adder_delta.html#ab3e3181f1c8dcbde98fabf81ef7d21cc',1,'electronAdderDelta::widthIn()'],['../structelectron_adder_b_spline.html#a5288cab68123a4dab52282e09ad40446',1,'electronAdderBSpline::widthIn()']]],
-  ['widthout_9920',['widthOut',['../structelectron_setter_delta.html#a173ce335015ca12ecf45a8dbfff09c3b',1,'electronSetterDelta::widthOut()'],['../structelectron_adder_delta.html#afc23bdb2a0fca677040790399108d548',1,'electronAdderDelta::widthOut()'],['../structelectron_adder_b_spline.html#abc3852d03dd7fe3f648c83b8f2fef876',1,'electronAdderBSpline::widthOut()']]],
-  ['wiener_9921',['wiener',['../struct_p_i_fimagehead__new.html#a863170d86b1bd4c98c55c33e8eb69a26',1,'PIFimagehead_new']]],
-  ['wrap_9922',['wrap',['../struct_bmd.html#a45c2d1935d473b6557abe36039a0f890',1,'Bmd::wrap()'],['../class_bmodparam.html#a9b9ea70d1bdf6498d1c8225690ad8968',1,'Bmodparam::wrap()']]],
-  ['wri_9923',['wri',['../class_bmicrograph.html#a314d2bdd5e5d55a557181497e8b949c8',1,'Bmicrograph']]]
+  ['wavenoteh_0',['waveNoteH',['../struct_w5head.html#a7e57646b2d476675d0c449e5cc8b3b02',1,'W5head']]],
+  ['wfmsize_1',['wfmSize',['../struct_i_b_whead.html#af434c338c5e30b8185fc854a54b85729',1,'IBWhead']]],
+  ['white_2',['white',['../struct_b_i_o_r_a_dhead.html#ac0853b2b12f5f43c04a9445682696213',1,'BIORADhead']]],
+  ['white2_3',['white2',['../struct_b_i_o_r_a_dhead.html#a438bedc799f54de4497fb1308fee2c99',1,'BIORADhead']]],
+  ['whitelevel_4',['whitelevel',['../struct_i_m_o_d.html#acc69d387ff55091f9a836e73d085b9b4',1,'IMOD']]],
+  ['whpad1_5',['whpad1',['../struct_w5head.html#ab8bb9927d3ca032144af194cabd21bc8',1,'W5head']]],
+  ['whpad2_6',['whpad2',['../struct_w5head.html#acb89ac867d2248d3affce0fbca4ef141',1,'W5head']]],
+  ['whpad3_7',['whpad3',['../struct_w5head.html#a2236a75b56a14dab06506fe8c1820369',1,'W5head']]],
+  ['whunused_8',['whUnused',['../struct_w5head.html#a1e7175c46cbad52ba20272d14013ba2a',1,'W5head']]],
+  ['whversion_9',['whVersion',['../struct_w5head.html#a72fe2c5c70536fc1421d725c8fb93daf',1,'W5head']]],
+  ['width_10',['width',['../struct_d_m_machead.html#aac19cd9a9d7cfc3cc3265c7a5fd8f549',1,'DMMachead']]],
+  ['widthin_11',['widthIn',['../structelectron_setter_delta.html#afb0c1bcb22493cd5b943e1732273bea7',1,'electronSetterDelta::widthIn'],['../structelectron_adder_delta.html#ab3e3181f1c8dcbde98fabf81ef7d21cc',1,'electronAdderDelta::widthIn'],['../structelectron_adder_b_spline.html#a5288cab68123a4dab52282e09ad40446',1,'electronAdderBSpline::widthIn']]],
+  ['widthout_12',['widthOut',['../structelectron_setter_delta.html#a173ce335015ca12ecf45a8dbfff09c3b',1,'electronSetterDelta::widthOut'],['../structelectron_adder_delta.html#afc23bdb2a0fca677040790399108d548',1,'electronAdderDelta::widthOut'],['../structelectron_adder_b_spline.html#abc3852d03dd7fe3f648c83b8f2fef876',1,'electronAdderBSpline::widthOut']]],
+  ['wiener_13',['wiener',['../struct_p_i_fimagehead__new.html#a863170d86b1bd4c98c55c33e8eb69a26',1,'PIFimagehead_new']]],
+  ['wrap_14',['wrap',['../struct_bmd.html#a45c2d1935d473b6557abe36039a0f890',1,'Bmd::wrap'],['../class_bmodparam.html#ae1b302feeb261d3e79a0e8c1dedbd888',1,'Bmodparam::wrap']]],
+  ['wri_15',['wri',['../class_bmicrograph.html#a314d2bdd5e5d55a557181497e8b949c8',1,'Bmicrograph']]]
 ];

@@ -164,7 +164,7 @@ int			main(int argc, char** argv)
 		project_set_mg_pixel_size(project, sam);
 	}
 
-	View				ref_view;
+	View2<double>		ref_view;
 	Bstring				id;
 
 	if ( maskfile.length() )
@@ -178,7 +178,7 @@ int			main(int argc, char** argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

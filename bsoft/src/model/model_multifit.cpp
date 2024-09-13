@@ -6,12 +6,11 @@
 @date	Modified: 20151127
 **/
 
-#include "rwimg.h"
-#include "rwmodel.h"
+//#include "rwimg.h"
+//#include "rwmodel.h"
 #include "model_multifit.h"
 #include "symmetry.h"
 #include "Matrix.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 
@@ -22,7 +21,7 @@ extern int 	verbose;		// Level of output to the screen
 @brief 	Searches a 2D/3D density map for a template.
 @param 	*p			the image.
 @param 	*ptemp		the template to be searched for.
-@param 	*view		views.
+@param 	&views		views.
 @param 	alpha		rotation around view vector, <0 = use 2*PI (radians).
 @param 	alpha_step	angular step size around view vector (radians).
 @param 	hires		high resolution limit.
@@ -35,15 +34,13 @@ extern int 	verbose;		// Level of output to the screen
 	The views must be calculated externally to allow for custom sets.
 
 **/
-Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
+Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, vector<View2<double>>& views,
 				double alpha, double alpha_step, double hires, double lores, Bimage* pmask, double threshold)
 {
-	int				mode = 0;		// Mode: 0=global, 1=refine, 2=symmetry
-	long			i, n = 0, nviews;
+	int				mode(0);		// Mode: 0=global, 1=refine, 2=symmetry
+	long			i, n(0), nviews;
 	double			alpha_min = 0;
 	double			alpha_max = TWOPI - alpha_step/2;
-	double			a;
-	View*			v;
 	
 	if ( alpha >= 0 ) {			// Case of refinement
 		mode = 1;
@@ -68,19 +65,11 @@ Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
 		origin = p->size()/2;
 		p->origin(origin);
 	}
+
+	if ( mode < 2 ) views = view_list_expand_angles(views, alpha_min, alpha_max, alpha_step);
 	
-	for ( nviews=0, v=view; v; v=v->next ) 
-		for ( a=alpha_min; a<=alpha_max; a+=alpha_step ) nviews++;
-		
-	View*			view_arr = new View[nviews];
-	Bmodel**		mod_arr = new Bmodel*[nviews];
-	
-	for ( n=0, v=view; v; v=v->next ) 
-		for ( a=alpha_min; a<=alpha_max; a+=alpha_step, n++ ) {
-			view_arr[n] = *v;
-			if ( mode < 2 ) view_arr[n][3] = a;
-		}
-		
+	nviews = views.size();
+
 	if ( verbose ) {
 		cout << "Finding a template in a map:" << endl;
 		cout << "Number of views:                " << nviews << endl;
@@ -88,7 +77,7 @@ Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
 		cout << "Origin:                         " << origin << endl;
 	}
 
-	Bstring			id("1");
+	string			id("1");
 	Bmodel*			model = new Bmodel(id);
 	Bcomponent*		comp = NULL;
 
@@ -98,12 +87,14 @@ Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
 	Bcomptype*		ct = model->add_type(id);
 	ct->file_name(ptemp->file_name());
 	
+	vector<Bmodel*>	mod_arr(nviews);
+	
 	if ( verbose & VERB_RESULT )
 		cout << "#\tx\ty\tz\tvx\tvy\tvz\tva\tCC" << endl;
 
 //#pragma omp parallel for private(comp)
 	for ( n=0; n<nviews; n++ ) {
-		mod_arr[n] = model_from_densities_for_view(p, ptemp, view_arr[n], hires, lores, pmask, threshold);
+		mod_arr[n] = model_from_densities_for_view(p, ptemp, views[n], hires, lores, pmask, threshold);
 		for ( comp = mod_arr[n]->comp; comp; comp = comp->next ) {
 			if ( verbose & VERB_RESULT )
 				cout << n << tab << comp->location()[0] << tab << comp->location()[1] << tab << 
@@ -130,12 +121,8 @@ Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
 			model->comp = mod_arr[n]->comp;
 		}
 		mod_arr[n]->comp = NULL;
-		model_kill(mod_arr[n]);
 	}
 
-	delete[] view_arr;
-	delete[] mod_arr;
-	
 	if ( verbose ) {
 		if ( i ) {
 			fomavg /= i;
@@ -167,7 +154,7 @@ Bmodel*		model_from_densities(Bimage* p, Bimage* ptemp, View* view,
 	The views must be calculated externally to allow for custom sets.
 
 **/
-Bmodel*		model_from_densities_for_view(Bimage* p, Bimage* ptemp, View view,
+Bmodel*		model_from_densities_for_view(Bimage* p, Bimage* ptemp, View2<double> view,
 				double hires, double lores, Bimage* pmask, double threshold)
 {
 	Matrix3			mat = view.matrix();
@@ -184,7 +171,7 @@ Bmodel*		model_from_densities_for_view(Bimage* p, Bimage* ptemp, View view,
 	Bcomponent*		comp = NULL;
 
 	for ( comp = model->comp; comp; comp = comp->next ) {
-		comp->view(View2<float>(view[0],view[1],view[2],view[3]));
+		comp->view(view);
 		comp->select(1);
 	}
 
@@ -217,11 +204,11 @@ Bmodel*		model_from_peaks(Bimage* p, double threshold, int wrap)
 	Vector3<long>	h(p->size()/2);
 	Vector3<double>	origin;
 		
-//	Bstring			id(p->file_name().post_rev('/').pre_rev('.'));
-	Bstring			id("Peaks");
+//	string			id(p->file_name().post_rev('/').pre_rev('.'));
+	string			id("Peaks");
 	Bmodel*			model = new Bmodel(id);
 	Bcomponent*		comp = NULL;
-	Bstring			nutype("PEAK");
+	string			nutype("PEAK");
 	
 	model->mapfile() = p->file_name();
 	model->FOM(1);
@@ -232,7 +219,7 @@ Bmodel*		model_from_peaks(Bimage* p, double threshold, int wrap)
 			for ( y=0; y<p->sizeY(); y++ ) {
 				for ( x=0; x<p->sizeX(); x++, i++ ) {
 					if ( (*pfom)[i] >= threshold ) {
-//						id = Bstring(++j, "%d");
+//						id = string(++j, "%d");
 //						comp = component_add(&comp, id);
 //						if ( !model->comp ) model->comp = comp;
 						if ( comp ) comp = comp->add(++j);

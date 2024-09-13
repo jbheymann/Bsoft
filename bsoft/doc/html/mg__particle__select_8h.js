@@ -13,7 +13,7 @@ var mg__particle__select_8h =
     [ "part_fix_defocus", "mg__particle__select_8h.html#ad816007a64af24ab32741397e8971a6f", null ],
     [ "part_fom_defocus_fit", "mg__particle__select_8h.html#a46283a21e655d0d30bf0349c972b730b", null ],
     [ "part_fom_defocus_fit_deselect", "mg__particle__select_8h.html#ad5f0a281f10b404ea6276c791ea05d94", null ],
-    [ "part_fom_order", "mg__particle__select_8h.html#ae4b69be5fd8360c2f88836fa7a864624", null ],
+    [ "part_fom_order", "mg__particle__select_8h.html#ae05191d4717e9e1ed1defe80ddb21e6d", null ],
     [ "part_invert_selection", "mg__particle__select_8h.html#a608c973f1f270183ec21fea25d6ec22b", null ],
     [ "part_origin_select", "mg__particle__select_8h.html#a808ff53eb9e89bad9c1e2cd4e451693b", null ],
     [ "part_reselect", "mg__particle__select_8h.html#a206d00314f833a2c6371cf56b6e94939", null ],
@@ -29,6 +29,7 @@ var mg__particle__select_8h =
     [ "part_select_group", "mg__particle__select_8h.html#a8be61b52e8203330c8146202044df533", null ],
     [ "part_select_maxsmooth", "mg__particle__select_8h.html#acb9d9c2915258d2a40f4b84a1b2eb84b", null ],
     [ "part_select_micrograph", "mg__particle__select_8h.html#af7c4047fd0427b6e25f11f687570006f", null ],
+    [ "part_select_micrographs_with_selected_particles", "mg__particle__select_8h.html#a683705737b6418786576c1b3f1dd776c", null ],
     [ "part_select_percentage", "mg__particle__select_8h.html#a09ffa8f997dd6f48a377a75207201ff1", null ],
     [ "part_select_random", "mg__particle__select_8h.html#a4b689a26908be5625d65eb4c20d1857e", null ],
     [ "part_select_random_filaments", "mg__particle__select_8h.html#a4224656f5ee9c547a1b99be6e7dfa215", null ],
@@ -49,7 +50,8 @@ var mg__particle__select_8h =
     [ "part_set_sequential", "mg__particle__select_8h.html#adee8557de60a30422b1790355aff3aff", null ],
     [ "part_side_view_select", "mg__particle__select_8h.html#a6741532c36930fa71a6eda10143776c8", null ],
     [ "part_unset_selection", "mg__particle__select_8h.html#a41fac751b6e91e0bb5db4908f2ada1c6", null ],
-    [ "part_view_select", "mg__particle__select_8h.html#a72245a5d264784a13e98b32e80f9488e", null ],
-    [ "project_fom_order", "mg__particle__select_8h.html#a69a5683d4b5e133127eb336bb12d6583", null ],
-    [ "project_part_sort", "mg__particle__select_8h.html#a845af9a07b0bc85f4b2c9c39505ed18d", null ]
+    [ "part_view_select", "mg__particle__select_8h.html#a84c37501c5c15732d19a826cce94b844", null ],
+    [ "project_fom_order", "mg__particle__select_8h.html#a5356ecac16472ef3a1fb6fcf5b9c3f42", null ],
+    [ "project_part_sort", "mg__particle__select_8h.html#a37c329a18a4968448aea7e63ef3c760d", null ],
+    [ "project_selected_partlist", "mg__particle__select_8h.html#a7bbf93a8c1bce7c7289755968df3fad2", null ]
 ];

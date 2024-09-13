@@ -1,6 +1,7 @@
 var class_bmicrograph =
 [
     [ "Bmicrograph", "class_bmicrograph.html#a2fd9e18329327b7903ccf93736eddca4", null ],
+    [ "count", "class_bmicrograph.html#aba04be67b9e896bf55097c00cf1e5964", null ],
     [ "bad", "class_bmicrograph.html#a07d9d20d229f00c7a2ef47a7235ca794", null ],
     [ "bad_radius", "class_bmicrograph.html#ac0c97678bd7ed2e62f0ed2bf5aa5b0f7", null ],
     [ "block", "class_bmicrograph.html#a74f655e8cd9a584fd268442fd8efa480", null ],

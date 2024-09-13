@@ -3,13 +3,12 @@
 @brief	Projecting a 3D map and calculating comparison statistics of the projections.
 @author Bernard Heymann
 @date	Created: 20170613
-@date	Modified: 20170613
+@date	Modified: 20230524
 **/
 
 #include "rwimg.h"
 #include "symmetry.h"
 #include "ps_views.h"
-#include "linked_list.h"
 #include "options.h"
 #include "utilities.h"
 #include "timer.h"
@@ -43,6 +42,7 @@ const char* use[] = {
 " ",
 "Output:",
 "-Plotviews plot.ps       Output postscript file with a plot of projection vectors.",
+"-jsout views.json        Output JSON file with views.",
 " ",
 NULL
 };
@@ -52,21 +52,22 @@ int 		main(int argc, char **argv)
 	// Initialize variables
 	DataType		nudatatype(Unknown_Type);		// Conversion to new type
 	char			axis('n');						// Projection axis
-	Vector3<double>	origin;				// Origin
+	Vector3<double>	origin;							// Origin
 	int				set_origin(0);					// Flag to set origin
-	Vector3<double>	sam;    				// Units for the three axes (A/pixel)
-	Bstring			symmetry_string("C1");			// Default: asymmetric or C1 point group
+	Vector3<double>	sam;    						// Units for the three axes (A/pixel)
+	string			symmetry_string("C1");			// Default: asymmetric or C1 point group
 	double			theta_step(0);					// Angular step size for theta
 	double			phi_step(0);					// Angular step size for phi
 	double			ang_min(0), ang_max(0), ang_step(0), ang_axis(0); // Tilt series
 	double			side_ang(-1);					// Side view variation angle
 	int				nviews(0);						// Number of views
 	int				view_flag(1);					// Flag for projection generation
-	View			theview;						// View to generate symmetry-related projections
+	View2<double>	theview;						// View to generate symmetry-related projections
 	int				symviews(0);					// Flag to generate symmetry-related projections
 	double			threshold(0);					// Density threshold
 	int				ps_flag(0);						// Flag for postscript output
 	Bstring			ps_file;
+	Bstring			js_file;
 	
 	int				i, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -126,46 +127,54 @@ int 		main(int argc, char **argv)
 				cerr << "-threshold: A positive value must be specified!" << endl;
 		if ( curropt->tag == "Plotviews" )
 			ps_file = curropt->filename();
-    }
+ 		if ( curropt->tag == "jsout" )
+			js_file = curropt->filename();
+   }
 	option_kill(option);
 	
 	double		ti = timer_start();
 
 	Bsymmetry 	sym(symmetry_string);
-	View*		views = NULL;
+	vector<View2<double>> views;
 	
 	if ( axis == 'n' ) {
 		if ( nviews ) {
 			views = random_views(nviews);
 		} else if ( side_ang > -1 ) {
-			views = side_views(sym, side_ang, theta_step, phi_step);
+			views = sym.side_views(side_ang, theta_step, phi_step);
 		} else if ( ang_step ) {
 			views = tilt_views(ang_min, ang_max, ang_step, ang_axis);
 		} else if ( symviews ) {
-			views = symmetry_get_all_views(sym, theview);
+			views = sym.get_all_views(theview);
 		} else if ( theta_step && phi_step ) {
-			views = asymmetric_unit_views(sym, theta_step, phi_step, view_flag);
+			views = sym.asymmetric_unit_views(theta_step, phi_step, view_flag);
 			ps_flag = 1;
 		}
-		if ( views ) {
-			nviews = count_list((char *) views);
-			if ( verbose )
-				cout << "Generating " << nviews << " projections" <<endl << endl;
+		if ( views.size() ) {
+			nviews = views.size();
+			if ( verbose ) {
+				cout << "Generating height images:" << endl;
+				cout << "Number:                         " << nviews << endl;
+				cout << endl;
+			}
+//			if ( asu ) sym.change_views_to_asymmetric_unit(views);
 			if ( ps_file.length() )
-				ps_views(ps_file, symmetry_string, views, ps_flag);
+				ps_views(ps_file.str(), symmetry_string, views, ps_flag);
+			if ( js_file.length() ) {
+				string		fn(js_file.c_str());
+				JSvalue		js = js_views(views);
+				js.write(fn);
+			}
 		}
 	} else if ( axis == 'z' ) {
-		views = new View(0,0,1,0);
+		views.push_back(View2<double>(0,0,1,0));
 	} else if ( axis == 'y' ) {
-		views = new View(0,1,0,0);
+		views.push_back(View2<double>(0,1,0,0));
 	} else if ( axis == 'x' ) {
-		views = new View(1,0,0,0);
+		views.push_back(View2<double>(1,0,0,0));
 	}
 	
-	if ( optind >= argc ) {
-		if ( views ) kill_list((char *) views, sizeof(View));
-		bexit(0);
-	}
+	if ( optind >= argc ) bexit(0);
 
 	// Read image file
 	int 		dataflag(0);
@@ -188,8 +197,6 @@ int 		main(int argc, char **argv)
 	
 	Bimage* 	pheight = p->height(views, threshold);
 	
-	if ( views ) kill_list((char *) views, sizeof(View));
-	
 	if ( optind < argc ) {
 		pheight->change_type(nudatatype);
 		write_img(argv[optind], pheight, 0);
@@ -198,7 +205,7 @@ int 		main(int argc, char **argv)
 	delete p;	
 	delete pheight;
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

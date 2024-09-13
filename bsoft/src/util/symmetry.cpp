@@ -3,13 +3,12 @@
 @brief	General symmetry functions
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20210116
+@date	Modified: 20230524
 **/
 
 #include "symmetry.h"
 #include "random_numbers.h"
 #include "Euler.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -39,7 +38,7 @@ extern int 	verbose;		// Level of output to the screen
 	If the point group string is empty, the default is C1 (asymmetric).
 
 **/
-Bsymmetry::Bsymmetry(Bstring sym)
+Bsymmetry::Bsymmetry(string sym)
 {
 	int 			theorder, helix_dyad(1);
 	double			helix_rise = 1, helix_angle = M_PI;
@@ -52,27 +51,27 @@ Bsymmetry::Bsymmetry(Bstring sym)
 	
 	if ( lbl[0] == 'C' ) {									// Cyclic point groups
 		if ( lbl == "Cs" ) theorder = 1;					// Reflection
-		else theorder = lbl.substr(1,10).integer();
+		else theorder = to_integer(lbl.substr(1,10));
 		pnt = 100 + theorder;
 		op.push_back(Bsymop(0,0,1,theorder,M_PI*2.0L/theorder));
 	} else if ( lbl[0] == 'D' ) {							// Dihedral point groups
-		theorder = lbl.substr(1,10).integer();
+		theorder = to_integer(lbl.substr(1,10));
 		pnt = 200 + theorder;
 		op.push_back(Bsymop(0,0,1,theorder,M_PI*2.0L/theorder));
 		op.push_back(Bsymop(1,0,0,2,M_PI));					// Rotate around 2-fold x-axis
 	} else if ( lbl[0] == 'T' ) {							// Tetrahedral point group
 		pnt = 320;
-		if ( !lbl.contains("-3") )
+		if ( lbl.find("-3") == string::npos )
 			op.push_back(Bsymop(1,1,1,3,M_PI*2.0L/3.0));	// Rotate around 3-fold (1,1,1)
 		op.push_back(Bsymop(0,0,1,2,M_PI));					// Rotate around 2-fold z-axis
 		op.push_back(Bsymop(1,0,0,2,M_PI));					// Rotate around 2-fold x-axis
 	} else if ( lbl[0] == 'O' ) {							// Octahedral point group
 		pnt = 432;
-		if ( !lbl.contains("-3") )
+		if ( lbl.find("-3") == string::npos )
 			op.push_back(Bsymop(1,1,1,3,M_PI*2.0L/3.0));	// Rotate around 3-fold (1,1,1)
-		if ( lbl.contains("-4") ) {
+		if ( lbl.find("-4") != string::npos ) {
 			op.push_back(Bsymop(1,-1,0,2,M_PI));			// Rotate around 2-fold axis
-		} else if ( lbl.contains("-2") ) {
+		} else if ( lbl.find("-2") != string::npos ) {
 			op.push_back(Bsymop(0,0,1,4,M_PI_2));			// Rotate around 4-fold z-axis
 		} else {
 			op.push_back(Bsymop(0,0,1,4,M_PI_2));			// Rotate around 4-fold z-axis
@@ -80,22 +79,22 @@ Bsymmetry::Bsymmetry(Bstring sym)
 		}
 	} else if ( lbl[0] == 'I' ) {							// Icosahedral point group
 		pnt = 532;
-		if ( !lbl.contains("-3") )
+		if ( lbl.find("-3") == string::npos )
 			op.push_back(Bsymop(1,1,1,3,M_PI*2.0L/3.0));	// Rotate around 3-fold (1,1,1)
-		if ( lbl.contains("-5") ) {
+		if ( lbl.find("-5") != string::npos ) {
 			op.push_back(Bsymop(1,0,0,2,M_PI));				// Rotate around 2-fold x-axis
-		} else if ( lbl.contains("-2") ) {
+		} else if ( lbl.find("-2") != string::npos ) {
 			op.push_back(Bsymop(1,-1,0,2,M_PI));			// Rotate around 2-fold axis
 		} else {
 			op.push_back(Bsymop(1,1.0L/GOLDEN,GOLDEN,2,M_PI));	// Rotate around 2-fold
 		}
-		if ( !lbl.contains("-5") ) {
+		if ( lbl.find("-5") == string::npos ) {
 			op.push_back(Bsymop(1.0L/GOLDEN,1,0,5,M_PI*2.0L/5.0));	// Rotate around 5-fold
 		}
-		if ( !lbl.contains("-2") ) {
+		if ( lbl.find("-2") == string::npos ) {
 			op.push_back(Bsymop(0,0,1,2,M_PI));				// Rotate around 2-fold z-axis
 		}
-		if ( lbl.contains("90") )
+		if ( lbl.find("90") != string::npos )
 			transform(mat);
 	} else if ( lbl[0] == 'H' ) {							// Helical symmetry
 		sscanf(lbl.c_str(), "H%lf,%lf,%d", &helix_rise, &helix_angle, &helix_dyad);
@@ -144,61 +143,90 @@ string		symmetry_helical_label(double helix_rise, double helix_angle,
 
 /**
 @brief 	Returns an asymmetric unit reference point.
-@param 	&sym		symmetry structure.
-@return View			reference view.
+@return View2<double>		reference view.
 **/
-View		view_symmetry_reference(Bsymmetry& sym)
+View2<double>	Bsymmetry::reference_symmetry_view()
 {
-	View			ref;
+	View2<double>	ref;
  
-	if ( sym.point() < 200 ) {
+	if ( pnt < 200 ) {
 		ref[0] = 1;
 		ref[2] = 0;
-	} else if ( sym.point() < 300 ) {
+	} else if ( pnt < 300 ) {
 		ref[0] = sin(M_PI/4);
 		ref[2] = cos(M_PI/4);
-	} else if ( sym.point() == 320 ) {
-		ref[0] = sin(M_PI/4);
-		ref[2] = cos(M_PI/4);
-	} else if ( sym.point() == 432 ) {
-		ref[0] = sin(M_PI/8);
-		ref[2] = cos(M_PI/8);
-	} else if ( sym.point() == 532 ) {
-		ref[0] = sin(M_PI/18);
-		ref[2] = cos(M_PI/18);
-	} else if ( sym.point() == 600 ) {	// What is it for helical symmetry?
+	} else if ( pnt == 320 ) {
+//		ref[0] = sin(M_PI/4);
+//		ref[2] = cos(M_PI/4);
+		ref[0] = ref[1] = cos(M_PI/8.0);
+		ref[2] = sin(M_PI/8.0);
+	} else if ( pnt == 432 ) {
+//		ref[0] = sin(M_PI/8);
+//		ref[2] = cos(M_PI/8);
+		ref[0] = cos(M_PI/3.0);
+		ref[2] = sin(M_PI/3.0);
+	} else if ( pnt == 532 ) {
+//		ref[0] = sin(M_PI/18);
+//		ref[2] = cos(M_PI/18);
+		if ( lbl.find("I90") ) {
+			ref[1] = 1;
+			ref[2] = GOLDEN + 1;
+		} else {
+			ref[0] = 1;
+			ref[2] = GOLDEN + 1;
+		}
+	} else if ( pnt == 600 ) {	// What is it for helical symmetry?
 	}
+
+	ref.normalize();
 
 	return ref;
 }
 
+int 		Bsymmetry::asymmetric_unit_index(View2<double> theview)
+{
+	int				i(0), n(0);
+	double			a, amin(TWOPI);
+
+	vector<View2<double>>	rv = reference_asymmetric_unit_views();
+	
+	for ( i=0; i<rv.size(); ++i ) {
+		a = theview.angle(rv[i]);
+		if ( amin > a ) {
+			amin = a;
+			n = i;
+		}
+	}
+		
+	return n;
+}
+
 /**
 @brief 	Rotation matrix to orient a symmetry axis on the z axis.
-@param 	&sym		symmetry structure.
 @param 	axis		desired symmetry axis order.
 @param 	axis_flag	view modifier.
 @return Matrix3		new rotation matrix.
 **/
-Matrix3		symmetry_rotate_to_axis(Bsymmetry& sym, long axis, long axis_flag)
+Matrix3		Bsymmetry::rotate_to_axis(long axis, long axis_flag)
 {
 	double			sqrt2(sqrt(2));
 	Matrix3			mat(1), mat2(1);
 
 	if ( axis_flag ) mat2 = Matrix3(Vector3<double>(0,0,1), M_PI_2);
 	
-	if ( sym.point() < 200 ) {							// Cyclic
-	} else if ( sym.point() < 300 ) {					// Dihedral
-		if ( axis_flag ) mat2 = Matrix3(Vector3<double>(0,0,1), M_PI/sym[0].order());
+	if ( pnt < 200 ) {							// Cyclic
+	} else if ( pnt < 300 ) {					// Dihedral
+		if ( axis_flag ) mat2 = Matrix3(Vector3<double>(0,0,1), M_PI/op[0].order());
 		if ( axis > 2 ) mat = Matrix3(Vector3<double>(0,1,0), M_PI_2);
-	} else if ( sym.point() < 400 ) {					// Tetrahedral
+	} else if ( pnt < 400 ) {					// Tetrahedral
 		if ( axis == 3 ) mat = Matrix3(Vector3<double>(-1/sqrt2,1/sqrt2,0), atan(sqrt2));
-	} else if ( sym.point() < 500 ) {					// Octahedral
+	} else if ( pnt < 500 ) {					// Octahedral
 		if ( axis == 3 ) mat = Matrix3(Vector3<double>(-1/sqrt2,1/sqrt2,0), atan(sqrt2));
 		if ( axis == 2 ) mat = Matrix3(Vector3<double>(0,1,0), M_PI/4);
 	} else {											// Icosahedral
 		if ( axis == 3 ) mat = Matrix3(Vector3<double>(0,1,0), atan(1/(GOLDEN*sqrt(3))));
 		if ( axis == 5 ) mat = Matrix3(Vector3<double>(1,0,0), atan(1/GOLDEN));
-	}	
+	}
 		
 	mat = mat2*mat;
 
@@ -207,36 +235,35 @@ Matrix3		symmetry_rotate_to_axis(Bsymmetry& sym, long axis, long axis_flag)
 
 /**
 @brief 	Get all symmetry axes.
-@param 	&sym				symmetry structure.
 @return vector<Vector3<double>>	array of axes.
 **/
-vector<Vector3<double>>	symmetry_get_axes(Bsymmetry& sym)
+vector<Vector3<double>>	Bsymmetry::get_axes()
 {
 	long			i, j, k, m, ns;
 	Vector3<double>	axis1;
 	Matrix3			mat;
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG symmetry_get_axes: label=" << sym.label() << endl;
+		cout << "DEBUG Bsymmetry::get_axes: label=" << lbl << endl;
 	
-	if ( sym.point() < 300 ) {					// Cyclic and dihedral
+	if ( pnt < 300 ) {					// Cyclic and dihedral
 		axis1[2] = 1;
-	} else if ( sym.point() < 400 ) {					// Tetrahedral
+	} else if ( pnt < 400 ) {					// Tetrahedral
 		axis1[0] = axis1[1] = axis1[2] = 1/sqrt(3.0);
-	} else if ( sym.point() < 500 ) {					// Octahedral
-		if ( sym.label().contains("-4") ) {
+	} else if ( pnt < 500 ) {					// Octahedral
+		if ( lbl.find("-4") != string::npos ) {
 			axis1[2] = 1;
-		} else if ( sym.label().contains("-3") ) {
+		} else if ( lbl.find("-3") != string::npos ) {
 			axis1[0] = axis1[1] = axis1[2] = 1/sqrt(3.0);
 		} else {
 			cerr << "Error: The symmetry designation must be either O-3 or O-4!" << endl;
 			bexit(-1);
 		}
-	} else if ( sym.point() < 600 ) {						// Icosahedral
-		if ( sym.label().contains("-5") ) {
+	} else if ( pnt < 600 ) {						// Icosahedral
+		if ( lbl.find("-5") != string::npos ) {
 			axis1[1] = 1/sqrt(2+GOLDEN);
 			axis1[2] = 1/sqrt(3-GOLDEN);
-		} else if ( sym.label().contains("-3") ) {
+		} else if ( lbl.find("-3") != string::npos ) {
 			axis1[0] = axis1[1] = axis1[2] = 1/sqrt(3.0);
 		} else {
 			cerr << "Error: The symmetry designation must be either I-3 or I-5!" << endl;
@@ -248,9 +275,9 @@ vector<Vector3<double>>	symmetry_get_axes(Bsymmetry& sym)
 	
 	axis.push_back(axis1);
 
-	for ( i=0, k=1, ns=1; i<sym.operations(); i++ ) {
-		for ( j=1; j<sym[i].order(); j++ ) {
-			mat = Matrix3(sym[i].axis(), j*TWOPI/sym[i].order());
+	for ( i=0, k=1, ns=1; i<op.size(); i++ ) {
+		for ( j=1; j<op[i].order(); j++ ) {
+			mat = Matrix3(op[i].axis(), j*TWOPI/op[i].order());
 			for ( m=0; m<ns; m++, k++ ) axis.push_back(mat * axis[m]);
 		}
 		ns = k;
@@ -265,148 +292,98 @@ vector<Vector3<double>>	symmetry_get_axes(Bsymmetry& sym)
 
 /**
 @brief 	Get all symmetry-related views of one given view.
-@param 	&sym		symmetry structure.
-@param 	asu_view	asymmetric unit vector and rotation angle.
-@return View*			linked list of views.
+@param 	asu_view			asymmetric unit vector and rotation angle.
+@return vector<View2<double>>	list of views.
 
 	The number of views generated for a point group symmetry is
 	calculated as the product of the order fields in the symmetry
 	structure.
 
 **/
-View*		symmetry_get_all_views(Bsymmetry& sym, View asu_view)
+vector<View2<double>>	Bsymmetry::get_all_views(View2<double> asu_view)
 {
 	int				i, j, k;
 	double			angle;
-	Quaternion		q, qv; 
+	Quaternion		q, qv;
 	
-	View*			view = NULL;
-	View*			v;
-	View*			vn = (View *) add_item((char **) &view, sizeof(View));
-	*vn = asu_view;
-	vn->normalize();
-	vn->next = NULL;
+	asu_view.normalize();
+	
+	vector<View2<double>>	view;
+	view.push_back(asu_view);
 	
 	if ( verbose & VERB_FULL ) {
 		cout << "Getting all the symmetric views:" << endl;
-		cout << "Symmetry:                       " << sym.label() << endl;
+		cout << "Symmetry:                       " << lbl << endl;
 		cout << "View:                           " << asu_view << endl;
 	}
 	
 	int				nview(1);
-	for ( i=0; i<sym.operations(); i++ ) {
-		for ( j=1; j<sym[i].order(); j++ ) {
-			angle = j*TWOPI*1.0L/sym[i].order();
-			q = Quaternion(sym[i].axis(), angle);
-			for ( k=0, v=view; k<nview; k++, v=v->next ) {
-				qv = v->quaternion();
+	for ( i=0; i<op.size(); i++ ) {
+		for ( j=1; j<op[i].order(); j++ ) {
+			angle = j*TWOPI*1.0L/op[i].order();
+			q = Quaternion(op[i].axis(), angle);
+			for ( k=0; k<nview; ++k ) {
+				qv = view[k].quaternion();
 				qv = q * qv;
-//				vn = (View *) add_item((char **) &view, sizeof(View));
-				vn = (View *) add_item((char **) &vn, sizeof(View));
-				*vn = View(qv);
+				view.push_back(qv);
 				if ( verbose & VERB_DEBUG )
-					cout << "DEBUG symmetry_get_all_views: " << vn << endl;
+					cout << "DEBUG symmetry_get_all_views: " << view.back() << endl;
 			}
 		}
-		nview *= sym[i].order();
+		nview *= op[i].order();
 	}
 	
 	if ( verbose & VERB_FULL )
-		for ( i=1, v=view; v; v=v->next, i++ )
-			cout << "View " << i << ": " << tab << *v << endl;
+		for ( i=0; i<view.size(); ++i )
+			cout << "View " << i+1 << ": " << tab << view[i] << endl;
 	
 	return view;
 }
 
-View*		symmetry_get_all_views(Bsymmetry& sym, View* views)
-{
-	View*		v;
-	View*		vt;
-	View*		vc = NULL;
-	View*		vn = NULL;
-	
-	for ( v=views; v; v=v->next ) {
-		vt = symmetry_get_all_views(sym, *v);
-		if ( vc ) vc->next = vt;
-		else vn = vc = vt;
-		while ( vc->next ) vc = vc->next;
-	}
-	
-	return vn;
-}
-
-/**
-@brief 	Get all symmetry-related views of one given view.
-@param 	&sym			symmetry structure.
-@return vector<Matrix3>		array of matrices.
-
-	The number of views generated for a point group symmetry is
-	calculated as the product of the order fields in the symmetry
-	structure.
-
-**/
-vector<Matrix3>	symmetry_get_all_matrices(Bsymmetry& sym)
-{
-	vector<Matrix3>	mat = sym.matrices();
-	
-	if ( verbose & VERB_FULL ) {
-		cout << "Getting all the symmetric matrices:" << endl;
-		cout << "Symmetry:                       " << sym.label() << endl;
-	}
-	
-	if ( verbose & VERB_FULL ) {
-		for ( int i=1; i<=mat.size(); ++i ) {
-			cout << "Matrix " << i << ":" << endl;
-			matrix3_show_hp(mat[i-1]);
-		}
-	}
-	
-	return mat;
-}
-
 /**
 @brief 	Initializes a well-distributed set of views in an asymmetric unit.
-@param 	&sym		symmetry structure.
-@param 	theta_step	angular step size from primary symmetry axis (radians).
-@param 	phi_step	angular step size around primary symmetry axis (radians).
-@param 	flag		flag for generating a full asymmetric unit (default 0=half).
-@return View* 		a linked list of views.
+@param 	theta_step			angular step size from primary symmetry axis (radians).
+@param 	phi_step			angular step size around primary symmetry axis (radians).
+@param 	flag				flag: 0=half, 1=full, 2=no in-plane.
+@return vector<View2<double>>	list of views.
 
 	A set of views is calculated with tesselation within each asymmetric
 	unit such that the views are well-distributed.
-	If the full flag is set, both halves of the asymmetric unit are covered.
+ 	Flag bits:
+		1: both halves of the asymmetric unit are covered.
+ 		2: no in-plane rotations are applied.
 
 **/
-View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step, int flag)
+vector<View2<double>>	Bsymmetry::asymmetric_unit_views(double theta_step, double phi_step, int flag)
 {
 	if ( theta_step < M_PI/1800 ) theta_step = M_PI/180;
 	if ( phi_step < M_PI/1800 ) phi_step = M_PI/180;
 
-	char			full = flag & 1;
+	char			full(flag & 1);
 	char			inplanerot = !(flag & 2);
-	int 			i, j, n = 0, ntheta, nphi, nrphi, istart;
-	double			theta, phi, max_theta, theta_start, phi_start, phi_end;
+	int 			i, j, n(0), ntheta, nphi, nrphi, istart;
+	double			theta, phi, max_theta, theta_start, phi_start, phi_end, ang(0);
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG asymmetric_unit_views: flag=" << flag << " full=" << full << endl;
 
 	max_theta = M_PI_2 + 1e-6;			// Most symmetries limited to upper half
 	ntheta = (int) (max_theta/theta_step + 0.5);
-	nphi = (int) (M_PI*2.0/(sym[0].order()*phi_step) + 0.5);
+	nphi = (int) (M_PI*2.0/(op[0].order()*phi_step) + 0.5);
 	
-	if ( sym.point() < 200 ) {
+	if ( pnt < 200 ) {
 		if ( full ) {
 			max_theta = M_PI + 1e-6;
 			ntheta += ntheta;
 		}
-	} else if ( sym.point() == 432 ) {
+	} else if ( pnt == 432 ) {
 		max_theta = M_PI_4 + 1e-6;
 		ntheta = (int) (max_theta/theta_step + 0.5);
-	} else if ( sym.point() == 532 ) {
+	} else if ( pnt == 532 ) {
 		max_theta = atan(1/(GOLDEN+1)) + 1e-6;
 		ntheta = (int) (max_theta/theta_step + 2.5);
 		nphi = (int) (atan(1/GOLDEN)/phi_step + 1.5);
-	} else if ( sym.point() == 600 ) {
+	} else if ( pnt == 600 ) {
 		ntheta = 1;
 		nphi = (int) (M_PI*2.0/phi_step + 1);
 	}
@@ -416,10 +393,10 @@ View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step
 		
 	if ( verbose & (VERB_PROCESS | VERB_LABEL) ) {
 		if ( full )
-			cout << "Getting all the asymmetric unit views for symmetry " << sym.label() << endl;
+			cout << "Getting all the asymmetric unit views for symmetry " << lbl << endl;
 		else
-			cout << "Getting half the asymmetric unit views for symmetry " << sym.label() << endl;
-		cout << "Theta and phi step sizes:       " << 
+			cout << "Getting half the asymmetric unit views for symmetry " << lbl << endl;
+		cout << "Theta and phi step sizes:       " <<
 				theta_step*180/M_PI << " " << phi_step*180/M_PI << " degrees" << endl;
 		cout << "Theta and phi steps:            " << ntheta << " " << nphi << endl;
 	}
@@ -427,53 +404,48 @@ View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG asymmetric_unit_views: Views allocated = " << 2*ntheta*nphi << endl;
 	
-	View*			view = NULL;	
-	View*			v = NULL;
+	vector<View2<double>>	views;
 	
-	if ( sym.point() < 500 ) {						// Top view for all but icosahedral and helical symmetry
-		v = (View *) add_item((char **) &view, sizeof(View));
-		(*v)[2] = 1;
+	if ( pnt < 500 ) {						// Top view for all but icosahedral and helical symmetry
+		views.push_back(View2<double>(0,0,1,0));
 		n = 1;
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG asymmetric_unit_views: Adding the top view" << endl;
 	}
 	
-	if ( sym.point() > 100 && sym.point() < 200 ) {
+	if ( pnt > 100 && pnt < 200 ) {
 		for ( theta=theta_step; theta<=max_theta; theta+=theta_step ) {
 			nrphi = (int) (nphi*sin(theta)/2 + 0.5);	// Number of views at this radius and theta
 			phi = istart = 0;
 			if ( nrphi ) {
-				phi = M_PI*1.0/(sym[0].order()*nrphi);
+				phi = M_PI*1.0/(op[0].order()*nrphi);
 				istart = -nrphi;
-				if ( sym.point() < 102 ) nrphi -= 1;
+				if ( pnt < 102 ) nrphi -= 1;
 			}
 			for ( j=istart; j<=nrphi; j++ ) {
-				v = (View *) add_item((char **) &view, sizeof(View));
-				*v = View(sin(theta)*cos(j*phi), sin(theta)*sin(j*phi), cos(theta), 0);
-				if ( inplanerot ) (*v)[3] = j*phi;
+				if ( inplanerot ) ang = j*phi;
+				views.push_back(View2<float>(sin(theta)*cos(j*phi), sin(theta)*sin(j*phi), cos(theta), ang));
 				n++;
 			}
 		}
-		if ( full && v->z() > -0.999999 ) {
-			v = (View *) add_item((char **) &view, sizeof(View));
-			(*v)[2] = -1;
+		if ( full && views.back()[2] > -0.999999 ) {
+			views.push_back(View2<double>(0,0,-1,0));
 			n++;
 		}
-	} else if ( sym.point() > 200 && sym.point() < 300 ) {
+	} else if ( pnt > 200 && pnt < 300 ) {
 		for ( theta=theta_step; theta<=max_theta; theta+=theta_step ) {
 			nrphi = (int) (nphi*sin(theta)/2 + 0.5);	// Number of views at this radius and theta
 			phi = 0;
-			if ( nrphi ) phi = M_PI*1.0/(sym[0].order()*nrphi);
+			if ( nrphi ) phi = M_PI*1.0/(op[0].order()*nrphi);
 			istart = 0;
 			if ( full ) istart = -nrphi;
 			for ( j=istart; j<=nrphi; j++ ) {
-				v = (View *) add_item((char **) &view, sizeof(View));
-				*v = View(sin(theta)*cos(j*phi), sin(theta)*sin(j*phi), cos(theta), 0);
-				if ( inplanerot ) (*v)[3] = j*phi;
+				if ( inplanerot ) ang = j*phi;
+				views.push_back(View2<double>(sin(theta)*cos(j*phi), sin(theta)*sin(j*phi), cos(theta), ang));
 				n++;
 			}
 		}
-	} else if ( sym.point() == 320 ) {
+	} else if ( pnt == 320 ) {
 		for ( theta=theta_step; theta<=max_theta; theta+=theta_step ) {
 			phi_start = 0;
 			phi_end = theta;
@@ -481,29 +453,26 @@ View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step
 			if ( full ) phi_start = -theta;
 			if ( full && theta > M_PI_4 ) phi_start = theta - M_PI_2;
 			for ( phi=phi_start; phi<=phi_end; phi+=phi_step ) {
-				v = (View *) add_item((char **) &view, sizeof(View));
-				*v = View(sin(theta), sin(phi), cos(theta), 0);
+				views.push_back(View2<double>(sin(theta), sin(phi), cos(theta), 0));
 				n++;
 			}
 		}
-	} else if ( sym.point() == 432 ) {
+	} else if ( pnt == 432 ) {
 		for ( theta=theta_step; theta<=max_theta; theta+=theta_step ) {
 			phi_start = 0;
 			if ( full ) phi_start = -theta;
 			for ( phi=phi_start; phi<=theta; phi+=phi_step ) {
-				v = (View *) add_item((char **) &view, sizeof(View));
-				*v = View(sin(theta), sin(phi), cos(theta), 0);
+				views.push_back(View2<double>(sin(theta), sin(phi), cos(theta), 0));
 				n++;
 			}
 		}
-	} else if ( sym.point() == 532 ) {
-		if ( sym.label().contains("I90") ) {
+	} else if ( pnt == 532 ) {
+		if ( lbl.find("I90") != string::npos ) {
 			theta_start = 0;
 			if ( full ) theta_start = -ntheta*theta_step;
 			for ( theta=theta_start; theta<=max_theta; theta+=theta_step ) {
 				for ( phi=0; phi<=GOLDEN*(max_theta - fabs(theta)); phi+=phi_step ) {
-					v = (View *) add_item((char **) &view, sizeof(View));
-					*v = View(tan(phi), tan(theta), cos(theta), 0);
+					views.push_back(View2<double>(tan(phi), tan(theta), cos(theta), 0));
 					n++;
 				}
 			}
@@ -513,62 +482,57 @@ View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step
 				phi_start = 0;
 				if ( full ) phi_start = -nrphi*phi_step;
 				for ( phi=phi_start; phi<=GOLDEN*(max_theta - theta); phi+=phi_step ) {
-					v = (View *) add_item((char **) &view, sizeof(View));
-					*v = View(tan(theta), tan(phi), cos(theta), 0);
+					views.push_back(View2<double>(tan(theta), tan(phi), cos(theta), 0));
 					n++;
 				}
 			}
 		}
-	} else if ( sym.point() == 600 ) {					// Helical symmetry
+	} else if ( pnt == 600 ) {					// Helical symmetry
 		for ( phi = 0; phi < TWOPI-0.001; phi += phi_step ) {
-			v = (View *) add_item((char **) &view, sizeof(View));
-			*v = View(cos(phi), sin(phi), 0, 0);
-			if ( inplanerot ) (*v)[3] = phi;
+			if ( inplanerot ) ang = phi;
+			views.push_back(View2<double>(cos(phi), sin(phi), 0, ang));
 			n++;
 		}
 	} else {
-		cerr << "Warning: Symmetry type " << sym.point() << " not supported!" << endl;
+		cerr << "Warning: Symmetry type " << pnt << " not supported!" << endl;
 	}
 
 	if ( verbose & ( VERB_PROCESS | VERB_LABEL ) )
 		cout << "Views generated:                " << n << endl << endl;
 
-	for ( v=view; v; v = v->next ) v->normalize();
+	for ( auto& v: views ) v.normalize();
 	
 	if ( verbose & VERB_FULL ) {
 		cout << "View\tx\ty\tz\ta" << endl;
-		for ( v=view, i=1; v; v = v->next, i++ )
-			cout << i << tab << *v << endl;
+		for ( i=0; i<views.size(); ++i )
+			cout << i+1 << tab << views[i] << endl;
 		cout << endl;
 	}
 	
-	return view;
+	return views;
 }
 
-View* 		asymmetric_unit_views(Bsymmetry& sym, double theta_step, double phi_step, double alpha_step, int flag)
+vector<View2<double>>	Bsymmetry::asymmetric_unit_views(double theta_step, double phi_step, double alpha_step, int flag)
 {
-	View*		view = asymmetric_unit_views(sym, theta_step, phi_step, flag);
+	vector<View2<double>>	views = asymmetric_unit_views(theta_step, phi_step, flag);
 	
-	View*		view2 = view_list_expand_angles(view, -M_PI, M_PI - alpha_step/2, alpha_step);
+	vector<View2<double>>	views2 = view_list_expand_angles(views, -M_PI, M_PI - alpha_step/2, alpha_step);
 	
-	kill_list((char *) view, sizeof(View));
-
-	return view2;
+	return views2;
 }
 
 /**
 @brief 	Initializes a set of views around the z-axis for helical projection.
-@param 	&sym		symmetry structure.
-@param 	side_ang	starting angle (radians).
-@param 	theta_step	angular step size perpendicular to equator (radians).
-@param 	phi_step	angular step size around equator (radians).
-@return View* 		a set of 4-value views.
+@param 	side_ang			starting angle (radians).
+@param 	theta_step			angular step size perpendicular to equator (radians).
+@param 	phi_step			angular step size around equator (radians).
+@return vector<View2<double>>	list of views.
 
 	A set of views is calculated corresponding to views around the z-axis
 	including some tilting to account for oblique views.
 
 **/
-View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi_step)
+vector<View2<double>>	Bsymmetry::side_views(double side_ang, double theta_step, double phi_step)
 {
 	if ( side_ang < 0 ) side_ang = -side_ang;
 	if ( theta_step <= 0 ) {
@@ -577,19 +541,18 @@ View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi
 	} else {
 		side_ang = theta_step*floor(side_ang/theta_step);
 	}
-	if ( phi_step <= 0 ) phi_step = M_PI_2;	
+	if ( phi_step <= 0 ) phi_step = M_PI_2;
 	
-	int				order = sym[0].order();
+	int				order = op[0].order();
 	if ( order < 1 ) order = 1;
 	
 	double			phi, theta;
 	int				n;
 	Euler			euler;
-	View*			view = NULL;
-	View*			v = NULL;
+	vector<View2<double>>	views;
 	
 	if ( verbose & VERB_PROCESS ) {
-		cout << "Getting all the asymmetric unit side views for symmetry " << sym.label() << endl;
+		cout << "Getting all the asymmetric unit side views for symmetry " << lbl << endl;
 		cout << "Step size around equator:       " << phi_step*180.0/M_PI << " degrees" << endl;
 		if ( side_ang ) {
 			cout << "Deviation from equator:         " << side_ang*180.0/M_PI << " degrees" << endl;
@@ -599,9 +562,8 @@ View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi
 	
 	for ( n = 0, phi = -M_PI*1.0L/order; phi < M_PI*1.0L/order; phi += phi_step ) {
 		for ( theta = M_PI_2 - side_ang; theta <= M_PI_2 + side_ang; theta += theta_step ) {
-			v = (View *) add_item((char **) &view, sizeof(View));
 			euler = Euler(0, theta, phi);
-			*v = euler.view();
+			views.push_back(euler.view());
 			n++;
 //			cout << "theta=" << theta*180.0/M_PI << " phi=" << phi*180.0/M_PI << endl;
 		}
@@ -610,108 +572,83 @@ View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi
 	if ( verbose & VERB_PROCESS )
 		cout << "Number of views:                " << n << endl << endl;
 	
-	return view;
+	return views;
 }
 
-View*		side_views(Bsymmetry& sym, double side_ang, double theta_step, double phi_step, double alpha_step)
+vector<View2<double>>	Bsymmetry::side_views(double side_ang, double theta_step, double phi_step, double alpha_step)
 {
-	View*		view = side_views(sym, side_ang, theta_step, phi_step);
+	vector<View2<double>>	views = side_views(side_ang, theta_step, phi_step);
 	
-	View*		view2 = view_list_expand_angles(view, -M_PI, M_PI - alpha_step/2, alpha_step);
+	vector<View2<double>>	views2 = view_list_expand_angles(views, -M_PI, M_PI - alpha_step/2, alpha_step);
 	
-	kill_list((char *) view, sizeof(View));
-
-	return view2;
-}
-
-/**
-@brief 	Change the views to those in the asymmetric unit.
-@param 	&sym		symmetry structure.
-@param 	*view		list of views (replaced).
-@return int			0.
-
-	The view is replaced with the one in the standard asymmetric unit.
-
-**/
-int 		change_views_to_asymmetric_unit(Bsymmetry& sym, View* view)
-{
-	if ( sym.point() < 102 ) return 0;
-	
-	View*			v;
-
-	for ( v=view; v; v=v->next )
-		*v = find_asymmetric_unit_view(sym, *v);
-	
-	return 0;
+	return views2;
 }
 
 /**
 @brief 	Finds the corresponding view in the asymmetric unit.
-@param 	&sym		symmetry structure.
-@param 	theview		view.
-@return View			the asymmetric unit view.
+@param 	theview			view.
+@return View2<double>	the asymmetric unit view.
 
 	The asymmetric unit view is found and the the new view with the 
 	link from the old view is returned.
 
 **/
-View 		find_asymmetric_unit_view(Bsymmetry& sym, View theview)
+View2<double>	Bsymmetry::find_asymmetric_unit_view(View2<double> theview)
 {
-	if ( sym.point() < 102 ) return theview;
-	if ( sym.point() >= 600 ) return theview;
+	if ( pnt < 102 ) return theview;
+	if ( pnt >= 600 ) return theview;
 	
-	View*			v, bv(theview), tv;
-	View*			view = symmetry_get_all_views(sym, theview);
+	View2<double>	v, bv(theview), tv;
+	vector<View2<double>>	views = get_all_views(theview);
 	
 	int				found(0);
 	double			tol(1e-10);
-	double			lim = tan(M_PI*1.0L/sym[0].order());
+	double			lim = tan(M_PI*1.0L/op[0].order());
 	
-	for ( v=view; v && !found; v=v->next )
-			if ( ( v->x() - tol >= 0 ) || ( v->x() + tol >= 0 && v->y() >= 0 ) ) {
-		tv.x(0); tv.y(0); tv.z(0);
-		if ( sym.point() < 200 ) {
-			if ( sym[0].order() == 2 ) {
-				tv = *v;
-			} else {
-				if ( fabs(v->y()) <= v->x()*lim + tol )
-					tv = *v;
-			}
-		} else if ( sym.point() > 200 && sym.point() < 300 ) {
-			if ( v->z() + tol >= 0 ) {
-				if ( sym[0].order() == 2 ) {
-					tv = *v;
+	for ( auto& v: views ) {
+		if ( found ) break;
+		if ( ( v[0] - tol >= 0 ) || ( v[0] + tol >= 0 && v[1] >= 0 ) ) {
+			tv = View2<double>(0,0,0,0);
+			if ( pnt < 200 ) {
+				if ( op[0].order() == 2 ) {
+					tv = v;
 				} else {
-					if ( fabs(v->y()) <= v->x()*lim + tol ) tv = *v;
+					if ( fabs(v[1]) <= v[0]*lim + tol ) tv = v;
 				}
+			} else if ( pnt > 200 && pnt < 300 ) {
+				if ( v[2] + tol >= 0 ) {
+					if ( op[0].order() == 2 ) {
+						tv = v;
+					} else {
+						if ( fabs(v[1]) <= v[0]*lim + tol ) tv = v;
+					}
+				}
+			} else if ( pnt == 320 ) {
+				if ( fabs(v[1]) <= v[0] + tol && fabs(v[1]) <= v[2] + tol )
+					tv = v;
+			} else if ( pnt == 432 ) {
+				if ( fabs(v[1]) <= v[0] + tol && v[0] <= v[2] + tol )
+					tv = v;
+			} else if ( pnt == 532 ) {
+				if ( lbl.find("I90") != string::npos ) {
+					if ( v[2] + tol >= 0 && fabs(v[1]) <= (v[2]/GOLDEN - v[0])/GOLDEN + tol )
+						tv = v;
+				} else {
+					if ( v[2] + tol >= 0 && fabs(v[1]) <= v[2]/GOLDEN - v[0]*GOLDEN + tol )
+						tv = v;
+				}
+			} else if ( pnt >= 600 ) {	// What is it for helical symmetry?
+				tv = theview;
 			}
-		} else if ( sym.point() == 320 ) {
-			if ( fabs(v->y()) <= v->x() + tol && fabs(v->y()) <= v->z() + tol )
-				tv = *v;
-		} else if ( sym.point() == 432 ) {
-			if ( fabs(v->y()) <= v->x() + tol && v->x() <= v->z() + tol )
-				tv = *v;
-		} else if ( sym.point() == 532 ) {
-			if ( sym.label().contains("I90") ) {
-				if ( v->z() + tol >= 0 && fabs(v->y()) <= (v->z()/GOLDEN - v->x())/GOLDEN + tol )
-					tv = *v;
-			} else {
-				if ( v->z() + tol >= 0 && fabs(v->y()) <= v->z()/GOLDEN - v->x()*GOLDEN + tol )
-					tv = *v;
+			if ( tv.vector_size() > 0.9 ) {
+				bv = tv;
+				found++;
 			}
-		} else if ( sym.point() >= 600 ) {	// What is it for helical symmetry?
-			tv = theview;
-		}
-		if ( tv.vector_size() > 0.9 ) {
-			bv = tv;
-			found++;
 		}
 	}
 	
 	if ( !found ) {
 		cerr << "ASU view not found: " << theview << endl;
-//		for ( v=view; v; v=v->next )
-//			cerr << *v << endl;
 	} else {
 		if ( verbose & VERB_STATS ) {
 			cout << "Old view:\t" << theview << endl;
@@ -719,150 +656,51 @@ View 		find_asymmetric_unit_view(Bsymmetry& sym, View theview)
 		}
 	}
 
-	kill_list((char *) view, sizeof(View));
-	
-	bv.next = theview.next;
-	
 	return bv;
 }
 
 /**
 @brief 	Finds the closest symmetric match between two views.
-@param 	&sym		symmetry structure.
-@param 	view_ref	reference view.
-@param 	view		test view.
-@return View			matched symmetric version of test view.
+@param 	view_ref		reference view.
+@param 	view			test view.
+@return View2<double>	matched symmetric version of test view.
 
 	A list of symmetry-related views of the test view is searched
 	for the closest to the reference view.
 	The matched view is returned.
 
 **/
-View 		find_closest_symmetric_view(Bsymmetry& sym, View view_ref, View view)
+View2<double>	Bsymmetry::find_closest_symmetric_view(View2<double> view_ref, View2<double> view)
 {
-	if ( sym.point() < 102 ) return view;
-	if ( sym.point() >= 600 ) return view;
+	if ( pnt < 102 ) return view;
+	if ( pnt >= 600 ) return view;
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG find_closest_symmetric_view: " << sym.label() << endl;
+		cout << "DEBUG Bsymmetry::find_closest_symmetric_view: " << lbl << endl;
 	
-	double			r, rb(1e30);
-	View*			v, bv(view);
-	View*			viewsym = symmetry_get_all_views(sym, view);
+	double					r, rb(1e30);
+	View2<double>			bv(view);
+	vector<View2<double>>	viewsym = get_all_views(view);
 	
-	for ( v=viewsym; v; v=v->next ) {
-//		r = v->residual(view_ref);
-		r = v->angle(view_ref);
+	for ( auto& v: viewsym ) {
+//		r = v.residual(view_ref);
+		r = v.angle(view_ref);
 		if ( rb > r ) {
 			rb = r;
-			bv = *v;
+			bv = v;
 		}
 	}
-	
-	kill_list((char *) viewsym, sizeof(View));
-	
-	bv.next = view.next;
 	
 	return bv;
 }
 
 /**
-@brief 	Returns a reference view for each asymmetric unit.
-@param 	&sym		symmetry structure.
-@return View*			reference views.
-**/
-View* 		reference_asymmetric_unit_views(Bsymmetry& sym)
-{
-	View			ref;
-	
-	if ( sym.point() < 200 ) {
-		ref[0] = 1;
-		ref[2] = 0;
-	} else if ( sym.point() < 300 ) {
-		ref[0] = ref[2] = 1;
-	} else if ( sym.point() == 320 ) {
-		ref[0] = ref[1] = cos(M_PI/8.0);
-		ref[2] = sin(M_PI/8.0);
-	} else if ( sym.point() == 432 ) {
-		ref[0] = cos(M_PI/3.0);
-		ref[2] = sin(M_PI/3.0);
-	} else if ( sym.point() == 532 ) {
-		if ( sym.label().contains("I90") ) {
-			ref[1] = 1;
-			ref[2] = GOLDEN + 1;
-		} else {
-			ref[0] = 1;
-			ref[2] = GOLDEN + 1;
-		}
-	} else if ( sym.point() == 600 ) {	// What is it for helical symmetry?
-	}
-
-	ref.normalize();
-
-	View*			rv = symmetry_get_all_views(sym, ref);
-
-	return rv;
-}
-
-/**
-@brief 	Returns a randomly picked symmetry view.
-@param	&asu_view	asymmetric unit view.
-@param 	&sym		symmetry structure.
-@return View			picked view.
-**/
-View 		random_symmetric_view(View& asu_view, Bsymmetry& sym)
-{
-	View*			v;
-	View*			view = symmetry_get_all_views(sym, asu_view);
-	
-	long			n(sym.order());
-	
-	long			j, i(n*random()*0.99999L/get_rand_max());
-
-	for ( j=0, v=view; v && j<i; v=v->next, j++ ) ;
-	
-	View			vr(*v);
-	
-	kill_list((char *) view, sizeof(View));
-	
-	return vr;
-}
-
-/**
-@brief 	Returns an asymmetric unit index number.
-@param 	theview		view to test.
-@param 	&sym		symmetry structure.
-@return int			view number.
-**/
-int 		test_asymmetric_unit_view(View theview, Bsymmetry& sym)
-{
-	int				i, n = 0;
-	double			a, amin = TWOPI;
-
-	View*			rv = reference_asymmetric_unit_views(sym);
-	View*			v;
-	
-	for ( i=0, v=rv; v; v=v->next, i++ ) {
-		a = theview.angle(*v);
-		if ( amin > a ) {
-			amin = a;
-			n = i;
-		}
-	}
-	
-	kill_list((char *) rv, sizeof(View));
-		
-	return n;
-}
-
-/**
 @brief 	Show symmetry matrices.
-@param 	&sym		symmetry structure.
 @return int 			number of symmetry matrices.
 **/
-int			sym_show_matrices(Bsymmetry& sym)
+int			Bsymmetry::show_matrices()
 {
-	vector<Matrix3>	mat = sym.matrices();
+	vector<Matrix3>	mat = matrices();
 	int				n(mat.size());
 
 	cout << "\nSymmetry matrices (" << n << "):" << endl;
@@ -877,34 +715,34 @@ int			sym_show_matrices(Bsymmetry& sym)
 
 /**
 @brief 	Show symmetry matrices associated with each symmetry operator.
-@param 	&sym		symmetry structure.
 @return int 			number of symmetry matrices.
 **/
-int			sym_show_operational_matrices(Bsymmetry& sym)
+int			Bsymmetry::show_operational_matrices()
 {
 	int			i;
+	Matrix3		mat;
 
-	for ( i=0; i<sym.operations(); ++i ) {
+	for ( i=0; i<op.size(); ++i ) {
+		mat = op[i].matrix();
 		cout << "Operation " << i+1 << ":" << endl;
-		cout << "Axis and angle: " << sym[i].axis() << " " << 360.0/sym[i].order() << endl;
-		cout << sym[i].matrix() << endl;
+		cout << "Axis and angle: " << op[i].axis() << " " << 360.0/op[i].order() << endl;
+		cout << mat << endl;
 	}
 	cout << endl;
 	
-	return sym.operations();
+	return op.size();
 }
 
 /**
 @brief 	Show PDB format symmetry matrices associated with each symmetry operator.
-@param 	&sym		symmetry structure.
 @return int 			number of symmetry matrices.
 **/
-int			sym_show_pdb_matrices(Bsymmetry& sym)
+int			Bsymmetry::show_pdb_matrices()
 {
 	int			i, j, k;
 	double		t(0);
 
-	vector<Matrix3>	mat = sym.matrices();
+	vector<Matrix3>	mat = matrices();
 	long			nsym = mat.size();
 
 	for ( i=0; i<nsym; i++ ) {

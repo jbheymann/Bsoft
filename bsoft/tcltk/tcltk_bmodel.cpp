@@ -157,7 +157,7 @@ int			model_processing(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG model_processing: File name: " << filename << " (" << filename.length() << ")" << endl;
 		if ( model ) model_kill(model);
-		model = read_model(filename);
+		model = read_model(filename.str());
 		Tcl_SetStringObj(returnObj, (char *)model->identifier() .c_str(), model->identifier() .length());
 	} else if ( action == "write" ) {
 		if ( objc < 2 ) {
@@ -173,7 +173,7 @@ int			model_processing(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 		}
 		string		com = "\n# Written from Bshow\n# ";
 		model->comment() += com + asctime(localtime(&ti)) + "\n";
-		write_model(filename, model);
+		write_model(filename.str(), model);
 	} else if ( action == "kill" ) {
 		model_kill(model);
 	} else if ( action == "find" ) {
@@ -237,7 +237,7 @@ Tcl_Obj*	do_get(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 {
 	Tcl_Obj*			returnObj = Tcl_NewObj();
 
-	int					err(0);
+//	int					err(0);
 	Bmodel*				mp = model;
 	Bstring				bstr, imgtype;
 	
@@ -259,7 +259,7 @@ Tcl_Obj*	do_get(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		mp = model;
 	} else if ( item.contains("Model") ) {
 		for ( mp = model; mp && mp->identifier() != id.str(); mp = mp->next ) ;
-		if ( !mp ) err++;
+//		if ( !mp ) err++;
 	} else {
 		cerr << "Error in do_get: item \"" << item << "\" not supported!" << endl;
 		return returnObj;
@@ -328,7 +328,7 @@ int			do_set(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 {
 	if ( !model ) return 0;
 	
-	int					err(0);
+//	int					err(0);
 	int					i, rtn(0);
 	double				radius(1);
 	Bstring				calc_views;
@@ -352,7 +352,7 @@ int			do_set(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		mp = model;
 	} else if ( item.contains("Model") ) {
 		for ( mp = model; mp && mp->identifier() != id.str(); mp = mp->next ) ;
-		if ( !mp ) err++;
+//		if ( !mp ) err++;
 	} else {
 		cerr << "Error in do_get: item \"" << item << "\" not supported!" << endl;
 		return rtn;
@@ -583,7 +583,7 @@ Tcl_Obj*	draw_components(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		dz = fabs(coor[2] - slice);
 		if ( dz <= rad ) {
 			rad = sqrt(rad*rad - dz*dz);
-			sprintf(string, "%ld %ld %g ", coor[0], coor[1], rad);
+			snprintf(string, MAXLINELEN, "%ld %ld %g ", coor[0], coor[1], rad);
 			Tcl_AppendToObj(returnObj, string, strlen(string));
 		}
 	}
@@ -698,7 +698,7 @@ Tcl_Obj*	comptype_ids(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	Bcomptype*			ct;
 
 	for ( ct = model->type; ct; ct = ct->next ) if ( ct->select() ) {
-		sprintf(string, " %ld", stol(ct->identifier()));
+		snprintf(string, MAXLINELEN, " %ld", stol(ct->identifier()));
 		Tcl_AppendToObj(returnObj, string, strlen(string));
 	}
 	
@@ -715,7 +715,7 @@ Tcl_Obj*	comptype_list(Bmodel* model)
 	model->update_type_counts();
 
 	for ( ct = model->type; ct; ct = ct->next ) {
-		sprintf(string, " %s %s %ld %g %g %g %ld", ct->identifier().c_str(),
+		snprintf(string, MAXLINELEN, " %s %s %ld %ld %g %g %ld", ct->identifier().c_str(),
 			ct->file_name().c_str(), ct->image_number(),
 			ct->component_count(), ct->mass(), ct->FOM(), ct->select());
 		Tcl_AppendToObj(returnObj, string, strlen(string));
@@ -730,7 +730,7 @@ Tcl_Obj*	comptype_create_update(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 
 	int					num(-1);
 	double				mass(0);
-	Bstring				type_id("VER");
+	string				type_id("VER");
 	Bcomptype*			ct;
 	Bstring				filename;
 
@@ -811,11 +811,11 @@ Tcl_Obj*	comptype_first_selected(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		if ( ct->select() ) ctsel = ct;
 
 	if ( ct ) {
-		sprintf(string, " %s %s %ld %g %g %g %ld", ct->identifier().c_str(),
+		snprintf(string, MAXLINELEN, " %s %s %ld %ld %g %g %ld", ct->identifier().c_str(),
 			ct->file_name().c_str(), ct->image_number(),
 			ct->component_count(), ct->mass(), ct->FOM(), ct->select());
 	} else {
-		sprintf(string, " VER ? 0 0 1 1 1");
+		snprintf(string, MAXLINELEN, " VER ? 0 0 1 1 1");
 	}
 
 	Tcl_SetStringObj(returnObj, string, strlen(string));
@@ -959,7 +959,7 @@ Tcl_Obj*	component_ids(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	Bcomponent*			comp = NULL;
 
 	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->FOM()  >= fom_cut ) {
-		sprintf(string, " %ld", stol(comp->identifier()));
+		snprintf(string, MAXLINELEN, " %ld", stol(comp->identifier()));
 		Tcl_AppendToObj(returnObj, string, strlen(string));
 	}
 	
@@ -982,7 +982,7 @@ Tcl_Obj*	component_location(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	for ( comp = model->comp; comp && stoi(comp->identifier()) != id; comp = comp->next ) ;
 	
 	if ( comp ) {
-		sprintf(string, "%f %f %f", comp->location()[0], comp->location()[1], comp->location()[2]);
+		snprintf(string, MAXLINELEN, "%f %f %f", comp->location()[0], comp->location()[1], comp->location()[2]);
 		Tcl_SetStringObj(returnObj, string, strlen(string));
 	}
 	
@@ -1045,7 +1045,7 @@ Tcl_Obj*	component_img_coords(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		for ( comp = model->comp; comp && stoi(comp->identifier()) != id; comp = comp->next ) ;
 		if ( comp ) {
 			hexcol = comp->color().hex();
-			sprintf(string, " %ld %g %g %g %g %s", stol(comp->identifier()),
+			snprintf(string, MAXLINELEN, " %ld %g %g %g %g %s", stol(comp->identifier()),
 				comp->location()[0]/p->sampling(0)[0] + p->image[n].origin()[0],
 				comp->location()[1]/p->sampling(0)[1] + p->image[n].origin()[1],
 				comp->location()[2]/p->sampling(0)[2] + p->image[n].origin()[2],
@@ -1055,7 +1055,7 @@ Tcl_Obj*	component_img_coords(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	} else {
 		for ( comp = model->comp; comp; comp = comp->next ) if ( comp->FOM() >= fom_cut ) {
 			hexcol = comp->color().hex();
-			sprintf(string, " %ld %g %g %g %g %s", stol(comp->identifier()),
+			snprintf(string, MAXLINELEN, " %ld %g %g %g %g %s", stol(comp->identifier()),
 				comp->location()[0]/p->sampling(0)[0] + p->image[n].origin()[0],
 				comp->location()[1]/p->sampling(0)[1] + p->image[n].origin()[1],
 				comp->location()[2]/p->sampling(0)[2] + p->image[n].origin()[2],
@@ -1063,7 +1063,7 @@ Tcl_Obj*	component_img_coords(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 			Tcl_AppendToObj(returnObj, string, strlen(string));
 		}
 //	} else {
-//		sprintf(string, " -1");
+//		snprintf(string, MAXLINELEN, " -1");
 //		Tcl_AppendToObj(returnObj, string, strlen(string));
 	}
 	
@@ -1461,7 +1461,7 @@ Tcl_Obj*	link_ids(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 
 	for ( link = model->link; link; link = link->next )
 		if ( link->comp[0]->FOM()  >= fom_cut && link->comp[1]->FOM()  >= fom_cut ) {
-			sprintf(string, " %ld %ld", stol(link->comp[0]->identifier()), stol(link->comp[1]->identifier()));
+			snprintf(string, MAXLINELEN, " %ld %ld", stol(link->comp[0]->identifier()), stol(link->comp[1]->identifier()));
 			Tcl_AppendToObj(returnObj, string, strlen(string));
 		}
 	
@@ -1502,7 +1502,7 @@ Tcl_Obj*	link_img_coords(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 				( stoi(link->comp[0]->identifier()) == id2 && stoi(link->comp[1]->identifier()) == id1 ) ) break;
 		if ( link ) {
 			hexcol = link->color().hex();
-			sprintf(string, " %g %g %g %g %g %g %g %s",
+			snprintf(string, MAXLINELEN, " %g %g %g %g %g %g %g %s",
 				link->comp[0]->location()[0]/p->sampling(0)[0] + p->image[n].origin()[0],
 				link->comp[0]->location()[1]/p->sampling(0)[1] + p->image[n].origin()[1],
 				link->comp[0]->location()[2]/p->sampling(0)[2] + p->image[n].origin()[2],
@@ -1516,7 +1516,7 @@ Tcl_Obj*	link_img_coords(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		for ( link = model->link; link; link = link->next )
 				if ( link->comp[0]->FOM()  >= fom_cut && link->comp[1]->FOM()  >= fom_cut ) {
 			hexcol = link->color().hex();
-			sprintf(string, " %g %g %g %g %g %g %g %s",
+			snprintf(string, MAXLINELEN, " %g %g %g %g %g %g %g %s",
 				link->comp[0]->location()[0]/p->sampling(0)[0] + p->image[n].origin()[0],
 				link->comp[0]->location()[1]/p->sampling(0)[1] + p->image[n].origin()[1],
 				link->comp[0]->location()[2]/p->sampling(0)[2] + p->image[n].origin()[2],
@@ -1565,7 +1565,7 @@ Tcl_Obj*	link_select(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	if ( linksel && dmin <= rad ) {
 		id1 = stoi(linksel->comp[0]->identifier());
 		id2 = stoi(linksel->comp[1]->identifier());
-		sprintf(string, "%d %d", id1, id2);
+		snprintf(string, 60, "%d %d", id1, id2);
 		Tcl_SetStringObj(returnObj, string, strlen(string));
 	}
 	
@@ -1594,7 +1594,7 @@ Tcl_Obj*	link_create(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 			link_add(&model->link, comp1, comp2, 0, 1);
 	}
 	
-	sprintf(string, "%d %d", id1, id2);
+	snprintf(string, 60, "%d %d", id1, id2);
 	Tcl_SetStringObj(returnObj, string, strlen(string));
 	
 	return returnObj;
@@ -1625,7 +1625,7 @@ Tcl_Obj*	link_delete(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 			remove_item((char **)&model->link, (char *)link, sizeof(Blink));
 	}
 	
-	sprintf(string, "%d %d", id1, id2);
+	snprintf(string, 60, "%d %d", id1, id2);
 	Tcl_SetStringObj(returnObj, string, strlen(string));
 	
 	return returnObj;

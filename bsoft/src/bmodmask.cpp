@@ -3,11 +3,12 @@
 @brief	Generating a mask from an atomic model
 @author Bernard Heymann
 @date	Created: 20060301
-@date	Modified: 20200329
+@date	Modified: 20240329
 **/
 
 #include "rwmodel.h"
 #include "model_mask.h"
+#include "model_transform.h"
 #include "model_links.h"
 #include "model_util.h"
 #include "utilities.h"
@@ -25,7 +26,8 @@ const char* use[] = {
 "Generates a mask from a model if an output image is specified.",
 " ",
 "Actions:",
-"-type hull               Mask type: model, hull, shell, level.",
+"-center                  Center coordinates before all other operations.",
+"-type hull               Mask type: point, model, hull, shell, level.",
 "-invert                  Invert the mask after creation.",
 "-project 2.5,D3          Projected masks at the angular step size and symmetry.",
 " ",
@@ -59,16 +61,17 @@ int 	main(int argc, char **argv)
 {
 	/* Initialize variables */
 	DataType 		nudatatype = Float;	// Mask data type
-	int				mask_type(-1);		// 0=model, 1=hull, 2=shell, 3=level, 4=project
+	bool			center(0);					// Flag to center the structure
+	string			mask_type;			// point, model, hull, shell, level, project
 	double			dang(0);			// Projection angular step size
-	Bsymmetry		sym;			// Point group for projections
+	Bsymmetry		sym;				// Point group for projections
 	Vector3<long>	mask_size;			// Size for creating a mask
 	Vector3<double>	sam;	   			// Map sampling
 	Vector3<double>	origin;				// Mask origin
 	double			edge(1);			// Edge width for model mask
 	double			shell_width(1);		// Shell mask width
 	int				curv_flag(0);		// Curved surface flag for hull and shell masks
-	int				invert(0);			// Flag for mask inversion
+	bool			invert(0);			// Flag for mask inversion
 	double			comprad(0);			// Component display radius
 	double			linkrad(0);			// Link display radius
 	int				smooth(0);			// Edge smoothing in pixels
@@ -81,20 +84,22 @@ int 	main(int argc, char **argv)
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "type" ) {
-			if ( curropt->value[0] == 'm' ) mask_type = 0;
-			if ( curropt->value[0] == 'h' ) mask_type = 1;
-			if ( curropt->value[0] == 's' ) mask_type = 2;
-			if ( curropt->value[0] == 'l' ) mask_type = 3;
-		}
+		if ( curropt->tag == "center" ) center = 1;
+		if ( curropt->tag == "type" )
+			mask_type = curropt->value.str();
+//			if ( curropt->value[0] == 'm' ) mask_type = 0;
+//			if ( curropt->value[0] == 'h' ) mask_type = 1;
+//			if ( curropt->value[0] == 's' ) mask_type = 2;
+//			if ( curropt->value[0] == 'l' ) mask_type = 3;
+//		}
 		if ( curropt->tag == "project" ) {
 			if ( ( dang = curropt->value.real() ) < 0.5 )
 				cerr << "-project: An angular step size must be specified!" << endl;
 			else {
 				dang *= M_PI/180.0;
 				if ( curropt->value.contains(",") )
-					sym = Bsymmetry(curropt->value.post(','));
-				mask_type = 4;
+					sym = Bsymmetry(curropt->value.post(',').str());
+				mask_type = "2d";
 			}
 		}
 		if ( curropt->tag == "componentradius" )
@@ -135,41 +140,45 @@ int 	main(int argc, char **argv)
 	double			ti = timer_start();
 	
 	// Read all the parameter files
-	Bstring*		file_list = NULL;
-	while ( optind < argc ) string_add(&file_list, argv[optind++]);
-	if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No parameter or image files specified!" << endl;
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list, paramfile);		
-	string_kill(file_list);
+	Bmodel*		model = read_model(file_list, paramfile.str());		
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
 		bexit(-1);
 	}
 	
+	if ( center ) models_process(model, model_center);
+
 	if ( comprad ) models_process(model, comprad, model_set_component_radius);
 
 	if ( linkrad ) models_process(model, linkrad, model_set_link_radius);
 
 	Bimage*			pmask = NULL;
-	if ( maskfile.length() && mask_size.volume() && mask_type >= 0 ) {
-		switch ( mask_type ) {
-			case 0:
+	if ( maskfile.length() && mask_size.volume() && mask_type.length() >= 0 ) {
+		switch ( mask_type[0] ) {
+			case 'm':
 				pmask = model_create_mask(model, mask_size, origin, sam, edge);
 				break;
-			case 1:
+			case 'p':
+				pmask = model_create_point_mask(model, mask_size, origin, sam);
+				break;
+			case 'h':
 				pmask = model_create_hull_mask(model, mask_size, origin, sam, curv_flag, fast);
 				break;
-			case 2:
+			case 's':
 				pmask = model_create_shell_mask(model, mask_size, origin, sam, shell_width, curv_flag, fast);
 				break;
-			case 3:
+			case 'l':
 				pmask = model_create_level_mask(model, mask_size, origin, sam);
 				break;
-			case 4:
+			case '2':
 				pmask = model_create_projected_mask(model, mask_size, origin, sam, dang, sym);
 				break;
 		}
@@ -183,12 +192,12 @@ int 	main(int argc, char **argv)
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile, model);
+		write_model(outfile.str(), model);
 	}
 
     model_kill(model);
 	
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

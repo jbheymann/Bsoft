@@ -5,6 +5,7 @@
 @date	Created: 20091202 (DN)
 @date	Modified: 20110729 (BH)
 @date	Updated 20110507 (DN) 
+@date	Updated 20230426 (BH)
       - determine density threshold from unmasked particles
       - mask particles before refinement of locations and determination of occupancy 
 **/
@@ -154,38 +155,22 @@ int             main(int argc, char **argv)
     double			ti = timer_start();
         
 	// Read the input models
-	Bstring*		file_list = NULL;
-        
-    while ( optind < argc ) string_add(&file_list, argv[optind++]);
-    if ( !file_list ) {
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
 		cerr << "Error: No model or image files specified!" << endl;
 		bexit(-1);
 	}
 
     Bmodel*         model = read_model(file_list);
-	string_kill(file_list);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
 		bexit(-1);
 	}
 	
-    Bmodel*         modref = NULL;
-	
-	// Read a reference model and replace all components in the input models
-	if ( modelin.length() ) {
-		modref = read_model(modelin);
-		if ( !modref ) {
-			cerr << "Error: No model was read!\n" << endl;
-			bexit(-1);
-		}
-		model_replace_components(model, modref);
-		model_kill(modref);
-	}
-
 	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
 
-//    Bimage*         p = NULL;
     Bimage*         pt = NULL;
 	Bimage*         pmask = NULL;
 	Bmodel*			mp;
@@ -226,13 +211,13 @@ int             main(int argc, char **argv)
 	
 	// Write the model 
     if ( model && ( outmod.length() || split == 9 ) )
-		write_model(outmod, model);
+		write_model(outmod.str(), model);
 
     delete pt;
     delete pmask;
     model_kill(model);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 
 	bexit(0);

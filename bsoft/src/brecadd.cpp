@@ -91,7 +91,7 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "size" )
 			size = curropt->size();
 		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.1 )
+			if ( ( resolution = curropt->value.real() ) < 0.01 )
 				cerr << "-resolution: The resolution must be specified!" << endl;
 		if ( curropt->tag == "std" ) calcfom += 1;
 		if ( curropt->tag == "sampling" )
@@ -195,7 +195,7 @@ int 		main(int argc, char **argv)
 	
 	project_kill(project);
 
-	if ( verbose & VERB_TIME )
+	
 		timer_report(ti);
 	
 	bexit(0);

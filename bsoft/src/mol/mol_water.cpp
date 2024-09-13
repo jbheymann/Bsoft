@@ -21,7 +21,7 @@ extern int 	verbose;		// Level of output to the screen
 @param 	**mollist		molecule list.
 @param 	*watername		molecule name.
 @param 	Ocoord			oxygen coordinates.
-@return Bmolecule*			new water molecule.
+@return Bmolecule*		new water molecule.
 **/
 Bmolecule*	mol_generate_one_water(Bmolecule** mollist, char* watername, Vector3<double> Ocoord)
 {
@@ -78,13 +78,13 @@ Bmolecule*	mol_generate_one_water(Bmolecule** mollist, char* watername, Vector3<
 
 /**
 @brief 	Generates a block of water based on a regular lattice.
+@param 	size			size of block.
+@param 	type			type of lattice, 2=rectangular, 3=tetrahedral.
+@return Bmolgroup*		new molecule group.
 
 	The number of water molecules generated is calculated as:
 		n = volume * 0.03346.
 
-@param 	size	size of block.
-@param 	type			type of lattice, 2=rectangular, 3=tetrahedral.
-@return Bmolgroup*			new molecule group.
 **/
 Bmolgroup*	molgroup_generate_regular_water(Vector3<double> size, int type)
 {
@@ -171,13 +171,13 @@ Bmolgroup*	molgroup_generate_regular_water(Vector3<double> size, int type)
 
 /**
 @brief 	Generates a block of water with random placement.
+@param 	size			size of block.
+@return Bmolgroup*		new molecule group.
 
 	The number of water molecules generated is calculated as:
 		n = volume * 0.03346.
 
-@param 	size	size of block.
-@return Bmolgroup*			new molecule group.
-**/
+ **/
 Bmolgroup*	molgroup_generate_random_water(Vector3<double> size)
 {
 	if ( size.volume() < 1 ) {
@@ -243,8 +243,8 @@ Bmolgroup*	molgroup_generate_random_water(Vector3<double> size)
 
 /**
 @brief 	Generates a bond list for a block of waters.
-@param 	*molgroup	molecule group.
-@return Bbond*				new bond list.
+@param 	*molgroup		molecule group.
+@return Bbond*			new bond list.
 **/
 Bbond*		water_bond_list(Bmolgroup* molgroup)
 {
@@ -283,12 +283,12 @@ Bbond*		water_bond_list(Bmolgroup* molgroup)
 	return bondlist;
 }
 
-/**
+/*
 @brief 	Generates a bond angle list for a block of waters.
 @param 	*molgroup	molecule group.
 @return Bangle*				new bond angle list.
-**/
-Bangle*		water_angle_list(Bmolgroup* molgroup)
+*/
+/*Bangle*		water_angle_list(Bmolgroup* molgroup)
 {
 	Bmolecule*		mol;
 	Bresidue*		res;
@@ -312,12 +312,13 @@ Bangle*		water_angle_list(Bmolgroup* molgroup)
 	
 	return molgroup->angle;
 }
+*/
 
 /**
 @brief 	Calculates a radial distribution function for water molecules.
-@param 	*molgroup		molecule group.
-@param 	interval		interval between bins.
-@param 	cutoff			distance cutoff.
+@param	*molgroup		molecule group.
+@param	interval		interval between bins.
+@param	cutoff			distance cutoff.
 @return int				0.
 **/
 int			molgroup_calc_water_rdf(Bmolgroup* molgroup, double interval, double cutoff)

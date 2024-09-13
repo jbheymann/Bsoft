@@ -182,7 +182,10 @@ int			molgroup_select_chains(Bmolgroup* molgroup, Bstring chains)
 			mol->sel = 0;
 		}
 	}
-	
+
+	if ( verbose )
+		cout << "Number of selected chains: " << nsel << endl << endl;
+
 	return nsel;
 }
 

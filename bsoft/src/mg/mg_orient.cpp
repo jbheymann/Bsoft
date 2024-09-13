@@ -3,7 +3,7 @@
 @brief	Determines orientation angles and x,y origins of single particle images 
 @author	Bernard Heymann and David M. Belnap
 @date	Created: 20010403
-@date	Modified: 20200218 (BH)
+@date	Modified: 20220813 (BH)
 **/
 
 #include "mg_orient.h"
@@ -12,7 +12,6 @@
 #include "mg_particle_select.h"
 #include "mg_ctf.h"
 #include "symmetry.h"
-#include "linked_list.h"
 #include "rwimg.h"
 #include "ps_views.h"
 #include "utilities.h"
@@ -68,17 +67,26 @@ Bimage*		project_prepare_2D_references(Bproject* project, long first,
 	if ( bin < 1 ) bin = 1;
 	if ( bin > 4 ) bin = 4;
 
+	bool			invert(0);
+
+	Bimage*			p = NULL;
+
 	Bparticle*		part = part_find_first(project);
+
+	if ( !part ) {
+		cerr << "Error in project_prepare_2D_references: No particles found!" << endl;
+		return p;
+	}
+
 	Bmicrograph*	mg = part->mg;
 	Bfield*			field = project->field;
-	Bimage*			p = NULL;
 	Vector3<double>	pixel_size(part->pixel_size);
 
 	if ( part->fpart.length() ) p = read_img(part->fpart, 1, 0);
 	else p = read_img(mg->fpart, 1, part->id - 1);
 	
 	if ( pixel_size[0] < 0.01 ) pixel_size = p->sampling(0);
-	if ( pixel_size[0] < 0.01 ) pixel_size = mg->pixel_size;
+	if ( pixel_size[0] < 0.01 ) pixel_size = part->pixel_size;
 	
 	Bimage*			pref = new Bimage(Float, TSimple, p->size(), number);
 	pref->sampling(pixel_size);
@@ -109,7 +117,7 @@ Bimage*		project_prepare_2D_references(Bproject* project, long first,
 				p->change_type(Float);
 				p->sampling(pixel_size);
 				if ( ctf_action && mg->ctf )
-					img_ctf_apply(p, *mg->ctf, ctf_action, wiener, 0, 0);
+					img_ctf_apply(p, *mg->ctf, ctf_action, wiener, 0, 0, invert);
 				p->rescale_to_avg_std(0, 1);
 				p->shift_background(0);
 				if ( part->ori[0] > 0 && part->ori[1] > 0 ) p->origin(part->ori);
@@ -209,7 +217,7 @@ Bimage*		img_prepare_projections(Bstring& filename, Bstring& mask_file,
 	}
 
 	Bimage*			proj = NULL;
-	View*			views = NULL;
+	vector<View2<double>>	views;
 	int				nviews(0);
 	
 	time_t			t = time(NULL);
@@ -228,10 +236,10 @@ Bimage*		img_prepare_projections(Bstring& filename, Bstring& mask_file,
 
 	if ( pref->sizeZ() > 1 && pref->images() < 2 ) {
 		if ( side_ang < 0 )
-			views = asymmetric_unit_views(sym, theta_step, phi_step, 1);
+			views = sym.asymmetric_unit_views(theta_step, phi_step, 1);
 		else
-			views = side_views(sym, side_ang, theta_step, phi_step);
-		nviews = count_list((char *)views);
+			views = sym.side_views(side_ang, theta_step, phi_step);
+		nviews = views.size();
 		mem_req = pref->size()[0]*pref->size()[1]*sizeof(float)*nviews;
 		if ( verbose ) {
 			cout << "Number of projections:          " << nviews << endl;
@@ -242,9 +250,8 @@ Bimage*		img_prepare_projections(Bstring& filename, Bstring& mask_file,
 			cerr << "Not enough memory to run!" << endl;
 			bexit(-1);
 		}
-		proj = pref->project(views, pref->sampling(0)[0], kernel);
+		proj = pref->project(views, pref->sampling(0)[0], kernel, 0, 0, 1, Real);
 		if ( pmask ) proj->multiply(pmask);
-		kill_list((char *) views, sizeof(View));
 		delete pref;
 		if ( verbose )
 			cout << "Time to generate projections:   " << (long)(time(NULL) - t) << " seconds" << endl << endl;
@@ -339,7 +346,7 @@ int 		project_determine_orientations(Bproject* project, Bimage* proj, Bstring& m
 //	Bfield*			field = project->field;
 
 	Bparticle*		part = part_find_first(project);
-	Bmicrograph*	mg = part->mg;
+//	Bmicrograph*	mg = part->mg;
 
 	if ( !part ) {
 		cerr << "Error in project_determine_orientations: No particles found!" << endl;
@@ -353,7 +360,7 @@ int 		project_determine_orientations(Bproject* project, Bimage* proj, Bstring& m
 	if ( bin > 4 ) bin = 4;
 	edge_radius /= bin;
 	
-	Vector3<double>	pixel_size = mg->pixel_size*bin;
+	Vector3<double>	pixel_size = part->pixel_size*bin;
 	
 	// Read the reference (model) projections, convert to floating point and clean up
 	long 			i, nproj(0), npix(0);
@@ -372,10 +379,10 @@ int 		project_determine_orientations(Bproject* project, Bimage* proj, Bstring& m
 
 	// Set resolution limits
 	if ( res_lo < res_hi ) swap(res_hi, res_lo);
-	if ( res_lo > proj->sizeX()*mg->pixel_size[0] )
-		res_lo = proj->sizeX()*mg->pixel_size[0];
-	if ( res_hi > proj->sizeX()*mg->pixel_size[0]/2 )
-		res_hi = proj->sizeX()*mg->pixel_size[0]/2;
+	if ( res_lo > proj->sizeX()*part->pixel_size[0] )
+		res_lo = proj->sizeX()*part->pixel_size[0];
+	if ( res_hi > proj->sizeX()*part->pixel_size[0]/2 )
+		res_hi = proj->sizeX()*part->pixel_size[0]/2;
 	if ( res_lo < 4*pixel_size[0] ) res_lo = 4*pixel_size[0];
 	if ( res_hi < 2*pixel_size[0] ) res_hi = 2*pixel_size[0];
 	
@@ -550,20 +557,21 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 	int				mode = flags & MODE;
 	int				ctf_apply = (flags & APPLY_CTF)? 1: 0;
 	int				part_log = (flags & PART_LOG)? 1: 0;
+	bool			invert(flags & INVERT);
 
 	long 			k, imax(0), nproj(proj->images());
 	double			cc_best(-1e37), cc_min, cc_max, cc_avg, cc_std, cc_cut;
-	double*			angle = new double[nproj];
-	double*			ox = new double[nproj];
-	double*			oy = new double[nproj];
-	View*			view = new View[nproj];
-	double*			cc = new double[nproj];
+	vector<double>	angle(nproj, 0);
+	vector<double>	ox(nproj, 0);
+	vector<double>	oy(nproj, 0);
+	vector<View2<double>>	view(nproj);
+	vector<double>	cc(nproj, 0);
 	
 	Bmicrograph*	mg = part->mg;
 	if ( !mg )
 		return error_show("part_determine_orientation", __FILE__, __LINE__);
 
-	Vector3<double>	pixel_size = mg->pixel_size*bin;
+	Vector3<double>	pixel_size = part->pixel_size*bin;
 	ofstream		flog;
 	Bstring			log_name;
 	long			edge_size = (long) (2*edge_radius);
@@ -632,8 +640,8 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 		proj1->sampling(pixel_size);
 //		cout << "Projection sampling = " << proj1->sampling(0) << endl;
 		if ( ctf_apply && mg->ctf )
-			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, planf_2D, planb_2D);
-		p->image->view(part->view);
+			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, invert, planf_2D, planb_2D);
+		p->image->view(part->view2());
 		cc[k] = p->align2D_pps(proj1, res_hi, res_lo, shift_limit, angle_limit, planf_2D, planb_2D);
 		angle[k] = p->image->view_angle();
 		ox[k] = p->image->origin()[0];
@@ -702,8 +710,8 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 			return error_show("Error in part_determine_orientation", __FILE__, __LINE__);
 		proj1->sampling(pixel_size);
 		if ( ctf_apply && mg->ctf )
-			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, planf_2D, planb_2D);
-		p->image->view(part->view);
+			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, invert, planf_2D, planb_2D);
+		p->image->view(part->view2());
 		p->image->view_angle(angle[k]);
 		p->image->origin(ox[k], oy[k], 0);
 //		cc[k] = img_align2D(p, proj1, 1, res_polar, ann_min, ann_max,
@@ -742,7 +750,7 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG part_determine_orientation: projection matching done for image " << part->id << endl;
 	part->ori = Vector3<double>(bin*ox[imax], bin*oy[imax], 0);
-	part->view = view[imax];
+	part->view2(view[imax]);
 	part->fom[0] = cc[imax];
 	if ( prs_mask->minimum() < 0 ) {
 		proj1 = proj->extract(imax);
@@ -750,14 +758,14 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 			return error_show("Error in part_determine_orientation", __FILE__, __LINE__);
 		proj1->sampling(pixel_size);
 		if ( ctf_apply && mg->ctf )
-			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, planf_2D, planb_2D);
+			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, invert, planf_2D, planb_2D);
 		p->image->view_angle(angle[imax]);
 		p->image->origin(ox[imax], oy[imax], 0);
 		p->origin(0, ox[imax], oy[imax], 0.0);
 		part->fom[1] = img_cross_validate(p, proj1, prs_mask, planf_2D);
 		delete proj1;
 	}
-	part->view = find_asymmetric_unit_view(sym, part->view);
+	part->view2(sym.find_asymmetric_unit_view(part->view2()));
 	part->view[3] = angle_set_negPI_to_PI(part->view.angle());
 	part->sel = imax + 1;
 	if ( part_log ) {
@@ -772,11 +780,6 @@ int 		part_determine_orientation(Bparticle* part, Bimage* proj, Bimage* part_mas
 		flog.close();
 	}
 
-	delete[] angle;
-	delete[] ox;
-	delete[] oy;
-	delete[] view;
-	delete[] cc;
 	delete p;
 	
 	if ( flags & WRITE_PPX ) {
@@ -793,6 +796,8 @@ Bparticle	part_compare(Bimage* p, Bimage* proj, Bimage* prs_mask,
 	double shift_limit, double angle_limit, double edge_radius, int flags,
 	fft_plan planf_1D, fft_plan planb_1D, fft_plan planf_2D, fft_plan planb_2D)
 {
+	bool			invert(flags & INVERT);
+
 	Bimage*			pcopy = p->copy();
 	Bparticle		part;
 
@@ -807,8 +812,8 @@ Bparticle	part_compare(Bimage* p, Bimage* proj, Bimage* prs_mask,
 	
 	proj1->sampling(p->sampling(0));
 	
-	if ( ctf )
-		img_ctf_apply_to_proj(proj1, *ctf, ctf->defocus_average(), 1e6, res_hi, planf_2D, planb_2D);
+	if ( ctf && (flags & APPLY_CTF) )
+		img_ctf_apply_to_proj(proj1, *ctf, ctf->defocus_average(), 1e6, res_hi, invert, planf_2D, planb_2D);
 	
 	part.fom[0] = pcopy->align2D_pps(proj1, res_hi, res_lo, shift_limit, angle_limit, planf_2D, planb_2D);
 	
@@ -816,7 +821,7 @@ Bparticle	part_compare(Bimage* p, Bimage* proj, Bimage* prs_mask,
 	part.fom[0] = pcopy->align2D(proj1, res_polar, ann_min, ann_max,
 				prs_mask, shift_limit, angle_limit, planf_1D, planb_1D, planf_2D, planb_2D);
 
-	View			view = proj1->image->view();
+	View2<double>	view = proj1->image->view();
 	double			angle = pcopy->image->view_angle();
 				
 	if ( angle < 0 ) {
@@ -851,6 +856,7 @@ int 		part_determine_orientation2(Bparticle* part, Bimage* proj, Bimage* part_ma
 		
 	int				ctf_apply = (flags & APPLY_CTF)? 1: 0;
 	int				part_log = (flags & PART_LOG)? 1: 0;
+	bool			invert(flags & INVERT);
 
 	long 			k, imax(0), nproj(proj->images());
 	
@@ -971,7 +977,7 @@ int 		part_determine_orientation2(Bparticle* part, Bimage* proj, Bimage* part_ma
 			return error_show("Error in part_determine_orientation", __FILE__, __LINE__);
 		proj1->sampling(pixel_size);
 		if ( ctf_apply && mg->ctf )
-			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, planf_2D, planb_2D);
+			img_ctf_apply_to_proj(proj1, *(mg->ctf), part->def, 1e6, res_hi, invert, planf_2D, planb_2D);
 		p->image->origin(part->ori);
 		p->image->view(part->view);
 //		p->image->view_angle(angle[imax]);
@@ -979,7 +985,7 @@ int 		part_determine_orientation2(Bparticle* part, Bimage* proj, Bimage* part_ma
 		delete proj1;
 	}
 	
-	part->view = find_asymmetric_unit_view(sym, part->view);
+	part->view2(sym.find_asymmetric_unit_view(part->view2()));
 	part->view[3] = angle_set_negPI_to_PI(part->view.angle());
 	part->sel = imax + 1;
 	
@@ -1265,7 +1271,7 @@ int 		project_determine_origins(Bproject* project, Bimage* proj, int bin,
 	if ( bin < 1 ) bin = 1;
 	if ( bin > 4 ) bin = 4;
 
-	Vector3<double>	pixel_size = mg->pixel_size*bin;
+	Vector3<double>	pixel_size = part->pixel_size*bin;
 	
 	// Read the reference (model) projections, convert to floating point and clean up
 	long 			i, nproj(0), npart(0), npix(0), vmin(0);
@@ -1288,8 +1294,8 @@ int 		project_determine_origins(Bproject* project, Bimage* proj, int bin,
 	if ( shift_limit < 0 ) shift_limit = proj->sizeX()/10;	// Default shift limit
 
 	double			cc, angle, da, da_min;
-	View*			pv = new View[nproj];
-	View			hasu_view;
+	vector<View2<double>>	pv(nproj);
+	View2<double>	hasu_view;
 	
 	for ( i=0; i<nproj; i++ )
 			pv[i] = proj->image->view();
@@ -1345,7 +1351,7 @@ int 		project_determine_origins(Bproject* project, Bimage* proj, int bin,
 				p->rescale_to_avg_std(0, 1);
 				p->shift_background(0);
 				p->sampling(pixel_size);
-				hasu_view = part->view;
+				hasu_view = part->view2();
 				hasu_view[3] += TWOPI;
 				for ( i=vmin=0, da_min = 1e10; i<nproj; i++ ) {
 					da = hasu_view.angle(pv[i]);
@@ -1398,9 +1404,7 @@ int 		project_determine_origins(Bproject* project, Bimage* proj, int bin,
 
     fft_destroy_plan(planf_2D);
     fft_destroy_plan(planb_2D);
-	
-	delete[] pv;
-	
+		
 	return 0;
 }
 

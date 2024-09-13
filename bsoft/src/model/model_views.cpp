@@ -1,9 +1,9 @@
 /**
 @file	model_views.cpp
 @brief	Library routines used for analyzing the views of components in models
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20081120
-@date	Modified: 20210205
+@date	Modified: 20230512
 **/
 
 #include "rwimg.h"
@@ -12,7 +12,6 @@
 #include "model_neighbors.h"
 #include "mol_compare.h"
 #include "Matrix3.h"
-#include "linked_list.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -26,10 +25,10 @@ extern int 	verbose;		// Level of output to the screen
 	Only the first model is processed.
 
 **/
-list<View2<float>>		views_from_model(Bmodel* model)
+vector<View2<double>>		views_from_model(Bmodel* model)
 {
 	Bcomponent*			comp;
-	list<View2<float>>	v;
+	vector<View2<double>>	v;
 
 	for ( comp = model->comp; comp; comp = comp->next )
 		if ( comp->select() > 0 )
@@ -65,11 +64,11 @@ list<View2<float>>		views_from_model(Bmodel* model)
 	return view;
 }*/
 
-list<View2<float>>	views_from_models(Bmodel* model)
+vector<View2<double>>	views_from_models(Bmodel* model)
 {
 	Bmodel*				mp;
 	Bcomponent*			comp;
-	list<View2<float>>	v;
+	vector<View2<double>>	v;
 
 	for ( mp = model; mp; mp = mp->next )
 		for ( comp = mp->comp; comp; comp = comp->next )
@@ -88,7 +87,7 @@ list<View2<float>>	views_from_models(Bmodel* model)
 	Each component view is set tot the given view.
 
 **/
-long		model_set_views(Bmodel* model, View2<float> view)
+long		model_set_views(Bmodel* model, View2<double> view)
 {
 	long			nsel(0);
 	Bmodel*			mp;
