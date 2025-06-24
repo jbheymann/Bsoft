@@ -49,7 +49,7 @@ const char* use[] = {
 "-size 200,300,50         Size of focal series (must be specified for focal series).",
 "-resolution 2.3,120      Resolution limits for fitting (A).",
 "-focusstep 37,2,1        Focus increment between images, step to refine, flag for linear search.",
-"-ctf 3                   CTF type: 0=complex, 1=sine, 2=envelope.",
+"-ctf 3                   CTF type: 0=complex, 1=sine, 2=envelope, 4=combined, 8=conjugate.",
 "-Bfactor 44              B-factor (default 0 A^2).",
 "-beamtilt 5mr,45d        Beam tilt and direction (radians, mr=millirad, d=degrees).",
 "-Defocus 1.2,1.0,47      Defocus average & deviation, and astigmatism angle (default 2 um, 0, 0).",
@@ -119,7 +119,7 @@ int 		main(int argc, char **argv)
 	int				set_origin(0);				// Flag to set origin
 	Vector3<long>	size;						// Size for new focal series image
 	double			hires(0), lores(0);			// High and low resolution limits
-	int				ctf_flag(0);				// Flag for CTF form: 0=complex, 1=envelope, 2=sine
+	int				ctf_flag(0);				// Flag for CTF form: 0=complex, 1=envelope, 2=sine, 4=comb, 8=conjugate
 	bool			rec_flag(0);				// Flag to reconstruct
 	long			exit_iter(0);				// Number of iterations for exit wave reconstruction
 	double			tolerance(1e-6);			// Tolerance for exit wave reconstruction
@@ -227,38 +227,6 @@ int 		main(int argc, char **argv)
 				ast_angle *= M_PI/180.0;						// Assume degrees
 			}
 		}
-/*		if ( curropt->tag == "basetype" ) {
-			basetype = curropt->value.integer();
-			if ( basetype < 1 || basetype > 6 ) {
-				basetype = 1;
-				cerr << "Warning: The baseline type must be 1, 2 or 3. Reset to 1." << endl;
-			} else
-				setbase = 1;
-		}
-		if ( curropt->tag == "baseline" ) {
-			vector<double>	d = curropt->value.split_into_doubles(",");
-			for ( size_t i=0; i<d.size(); i++ ) base[i] = d[i];
-			if ( d.size() < 1 )
-				cerr << "-baseline: At least one coefficient must be specified!" << endl;
-			else
-				setbase = 2;
-		}
-		if ( curropt->tag == "envtype" ) {
-			envtype = curropt->value.integer();
-			if ( envtype < 1 || envtype > 4 ) {
-				envtype = 4;
-				cerr << "Warning: The envelope type must be 1, 2, 3 or 4. Reset to 4." << endl;
-			} else
-				setenv = 1;
-		}
-		if ( curropt->tag == "envelope" ) {
-			vector<double>	d = curropt->value.split_into_doubles(",");
-			for ( size_t i=0; i<d.size(); i++ ) env[i] = d[i];
-			if ( d.size() < 1 )
-				cerr << "-envelope: At least an envelope amplitude must be specified!" << endl;
-			else
-				setenv = 2;
-		}*/
 #include "ctf.inc"
 		if ( curropt->tag == "jsout" )
 			jsout = curropt->filename();
@@ -333,8 +301,7 @@ int 		main(int argc, char **argv)
 
 	if ( fit ) {		// Fitting power spectra
 		Bimage*	pfit = img_ctf_focal_fit(p, cp, hires, lores, tmax, Bfactor, fit);
-    	if ( outfile.length() )
-	    	write_img(outfile, pfit, 0);
+    	if ( outfile.length() ) write_img(outfile, pfit, 0);
 		bexit(0);
 	}
 	
@@ -350,13 +317,17 @@ int 		main(int argc, char **argv)
 		if ( beam_tilt ) pctf = img_ctf_focal_series_tilted(cp, dfocus, size, sam, hires, lores, beam_tilt, beam_dir);
 		else pctf = img_ctf_focal_series(cp, nfoc, size, sam, hires, lores, ctf_flag);
 		if ( !p ) p = pctf;
+		write_img("p.grd", pctf, 0);
 	}
 
 	if ( apply ) {
 		if ( p->compound_type() != TComplex )
 			p->fftxy();
+//		cout << "Image size = " << p->size() << endl;
+//		cout << "CTF size   = " << pctf->size() << endl;
 		p->complex_product(pctf);
-/*	} else if ( extract_sphere ) {
+/*
+	} else if ( extract_sphere ) {
 		if ( verbose )
 			for ( auto v: dfocus ) cout << v << endl;
 		Bimage*		ps = img_fspace_extract_sphere(p, cp, dfocus);
@@ -367,11 +338,13 @@ int 		main(int argc, char **argv)
 	} else if ( phi_diff ) {
 		Bimage*		pphi = img_focal_aberration_phase_difference(p, ps, cp, dfocus);
 		delete p;
-		p = pphi;*/
+		p = pphi;
+*/
 	} else if ( rec_flag ) {
 		if ( p->compound_type() != TComplex )
 			p->fftxy();
 		p->complex_conjugate_product(pctf);
+		p->slices_to_images();
 		Bimage*		pr = p->fspace_sum(0);
 		Bplot*		plot = pr->fspace_ssnr(nfoc, hires, 1);
 		pr->multiply(1.0/nfoc);

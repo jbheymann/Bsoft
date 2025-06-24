@@ -2,7 +2,7 @@
 
 # Bsoft configure script
 # Bernard Heymann
-# 20131205 - 20220921
+# 20131205 - 20250618
 
 # --------------------------------------------------------------------------
 # Main directories that can be changed
@@ -321,8 +321,17 @@ echo >> $mk
 echo 'clean:' >> $mk
 echo '	rm */*.o src/*/*.o bin/* lib/*' >> $mk
 echo '	rm -f */blevel* */bmaskmod*' >> $mk
+echo '	rm -f */bcatmol* */bsplitmol*' >> $mk
+echo '	rm -f */bmonte2*' >> $mk
 echo '	rm -f src/rwparam/rwmodel_param.* src/rwparam/rwmgSTAR2.*' >> $mk
 echo '	rm -f src/util/Bmaterial.*' >> $mk
+echo '	rm -f src/mol/seq*.*' >> $mk
+echo '	rm -f src/rwmol/rwClustal.*' >> $mk
+echo '	rm -f src/rwmol/rwEMBL.*' >> $mk
+echo '	rm -f src/rwmol/rwFASTA.*' >> $mk
+echo '	rm -f src/rwmol/rwGenBank.*' >> $mk
+echo '	rm -f src/rwmol/rwPhylip.*' >> $mk
+echo '	rm -f src/rwmol/rwPIR.*' >> $mk
 echo >> $mk
 
 echo 'tar:' >> $mk

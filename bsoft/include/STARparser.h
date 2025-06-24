@@ -14,6 +14,22 @@ using namespace std;
 
 #ifndef _STAR_
 
+/**
+@brief 	Reads paramaters and data into a JSON data base from a STAR file.
+
+	Every data block is read separately and comments are preserved as far 
+	as possible.
+
+	The split flag allows the user to output data blocks in separate files
+	in stead of one big file.
+	The line length field allows the user to output long lines without
+	wrapping it around.
+	The comments are ignored but output to the a new file - this can be used
+	to document the history of the file.
+	The STAR database is a hierarchy consisting of blocks, each with a set
+	of items.
+
+**/
 
 class STARparser {
 private:
@@ -156,26 +172,6 @@ public:
 	}
 };
 
-
-
-/**
-@brief 	Reads paramaters and data into a JSON data base from a STAR file.
-@param	&fstar		reference to output stream.
-@param	&loop		reference to loop.
-
-	Every data block is read separately and comments are preserved as far 
-	as possible.
-
-	The split flag allows the user to output data blocks in separate files
-	in stead of one big file.
-	The line length field allows the user to output long lines without
-	wrapping it around.
-	The comments are ignored but output to the a new file - this can be used
-	to document the history of the file.
-	The STAR database is a hierarchy consisting of blocks, each with a set
-	of items.
-
-**/
 
 int			write_loop(ofstream& fstar, vector<JSvalue>& loop)
 {

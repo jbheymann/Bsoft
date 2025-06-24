@@ -255,9 +255,9 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 
 	if ( fom_cutoff > 0 ) model_fom_deselect(model, fom_cutoff);
 
@@ -282,7 +282,7 @@ int 	main(int argc, char **argv)
 	}
 
 	if ( type == 2 && !model->link )
-		model_link_list_generate(model, linklength);
+		models_link_list_generate(model, linklength);
 
 	if ( refine_template.length() ) {
 		if ( mapfile.length() ) model->mapfile(mapfile.str());
@@ -315,7 +315,7 @@ int 	main(int argc, char **argv)
 		if ( type == 1 ) {
 			if ( extract_average > 0 ) {
 				pn = model_average_component_density(model, extract, origin, extract_average);
-				if ( mapout.length() ) model_set_comptype_filenames(model, mapout.str());
+				if ( mapout.length() ) models_set_comptype_filenames(model, mapout.str());
 			} else {
 				pn = model_extract_component_densities(model, extract, origin);
 			}
@@ -331,7 +331,7 @@ int 	main(int argc, char **argv)
 			p = pn;
 		}
 		if ( type == 1 ) {
-			if ( mapfile.length() ) model_set_comptype_filenames(model, mapfile.str());
+			if ( mapfile.length() ) models_set_comptype_filenames(model, mapfile.str());
 			pn = model_build_from_component_density(model, build, origin, flags);
 		} else if ( type == 2 ) {
 			pn = model_build_from_link_density(model, mapfile, build, origin, link_select, flags);
@@ -358,7 +358,7 @@ int 	main(int argc, char **argv)
 	if ( stdfile.length() && pn->next )
 		write_img(stdfile, pn->next, 0);
 
-	model_kill(model);
+	delete model;
 	delete p;
 	delete pn;
 	

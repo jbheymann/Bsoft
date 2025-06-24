@@ -722,7 +722,7 @@ Tcl_Obj*	do_delete(Bimage* p, int objc, Tcl_Obj *CONST objv[])
 	
 	if ( !p ) return returnObj;
 		
-	Bstring			delist;
+	string			delist;
 
 	if ( objc > 3 ) delist = Tcl_GetStringFromObj(objv[3], NULL);
 	
@@ -985,7 +985,9 @@ int			do_set(Bimage* p, int objc, Tcl_Obj *CONST objv[])
 		p->show_maximum(smax);
 	} else if ( property == "datatype" ) {
 		astring = Tcl_GetStringFromObj(objv[4], NULL);
-		p->change_type(astring);
+		int		keep_scale(0);
+		if ( objc > 5 ) Tcl_GetIntFromObj(NULL, objv[5], &keep_scale);
+		p->change_type(astring, keep_scale);
 	} else if ( property == "pixel_size" ) {
 		if ( objc > 4 ) Tcl_GetIntFromObj(NULL, objv[4], &i);
 		if ( objc > 5 ) Tcl_GetDoubleFromObj(NULL, objv[5], &sam[0]);
@@ -1224,7 +1226,7 @@ int			do_truncate(Bimage* p, int objc, Tcl_Obj *CONST objv[])
 {
 	if ( !p ) return 0;
 	
-	double		min, max, tol = 0.001*(p->maximum() - p->minimum());
+	double		min, max, tol = 1e-6*(p->maximum() - p->minimum());
 	
 	if ( objc > 4 ) {
 		Tcl_GetDoubleFromObj(NULL, objv[3], &min);

@@ -3,13 +3,14 @@
 @brief	Library functions useful in all the package
 @author Bernard Heymann
 @date	Created: 19990722
-@date	Modified: 20220722
+@date	Modified: 20250510
 **/
 
 #include <errno.h>
 #include <sys/sysctl.h>
 #include <stdio.h>
 #include "utilities.h"
+#include "string_util.h"
 
 #include <iostream>
 
@@ -111,7 +112,7 @@ string		get_user_name()
 	if ( (bufsize = sysconf(_SC_GETPW_R_SIZE_MAX)) == -1 )
 		bufsize = 16384;
 
-	char 		buffer[bufsize];
+	char* 		buffer = new char[bufsize];
 	passwd 		pw, *result = NULL;
 
 	string		user_name("unknown");
@@ -119,6 +120,8 @@ string		get_user_name()
 	if ( getpwuid_r(getuid(), &pw, buffer, bufsize, &result) == 0 && result)
 		user_name = pw.pw_name;
 
+	delete[] buffer;
+	
 	return user_name;
 }
 
@@ -387,6 +390,42 @@ int			select_numbers(Bstring& string, int n, int* numsel)
 	vector<int>		ns = select_numbers(string, n);
 	for ( long i=0; i<n; ++i ) numsel[i] = ns[i];
 	return 0;
+}
+
+vector<int>	select_numbers(string& s, int n)
+{
+	vector<int>		numsel(n, 0);
+
+	int			i, j, k;
+	
+	if ( s.length() < 1 || s == "all" ) {
+		for ( i=0; i<n; i++ ) numsel[i] = 1;
+		return numsel;
+	}
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG select_numbers: string=" << s << " n=" << n << endl;
+	
+	vector<string>	strcol = split(s, ':');
+	vector<string>	strarr, strrng;
+	
+	for ( k=0; k<strcol.size(); ++k ) {
+		strarr = split(strcol[k], ',');
+		for ( auto s2: strarr ) {
+			strrng = split(s2, '-');
+			i = j = to_integer(strrng[0]);
+			if ( strrng.size() > 1 ) j = to_integer(strrng[1]);
+			for ( ; i <= j && i < n; i++ ) numsel[i] = k+1;
+		}
+	}
+
+	if ( verbose & VERB_DEBUG ) {
+		cout << "DEBUG select_numbers: ";
+		for ( i=0; i<n; i++ ) cout << numsel[i];
+		cout << endl;
+	}
+	
+	return numsel;
 }
 
 vector<int>	select_numbers(Bstring& string, int n)

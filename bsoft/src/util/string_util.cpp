@@ -2,7 +2,7 @@
 @file	string_util.cpp
 @author	Bernard Heymann
 @date	Created: 20160911
-@date	Modified: 20230706
+@date	Modified: 20250608
 
 **/
 
@@ -46,10 +46,24 @@ string		replace_extension(string& filename, string ext)
 	return newname + ext;
 }
 
+string 		to_lower(string s) 
+{
+    transform(s.begin(), s.end(), s.begin(),
+       [](unsigned char c){ return std::tolower(c); } );
+    return s;
+}
+
+string 		to_upper(string s) 
+{
+    transform(s.begin(), s.end(), s.begin(),
+       [](unsigned char c){ return std::toupper(c); } );
+    return s;
+}
+
 string		insert(string& filename, string ins)
 {
 	string		newname = filename.substr(0, filename.rfind("."));
-	string		ext = filename.substr(filename.rfind(".")+1);
+	string		ext = filename.substr(filename.rfind("."));
 	
 	newname += ins + ext;
 	
@@ -62,19 +76,14 @@ string		insert(string& filename, int i, int n)
 	if ( ins.size() < n ) ins = string(n-ins.size(),'0') + ins;
 	
 	string		newname = filename.substr(0, filename.rfind("."));
-	string		ext = filename.substr(filename.rfind(".")+1);
+	string		ext = filename.substr(filename.rfind("."));
 	
 	newname += ins + ext;
 	
 	return newname;
 }
 
-void		remove_spaces(string& s)
-{
-	remove_if(s.begin(), s.end(), ::isspace);
-}
-	
-string		remove_spaces2(string& s)
+string		remove_spaces(string& s)
 {
 	long		i, j(0);
 	string		ns(s);
@@ -91,8 +100,8 @@ string		remove_spaces2(string& s)
 string		remove_quotes(string& s)
 {
 	string		ns(s);
-	if ( ns[0] == '"' ) ns = ns.substr(1);
-	if ( ns.back() == '"' ) ns.pop_back();
+	if ( ns[0] == '"' || ns[0] == '\'' ) ns = ns.substr(1);
+	if ( ns.back() == '"' || ns.back() == '\'' ) ns.pop_back();
 	return ns;
 }
 
@@ -132,18 +141,25 @@ string		parameter_file_path(string& filename)
 **/
 string 		quote_or_not(const string &s)
 {
+//	cout << "+++" << s << "+++" << endl;
 	if ( s.length() < 2 ) return s;
-	long				i, j, k, m(s.size()), f(0);
-	const char*			cs = s.c_str();
-	for ( i=j=k=0; i<m; ++i ) {
-		if ( cs[i] == '"' ) f = 1 - f;
-		if ( !f && isspace(cs[i]) ) {
-			if ( k ) break;
-		} else {
-			if ( !k ) j = i;
-			k++;
-		}
+	long				i, j, k, m(s.size());
+	char				q(0);
+
+	for ( i=j=0; i<m && isspace(s[i]); ++i, ++j ) ;	// find the first non-space
+
+	if ( s[i] == '"' || s[i] == '\'' ) {
+		q = s[i];	// set the quote
+		i++;
+		j++;
+		for ( k=0; i<m && s[i] != q ; ++i, ++k ) ; // test for the second quote
+	} else {
+		for ( k=0; i<m && !isspace(s[i]); ++i, ++k ) ; // test for space if unquoted
 	}
+//	cout << j << tab << k << endl;
+//	cout << "---" << s.substr(j, k) << "---" << endl;
+//	if ( s.substr(j, k).length() < 1 ) bexit(-1);
+
     return s.substr(j, k);
 }
 
@@ -174,16 +190,16 @@ vector<string> split(const string s)
 vector<string> splitn(const string s, long n)
 {
 	vector<string>		sv(n);
-//	bool				q(0);
 	long				i, j, k, l, m(s.size());
-	const char*			cs = s.c_str();
+	char				q(0);
 	for ( i=j=k=l=0; i<m && l<n; ++i ) {
-		if ( cs[i] == '"' ) {
-			for ( j = ++i; cs[i] != '"' && i<m; ++i );
+		if ( s[i] == '"' || s[i] == '\'' ) {
+			q = s[i];
+			for ( j = ++i; s[i] != q && i<m; ++i );
 			k = i-j;
 			i++;
 		}
-		if ( isspace(cs[i]) ) {	// End of string
+		if ( isspace(s[i]) ) {	// End of string
 			if ( k ) {
 				sv[l++] = s.substr(j, k);
 				k = 0;
@@ -196,32 +212,10 @@ vector<string> splitn(const string s, long n)
 	if ( l < n && k ) sv[l] = s.substr(j, k);	// Final string
     return sv;
 }
-/*
-vector<string> splitn(const string &s, long n)
-{
-	vector<string>		sv(n);
-	bool				q(0);
-	long				i, j, k, l, m(s.size());
-	const char*			cs = s.c_str();
-	for ( i=j=k=l=0; i<m && l<n; ++i ) {
-		if ( cs[i] == '"' ) q = 1 - q;	// Toggle on quotes
-		if ( !q && isspace(cs[i]) ) {	// End of string if not within quotes
-			if ( k ) {
-				sv[l++] = s.substr(j, k);
-				k = 0;
-			}
-		} else {
-			if ( !k ) j = i+q;	// Start of string
-			k++;
-		}
-	}
-	if ( l < n && k ) sv[l] = s.substr(j, k);	// Final string
-    return sv;
-}
-*/
+
 /**
 @brief 	Splits a string using a given delimiter.
-@param	&s				string to be split.
+@param	s				string to be split.
 @param	delim			delimiter.
 @return	vector<string>	vector of strings.
 **/
@@ -236,6 +230,34 @@ vector<string> split(const string s, char delim)
     }
 	
     return tokens;
+}
+
+/**
+@brief 	Splits a string using a set of delimiters.
+@param	s					string to be split.
+@param	t					string with delimiters.
+@return	map<char,string>	map of delimiters and associated strings.
+**/
+map<char,string>	split_on_delimeters(string s, string t)
+{
+	map<char,string>	ms;
+	long				i, m(s.size());
+	char				key(0);
+	string				st;
+	
+	for ( i=0; i<m; ++i ) {
+		if ( t.find(s[i]) == string::npos ) {
+			st += s[i];
+		} else {
+			if ( i ) ms[key] = st;
+			key = s[i];
+			st = "";
+		}
+	}
+	
+	if ( key ) ms[key] = st;
+	
+	return ms;
 }
 
 /**

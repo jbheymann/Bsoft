@@ -3,7 +3,7 @@
 @brief	Functions for reconstruction
 @author	Bernard Heymann
 @date	Created: 20010403
-@date	Modified: 20240408
+@date	Modified: 20241224
 **/
 
 #include "mg_processing.h"
@@ -16,7 +16,7 @@ int			part_ft_size(int xsize, double scale, int pad_factor);
 Bimage*		particle_reconstruct(Bparticle* partlist, Bsymmetry sym, int sym_mode,
 				double hi_res, Vector3<double> scale, Vector3<double> sam, Vector3<long> size,
 				int ft_size, fft_plan plan, int interp_type=0,
-				int ctf_action=0, double wiener=0.2, int flags=0, int first=0);
+				int ctf_action=0, double wiener=0.2, int ewald=0, int flags=0, int first=0);
 Bimage*		img_reconstruction_sum_weigh(Bimage** pacc, int imap, int nmaps, int nthreads, double hi_res);
 long		project_single_particle_reconstruction(Bproject* project, 
 				Bstring& maskfile, Bsymmetry& sym,

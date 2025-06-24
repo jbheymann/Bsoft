@@ -70,7 +70,7 @@ int			model_set_neighbors(Bmodel* model, int number, double distance)
 	Bcomponent*		comp;
 	Bcomponent*		comp2;
 	
-	Vector3<double>	com = model_center_of_mass(model);
+	Vector3<double>	com = model->center_of_coordinates();
 
 	if ( verbose ) {
 		cout << "Setting up neighbors for model: " << model->identifier() << endl;

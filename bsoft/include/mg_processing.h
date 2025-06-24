@@ -3,7 +3,7 @@
 @brief	Header file for micrograph processing
 @author 	Bernard Heymann
 @date	Created: 20000426
-@date	Modified: 20230622
+@date	Modified: 20250326
 **/
 
 #include "ctf.h"
@@ -26,7 +26,6 @@
 #define	PART_LOG		64
 #define	WRITE_PPX		128
 #define	CHECK_PPX		256
-
 
 #ifndef _ProjectParamStructs_
 /************************************************************************
@@ -89,6 +88,12 @@ public:
 	double			fom;			// Figure-of-merit
 	long			sel;			// Selection flag
 	Bframe() { initialize(); }
+	long			count() {
+		long		n(0);
+		Bframe* 	f;
+		for ( f = this; f; f = f->next ) n++;
+		return n;
+	}
 } ;
 
 /************************************************************************

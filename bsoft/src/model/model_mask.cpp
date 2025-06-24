@@ -193,7 +193,7 @@ Bimage*		model_create_hull_mask(Bmodel* model, Vector3<long> size,
 	}
 
 	// Calculate the center of the vertices
-	Vector3<double>	center = model_center_of_mass(model);
+	Vector3<double>	center = models_center_of_coordinates(model);
 	center /= sam;
 
 //	cout << "center=" << center << endl;
@@ -284,7 +284,7 @@ Bimage*		model_create_shell_mask(Bmodel* model, Vector3<long> size,
 	}
 
 	// Calculate the center of the vertices
-	Vector3<double>	center = model_center_of_mass(model);
+	Vector3<double>	center = models_center_of_coordinates(model);
 	center /= sam;
 	
 	// Calculate the minimum and maximum distances from the center

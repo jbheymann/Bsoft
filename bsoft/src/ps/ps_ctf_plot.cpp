@@ -81,7 +81,7 @@ int 		ps_ctf_plot(Bstring& filename, CTFparam& em_ctf, size_t n, double freq_ste
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("s");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(1).label("Carbon");
 	plot->page(0).column(2).label("PartialCoherence");
 	plot->page(0).column(3).label("EnergySpread");
@@ -165,7 +165,7 @@ int 		ps_ctf_plot(long n, double* rps, double interval,
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("s");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(1).label("RPS");
 	plot->page(0).column(2).label("Baseline");
 	plot->page(0).column(3).label("Envelope");

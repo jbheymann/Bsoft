@@ -3,7 +3,7 @@
 @brief	All STAR file format tags for molecules and molecular parameters
 @author 	Bernard Heymann
 @date	Created: 20000419
-@date	Modified: 20220929
+@date	Modified: 20250319
 **/
 
 // Do not change the constant names because they are referenced in code
@@ -13,8 +13,21 @@
 // Entry identifier
 #define ENTRY_ID				"pdbx_database_status.entry_id"
 
+// Entities
+#define ENTITY_ID				"entity.id"
+#define ENTITY_TYPE             "entity.type"
+#define ENTITY_DESCRIPTION		"entity.pdbx_description" 
+#define ENTITY_WEIGHT			"entity.formula_weight"
+
 // Molecules/chains
 #define MOL_ID					"struct_asym.id"
+#define MOL_ENTITY				"struct_asym.entity_id"
+
+// Sequences
+#define MOL_SEQ_ID				"struct_ref_seq.align_id"
+#define MOL_SEQ_TYPE			"struct_ref_seq.ref_id"
+#define	MOL_SEQ_PDB				"struct_ref_seq.pdbx_PDB_id_code" 
+#define MOL_SEQ_STRAND			"struct_ref_seq.pdbx_strand_id"
 
 // Crystallographic unit cell
 #define	CELL_A					"cell.length_a"
@@ -175,3 +188,33 @@
 #define CHEMICAL_ATOM_RESP		"chem_comp_atom.pdbx_component_comp_id"
 #define CHEMICAL_ATOM_NUMBER	"chem_comp_atom.pdbx_ordinal"
 
+// Associated map items
+#define MAP_ID					"em_map.id"
+#define MAP_PDB_ID				"em_map.pdb_entry_id"
+#define MAP_EMDB_ID				"em_map.entry_id"
+#define MAP_FILES_ID			"em_map.map_files_id"
+#define MAP_DATATYPE			"em_map.data_type"
+#define MAP_X					"em_map.num_columns"
+#define MAP_Y					"em_map.num_rows"
+#define MAP_Z					"em_map.num_sections"
+#define MAP_NX					"em_map.num_spacing_x"
+#define MAP_NY					"em_map.num_spacing_y"
+#define MAP_NZ					"em_map.num_spacing_z"
+#define MAP_UX					"em_map.pixel_x"
+#define MAP_UY					"em_map.pixel_y"
+#define MAP_UZ					"em_map.pixel_z"
+#define MAP_OX					"em_map.origin_x"
+#define MAP_OY					"em_map.origin_y"
+#define MAP_OZ					"em_map.origin_z"
+#define MAP_DETAILS				"em_map.details"
+#define MAP_MAX					"em_map.value_density_max"
+#define MAP_MIN					"em_map.value_density_min"
+#define MAP_AVG					"em_map.value_density_mean"
+#define MAP_STD					"em_map.value_density_std"
+#define MAP_SYMMETRY			"em_map.map_symmetry_id"
+#define MAP_UNITCELL_A			"em_map.cell_length_a"
+#define MAP_UNITCELL_B			"em_map.cell_length_b"
+#define MAP_UNITCELL_C			"em_map.cell_length_c"
+#define MAP_UNITCELL_ALPHA		"em_map.cell_angle_alpha"
+#define MAP_UNITCELL_BETA		"em_map.cell_angle_beta"
+#define MAP_UNITCELL_GAMMA		"em_map.cell_angle_gamma"

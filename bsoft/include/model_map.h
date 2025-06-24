@@ -33,5 +33,5 @@ double		img_potential_from_model(Bmodel* model, long compsel, Bimage* p,
 double		model_effective_thickness(Bmodel* model, double volt);
 int			img_ewald_sphere(Bmodel* model, long compsel, Bimage* p, double smax, double volt, int ewald_flag);
 int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
-				CTFparam& cp, double dose, double stdev, string atompropfile, int ewald_flag, bool ab_flag);
+				CTFparam& cp, double dose, double stdev, string atompropfile, int ewald_flag, int ab_flag);
 

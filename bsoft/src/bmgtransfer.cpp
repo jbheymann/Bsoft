@@ -58,7 +58,7 @@ int main (int argc, char **argv)
 	Bstring			masterfile;					// Input master parameter file name
 	Bstring			outfile;					// Output parameter file name
 	Bstring			dumpfile;					// File to dump particle info to
-	int				split(0);					// Output one big STAR file
+	int				splt(0);					// Output one big STAR file
 	
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -81,12 +81,12 @@ int main (int argc, char **argv)
 		if ( curropt->tag == "output" )
 			outfile = curropt->filename();
 		if ( curropt->tag == "split" ) {
-			if ( curropt->value.contains("id") || curropt->value.contains("ID") ) split = 9;
-			else if ( curropt->value.contains("field") || curropt->value.contains("FIELD") ) split = -9;
-			else if ( ( split = curropt->value.integer() ) < 1 )
+			if ( curropt->value.contains("id") || curropt->value.contains("ID") ) splt = 9;
+			else if ( curropt->value.contains("field") || curropt->value.contains("FIELD") ) splt = -9;
+			else if ( ( splt = curropt->value.integer() ) < 1 )
 				cerr << "-split: An integer must be specified!" << endl;
 			else
-				if ( split > 6 ) split = 6;
+				if ( splt > 6 ) splt = 6;
 		}
 		if ( curropt->tag == "dump" )
 			dumpfile = curropt->filename();
@@ -128,10 +128,10 @@ int main (int argc, char **argv)
 
 	
 	if ( project ) {
-		if ( split < 0 )
+		if ( splt < 0 )
 			project_split_field_write(project);
-		else if ( outfile.length() || split == 9 ) {
-			project->split = split;
+		else if ( outfile.length() || splt == 9 ) {
+			project->split = splt;
 			write_project(outfile, project, 0, 0);
 		}
 	}

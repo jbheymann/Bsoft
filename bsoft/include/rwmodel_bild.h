@@ -11,6 +11,7 @@
 /* Function prototypes */
 Bmodel*		read_model_bild(vector<string> file_list);
 int			write_model_bild(string filename, Bmodel* model, int split);
+int			write_ewald_scheme(string filename);
 int			model_to_bild_orientations(string filename, Bmodel* model, int vec_type, int color_type);
 int			model_to_bild_view_sphere(string filename, Bmodel* model, int color_type);
 int			model_to_bild_force_vectors(string filename, Bmodel* model, int color_type);

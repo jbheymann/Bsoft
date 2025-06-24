@@ -329,11 +329,25 @@ public:
 		v.push_back(2*asin(q[3]));
 		return v;
 	}
+	Vector3<double>	axis() {
+		Quaternion	q = quaternion();
+		return q.axis();
+	}
+	double		angle() {
+		Quaternion	q = quaternion();
+		return q.angle();
+	}
 	Matrix3		rotation(const Matrix3& mat) {
 		Quaternion	q1 = quaternion();
 		Quaternion	q2 = mat.quaternion();
 		Quaternion	q = q1 * q2.inverse();
 		return Matrix3(q);
+	}
+	Vector3<double>	axis(const Matrix3& mat) {
+		Quaternion	q1 = quaternion();
+		Quaternion	q2 = mat.quaternion();
+		Quaternion	q = q1 * q2.inverse();
+		return q.axis();
 	}
 	double		angle(const Matrix3& mat) {
 		Quaternion	q1 = quaternion();

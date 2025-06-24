@@ -107,7 +107,7 @@ Bmodel*		model_from_graph_segments(Bimage* p, GSgraph& gs)
 		cout << "Model\tSize\tLinks" << endl;
 	for ( mp = model; mp; mp = mp->next ) {
 		mp->mapfile(p->file_name());
-		model_link_list_generate(mp, maxlen);
+		models_link_list_generate(mp, maxlen);
 		cout << mp->identifier() << tab << mp->component_count() << tab
 			<< mp->link_count() << endl;
 	}
@@ -289,7 +289,7 @@ int			model_shell_fit(Bmodel* model, double hires, double lores, int neg)
 		cout << "Shifting the model by:          " << shift << endl << endl;
 	}
 	
-	model_shift(model, shift*pmod->sampling(0));
+	models_shift(model, shift*pmod->sampling(0));
 	
 	delete p;
 	delete pmod;
@@ -459,8 +459,9 @@ Bimage*		model_shell_power_spectrum(Bmodel* model, Vector3<long> size,
 	ctstr[4] = "PEN";
 	ctstr[5] = "HEX";
 	
-	comp_type_list_kill(model->type);
-	model->type = NULL;
+//	comp_type_list_kill(model->type);
+//	model->type = NULL;
+	model->clear_types();
 
 	Bimage**		pref = new Bimage*[nmax];
 	
@@ -684,8 +685,10 @@ int			model_component_symmetry(Bmodel* model, long nangles,
 {
 	if ( ann_width < 1 ) ann_width = ann_max - ann_min;
 	
-	long			i, nsym[maxorder+1];
-	double			fomsym[maxorder+1], sep(0), sep_avg(0);
+	long			i;
+	double			sep(0), sep_avg(0);
+	vector<long>	nsym(maxorder+1, 0);
+	vector<double>	fomsym(maxorder+1, 0);
 	Vector3<long>	size;
 	Vector3<double>	origin;
 	Matrix3			mat(1);
@@ -696,8 +699,6 @@ int			model_component_symmetry(Bmodel* model, long nangles,
 	Bimage*			pex = NULL;
 	Bimage*			pps = NULL;
 	
-	for ( i=0; i<=maxorder; i++ ) fomsym[i] = nsym[i] = 0;
-
 	fft_plan		plan = fft_setup_plan(nangles, 1, 1, FFTW_FORWARD, 1);
 	
 	p = read_img(model->mapfile(), 0, 0);
@@ -856,6 +857,7 @@ double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, 
 	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
 //	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
 //	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( nsf > p->size().volume() ) nsf = p->size().volume();
 	
 	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
 	
@@ -880,7 +882,7 @@ double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, 
 		}
 	});
 	if ( verbose )
-		cout << "Number of structure factors:    " << nd << endl;
+		cout << endl << "Number of structure factors:    " << nd << endl;
 #else
 	long			nd(0);
 #pragma omp parallel for
@@ -900,7 +902,7 @@ double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, 
 		}
 	}
 	if ( verbose )
-		cout << "Number of structure factors:    " << nd << endl;
+		cout << endl << "Number of structure factors:    " << nd << endl;
 #endif
 
 	t = timer_report(t);
@@ -909,14 +911,17 @@ double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, 
 		cout << "Number of processors:           " << system_processors() << endl;
 		cout << "Time prefactor:                 " << 1e6*t*system_processors()/(nd*nat) << " us" << endl << endl;
 	}
-
-	if ( p->sizeZ() > 1 ) scale /= p->real_size().volume();
-	else scale /= p->real_size()[0]*p->real_size()[1];
-//	scale /= p->size().volume();
-	p->multiply(scale);
 	
 	long		i(0);
-	return (*p)[i];
+	double		mip = (*p)[i] * scale;
+
+//	if ( p->sizeZ() > 1 ) scale /= p->real_size().volume();
+//	else scale /= p->real_size()[0]*p->real_size()[1];
+	if ( p->sizeZ() > 1 ) scale /= p->sampling(0).volume();
+	else scale /= p->sampling(0)[0]*p->sampling(0)[1];
+	p->multiply(scale);
+	
+	return mip;
 }
 
 /**
@@ -944,6 +949,7 @@ double		img_potential_from_model_structure_factors(Bmodel* model, long compsel, 
 //	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
 	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
 	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( nsf > p->size().volume() ) nsf = p->size().volume();
 	
 	double			ds(1/p->real_size()[0]);
 	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
@@ -994,6 +1000,7 @@ int			img_potential_from_model_slices(Bmodel* model, Bimage* p, string atompropf
 //	if ( p->sizeZ() < 2 ) nsf = M_PI_2*smax*smax*p->real_size()[0]*p->real_size()[1];
 	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
 	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
+	if ( nsf > p->size().volume() ) nsf = p->size().volume();
 	
 	double			ds(1/p->real_size()[0]);
 	double			scale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
@@ -1031,11 +1038,15 @@ int			img_potential_from_model_slices(Bmodel* model, Bimage* p, string atompropf
 
 	Bimage*				p1 = NULL;
 	
+	// This is a fix if the scaling is not done during potential calculation
+	scale = 1.0/(p->sizeX()*p->sizeY());
+	
 	for ( long i=0; i<p->images() && i<slice.size(); ++i ) {
 		if ( verbose )
 			cout << "Calculating image " << i+1 << endl;
 		p1 = p->extract(i);
 		img_potential_from_model_structure_factors(slice[i], compsel, p1, scat, ds, smax);
+		p1->multiply(scale);
 		p->replace(i, p1);
 		delete p1;
 	}
@@ -1048,31 +1059,61 @@ double		model_effective_thickness(Bmodel* model, double volt)
 	if ( !model ) return 0;
 	if ( !model->select() ) return 0;
 
-	double			wl = electron_wavelength(volt);
+	double					wl = electron_wavelength(volt);
 
-	long			i;
-	double			ds(0.01), s2, pil(M_PI*wl);
-	vector<double>	ew(1000, 0);
-	Bmodel*			mp;
-	Bcomponent*		comp;
+	long					i, j, ncomp(0);
+	double					ds(0.001), s, t, pil(M_PI*wl);
+	Vector3<double>			v;
+	vector<double>			s2(1000);
+	vector<Vector3<double>>	ew(1000);
+	Bmodel*					mp;
+	Bcomponent*				comp;
+
+	Vector3<double>	coc = models_center_of_coordinates(model);
+
+	for ( i=0; i<ew.size(); ++i ) s2[i] = i*i*ds*ds;
 	
 	for ( mp = model; mp; mp = mp->next ) {
-		for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-			for ( i=0; i<ew.size(); ++i ) {
-				s2 = i*ds;
-				s2 *= s2;
-				ew[i] += cos(pil*comp->location()[2]*s2);
-			}
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
+//			v = pil*(comp->location()[2] - coc[2]);
+//			for ( i=0; i<ew.size(); ++i )
+//				ew[i] += cos(v*s2[i]);
+			v = (comp->location() - coc)*pil;
+			for ( i=0; i<ew.size(); ++i )
+				for ( j=0; j<3; ++j )
+					ew[i][j] += cos(v[j]*s2[i]);
+			ncomp++;
 		}
 	}
 
-	for ( i=0; i<ew.size(); ++i )
-		if ( ew[i] < 0 ) break;
+	if ( verbose & VERB_FULL )
+		cout << endl << "Spatial Frequency (1/A)\tIntX\tIntY\tIntZ" << endl;
+	for ( i=0; i<ew.size(); ++i ) {
+		ew[i] /= ncomp;
+		if ( verbose & VERB_FULL )
+			cout << i*ds << tab << ew[i] << endl;
+	}
 
-	s2 = i*ds;
-	s2 *= s2;
+	for ( j=0; j<3; ++j ) {
+		for ( i=0; i<ew.size(); ++i ) if ( ew[i][j] < 0 ) {
+			v[j] = i*ds;
+			break;
+		}
+	}
+
+	s = (v[0] + v[1] + v[2])/3;
+	t = 2.0/(wl*s*s);
 	
-	return 2.0/(wl*s2);
+	if ( verbose & VERB_FULL ) {
+		cout << "First node frequency:           " << v << " 1/A" << endl;
+		cout << "Average first node frequency:   " << s << " 1/A" << endl;
+		cout << "Resolution:                     " << 1/v[0] << tab << 1/v[1] << tab << 1/v[2] << " A" << endl;
+		cout << "Average resolution:             " << 1/s << " A" << endl;
+		cout << "Effective thickness:            " << t << endl;
+		cout << "Number of components:           " << ncomp << endl << endl;
+	}
+		
+	return t;
 }
 
 /*
@@ -1103,14 +1144,14 @@ Complex<double>	structure_factor_ewald_sphere_envelope(Bmodel* model, long comps
 }
 
 Complex<double>	structure_factor_ewald_sphere(Bmodel* model, long compsel, Vector3<double> uvw,
-					const map<string, vector<double>>& scat, double ds, CTFparam& cp, double t, int ewald_flag, bool ab_flag)
+					const map<string, vector<double>>& scat, double ds, CTFparam& cp, double t, int ewald_flag, int ab_flag)
 {
 	Bmodel*				mp;
 	Bcomponent*			comp;
 	
 	double				s(uvw.length()), a(atan2(uvw[1], uvw[0]));
 	long				i(s/ds), n(0);
-	double				w(s/ds-i), we, phi, ew_phi(0), ab_phi(0);
+	double				w(s/ds-i), we(0), phi, ew_phi(0), ab_phi(0);
 	Complex<double>		sf;
 	string				cel;
 
@@ -1118,6 +1159,7 @@ Complex<double>	structure_factor_ewald_sphere(Bmodel* model, long compsel, Vecto
 	if ( ewald_flag < 0 ) we = uvw[2] + 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
 	
 	if ( ab_flag ) ab_phi = M_PI_2 + cp.calculate_aberration(s, a);	// Aberrations (CTF)
+	if ( ab_flag < 0 ) ab_phi = -ab_phi;	// Conjugate aberrations (CTF)
 
 	map<string, double>	f;
 	
@@ -1207,7 +1249,7 @@ int			img_ewald_sphere_envelope(Bmodel* model, long compsel, Bimage* p, double s
 }
 
 int			img_ewald_sphere(Bmodel* model, long compsel, Bimage* p,
-				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, double t, int ewald_flag, bool ab_flag)
+				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, double t, int ewald_flag, int ab_flag)
 {
 	double			width(50/t);
 	if ( width > smax ) width = smax;
@@ -1265,21 +1307,30 @@ int			img_ewald_sphere(Bmodel* model, long compsel, Bimage* p,
 
 
 Complex<double>	structure_factor_from_model(Bmodel* model, long compsel, Vector3<double> uvw,
-					const map<string, vector<double>>& scat, double ds, CTFparam& cp, int ewald_flag, bool ab_flag)
+					const map<string, vector<double>>& scat, double ds, CTFparam& cp, int ewald_flag, int ab_flag)
 {
 	Bmodel*				mp;
 	Bcomponent*			comp;
+	
+	long				ns = scat.begin()->second.size();
 	
 	double				s(uvw.length()), a(atan2(uvw[1], uvw[0]));
 	long				i(s/ds);
 	double				w(s/ds-i), phi, ab_phi(0);
 	Complex<double>		sf;
 	string				cel;
+	
+	if ( i >= ns - 1 ) {
+		if ( verbose )
+			cerr << "Warning: index " << i << " greater than lookup vector size " << ns << "!" << endl;
+		i = ns - 2;
+	}
 
 	if ( ewald_flag ) uvw[2] = 0.5*cp.lambda()*(uvw[0]*uvw[0]+uvw[1]*uvw[1]);	// Ewald sphere phase shift
 	if ( ewald_flag < 0 ) uvw[2] = -uvw[2];
 	
 	if ( ab_flag ) ab_phi = M_PI_2 + cp.calculate_aberration(s, a);	// Aberrations (CTF)
+	if ( ab_flag < 0 ) ab_phi = -ab_phi;	// Conjugate aberrations (CTF)
 
 	map<string, double>	f;
 	
@@ -1303,11 +1354,12 @@ Complex<double>	structure_factor_from_model(Bmodel* model, long compsel, Vector3
 }
 
 int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
-				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, int ewald_flag, bool ab_flag)
+				CTFparam& cp, map<string, vector<double>>& scat, double ds, double smax, int ewald_flag, int ab_flag)
 {
 	long			nsf((4.0/3.0)*M_PI*smax*smax*smax*p->real_size().volume());
 	if ( p->sizeZ() < 2 ) nsf = M_PI*smax*smax*p->real_size()[0]*p->real_size()[1];
-
+	if ( nsf > p->size().volume() ) nsf = p->size().volume();
+	
 	if ( verbose )
 		cout << "Number of structure factors:    " << nsf << endl << endl;
 
@@ -1439,6 +1491,7 @@ double		img_potential_from_model(Bmodel* model, Bimage* p,
 		cout << "Calculating structure factors:" << endl;
 		cout << "Atomic properties file:         " << atompropfile << endl;
 		cout << "Size:                           " << p->size() << tab << p->images() << endl;
+		cout << "Origin:                         " << p->image->origin() << endl;
 		cout << "Physical size:                  " << p->real_size() << " A" << endl;
 		cout << "High resolution limit:          " << hires << " A (" << smax << " 1/A)" << endl;
 		cout << "Scatter curve sampling & size:  " << ds << tab << long(1.1*smax/ds) << endl;
@@ -1778,7 +1831,7 @@ int			img_electron_scattering_chunks(Bmodel* model, Bimage* p,
 @param	ab_flag			apply aberrations.
 **/
 int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
-				CTFparam& cp, double dose, double stdev, string atompropfile, int ewald_flag, bool ab_flag)
+				CTFparam& cp, double dose, double stdev, string atompropfile, int ewald_flag, int ab_flag)
 {
 	if ( dose ) (*p)["dose"] = dose;	// Dose per frame
 
@@ -1830,8 +1883,8 @@ int			img_electron_scattering(Bmodel* model, long compsel, Bimage* p,
 //	double			potscale(1e20*PLANCK*PLANCK/(TWOPI*ECHARGE*EMASS));
 //	scale = potscale;
 //	scale /= p->real_size().volume();
-	scale /= sqrt(p->sizeX()*p->sizeY());
-//	scale /= model_component_count(model);
+//	scale /= sqrt(p->sizeX()*p->sizeY());
+	scale /= models_component_count(model);
 	
 	if ( dose && stdev ) {
 		for ( long nn=0; nn<p->images(); ++nn ) {

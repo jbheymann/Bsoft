@@ -588,7 +588,7 @@ long		particle_tomo_reconstruct(Bproject* project, Bparticle* recpart,
 
 	Bimage*				prec = particle_reconstruct(partlist, sym, 0,
 							resolution, scale, partlist->pixel_size, recsize, ft_size, planp, 
-							interp_type, ctf_action, wiener, 0, 0);
+							interp_type, ctf_action, wiener, 0, 0, 0);
 	
 	long				nr = prec->image->FOM();
 	

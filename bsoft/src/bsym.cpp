@@ -45,6 +45,7 @@ const char* use[] = {
 "-nonorm                  Do not normalize after symmetrization (use with -symmetry).",
 "-show                    Show operational symmetry matrices (use with -symmetry).",
 "-pdb                     Show PDB symmetry matrices (use with -symmetry).",
+"-view 0.1,-0.4,0.5,51    Show symmetry related views (use with -symmetry).",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
@@ -83,6 +84,7 @@ int 	main(int argc, char **argv)
 	Vector3<double>	origin;						// Origin
 	int				set_origin(0); 				// Flag to set origin
 	View2<double>	ref_view;					// Reference view
+	View2<double>	view;						// View for symmetry related views
 	double			hires(0), lores(0);			// Resolution limits for cross-correlation
 	Bsymmetry		sym;						// Point group
 	Bsymmetry		symnu;						// New point group
@@ -162,6 +164,10 @@ int 	main(int argc, char **argv)
 			norm_flag = 0;
 		if ( curropt->tag == "show" ) show |= 1;
 		if ( curropt->tag == "pdb" ) show |= 2;
+		if ( curropt->tag == "view" ) {
+			view = curropt->view();
+			show |= 4;
+		}
 		if ( curropt->tag == "handedness" ) {
 			if ( ( hand_threshold = curropt->value.real() ) )
 				cerr << "-handedness: A density threshold must be specified!" << endl;
@@ -184,6 +190,10 @@ int 	main(int argc, char **argv)
 
 	if ( show & 1 ) sym.show_operational_matrices();
 	if ( show & 2) sym.show_pdb_matrices();
+	if ( show & 4) {
+		vector<View2<double>>	views = sym.get_all_views(view);
+		show_views(views);
+	}
 	
 	if ( pgfile.length() )
 		write_pointgroup(pgfile.str(), sym, ref_view);
@@ -273,8 +283,7 @@ int 	main(int argc, char **argv)
 	delete p;
 	delete ptemp;
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

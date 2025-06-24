@@ -239,7 +239,7 @@ vector<Vector3<double>>	img_find_reflections(Bimage* p, double ref_res, double t
 	if ( threshold < 0.1 ) threshold = 20;
 	if ( kedge < 1 ) kedge = 1;
 	
-	long				i, j, na;
+	long				i, na;
 	long				ks(kedge/2);				// Summation kernel half edge and volume
 	double				a;
 	double				s(1/ref_res);				// Spatial frequency
@@ -264,7 +264,7 @@ vector<Vector3<double>>	img_find_reflections(Bimage* p, double ref_res, double t
 		cout << "Angular increment:              " << da*180.0/M_PI << " degrees" << endl << endl;
 	}
 
-	for ( a=0, j=na=0; a<TWOPI; a+=da, ++na ) {
+	for ( a=0, na=0; a<TWOPI; a+=da, ++na ) {
 //		tloc = Vector3<double>(p->image->origin()[0] + k[0]*cos(a), p->image->origin()[1] + k[1]*sin(a), 0);
 		tloc = Vector3<double>(k[0]*cos(a), k[1]*sin(a), 0);
 		rloc = tloc * rd;

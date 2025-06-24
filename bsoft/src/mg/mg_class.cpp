@@ -63,13 +63,11 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 	Bparticle*		part;
 	long			npart = project_count_mg_particles(project);
 
-	int*			num = new int[nmap+1];
-	float*			fom = new float[npart*nmap];
-	float*			fom_avg = new float[nmap+1];
-	float*			fom_std = new float[nmap+1];
+	vector<long>	num(nmap+1,0);
+	vector<double>	fom(npart*nmap,0);
+	vector<double>	fom_avg(nmap+1,0);
+	vector<double>	fom_std(nmap+1,0);
 	
-	for ( i=0; i<nmap+1; i++ ) fom_avg[i] = fom_std[i] = num[i] = 0;
-	for ( i=0; i<npart*nmap; i++ ) fom[i] = 0;
 
 	if ( verbose ) {
 		cout << "Classifying particles with respect to maps:" << endl;
@@ -261,11 +259,6 @@ long   mg_classify(Bproject* project, double resolution_hi, double resolution_lo
 			cout << i << tab << num[i] << tab << num[i]*100.0/npart << tab << fom_avg[i] << tab << fom_std[i] << endl;
 	}
 	
-	delete[] num;
-	delete[] fom;
-	delete[] fom_avg;
-	delete[] fom_std;
-
 	return nsel;
 }
 

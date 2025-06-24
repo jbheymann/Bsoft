@@ -294,13 +294,16 @@ int 	main(int argc, char **argv)
 	}
 
 	vector<map<pair<long,long>,double>> wa;
-	if ( weights.find({0,0}) == weights.end() )
-		weights[{0,0}] = cp.aberration_weight(0,0);
-	if ( weights.find({2,0}) == weights.end() )
-		weights[{2,0}] = cp.aberration_weight(2,0);
-	if ( weights.find({4,0}) == weights.end() )
-		weights[{4,0}] = cp.aberration_weight(4,0);
-	if ( weights.size() ) wa.push_back(weights);
+	if ( fit_flag != 1 ) {
+		if ( weights.find({0,0}) == weights.end() )
+			weights[{0,0}] = cp.aberration_weight(0,0);
+		if ( weights.find({2,0}) == weights.end() )
+			weights[{2,0}] = cp.aberration_weight(2,0);
+		if ( weights.find({4,0}) == weights.end() )
+			weights[{4,0}] = cp.aberration_weight(4,0);
+	}
+	
+	wa.push_back(weights);
 	if ( verbose ) {
 		cout << "Checking aberration weights:" << endl;
 		for ( auto w: weights ) 
@@ -373,7 +376,7 @@ int 	main(int argc, char **argv)
 		if ( ew_thick > 0 && argc > optind )
 			write_img(argv[optind++], p, 0);
 		else if ( p && abfile.length() ) {
-			if ( phifile.length() ) img_create_aberration(p, wa, 4);
+//			if ( phifile.length() ) img_create_aberration(p, wa, 4);
 			p->change_type(nudatatype);
 			write_img(abfile, p, 0);
 		}
@@ -560,7 +563,7 @@ vector<vector<double>>	aberration_fit_sensitivity(double hi_res, CTFparam& cp, l
 	double			irm(1.0L/get_rand_max());
 
 	long			nsam(100);
-	double			ds(nsam/hi_res), px(nsam*hi_res/nsam);
+	double			ds(nsam/hi_res);
 
 	long			i, j(0), k, t;
 	CTFparam		cptest;

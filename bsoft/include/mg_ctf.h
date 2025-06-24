@@ -3,19 +3,19 @@
 @brief	Functions for CTF (contrast transfer function) processing
 @author 	Bernard Heymann
 @date	Created: 19970715
-@date	Modified: 20240405
+@date	Modified: 20250115
 **/
 
 #include "mg_processing.h"
 #include "rwimg.h"
 
 // Function prototypes
-Bimage*		img_ctf_calculate(CTFparam& cp, bool flip, double wiener,
+Bimage*		img_ctf_calculate(CTFparam& cp, bool flip, bool env, double wiener,
 				Vector3<long> size, Vector3<double> sam, double lores, double hires);
 Bimage*		img_ctf_calculate(CTFparam cp, int action, double wiener, Vector3<long> size,
 				Vector3<double> sam, double lores=0, double hires=0);
 Bimage*		img_ctf_ewald_calculate(CTFparam& cp,
-				Vector3<long> size, Vector3<double> sam, double lores, double hires);
+				Vector3<long> size, Vector3<double> sam, double lores, double hires, int type);
 //Bimage*		img_ctf_gradient(CTFparam& cp, double def_min, double def_max, double def_inc,
 //				Vector3<long> size, Vector3<double> sam, double lores, double hires);
 double		aberration(long n, long m, double s, double p);
@@ -37,8 +37,8 @@ int 		img_ctf_apply(Bimage* p, CTFparam em_ctf, int action, double wiener,
 int 		img_ctf_apply(Bimage* p, CTFparam em_ctf, int action, double wiener,
 				double lores, double hires, bool invert, fft_plan planf_2D, fft_plan planb_2D);
 int 		img_ctf_apply_complex(Bimage* p, CTFparam& cp, bool flip,
-				double wiener, double lores, double hires);
-int 		img_ctf_apply_ewald(Bimage* p, CTFparam& cp, double lores, double hires, bool back_transform=0);
+				bool env, double wiener, double lores, double hires);
+int 		img_ctf_apply_ewald(Bimage* p, CTFparam& cp, double lores, double hires, int type, bool back_transform=0);
 int			img_apply_phase_aberration(Bimage* p, CTFparam em_ctf);
 int			img_ttf_apply(Bimage* p, CTFparam ctf, int action, double wiener,
 				Vector3<long> tile_size, double tilt, double axis, double res_lo, double res_hi, int invert);
@@ -54,6 +54,7 @@ int 		project_ctf(Bproject* project, int action, double lores,
 int			project_powerspectrum_isotropy(Bproject* project, double lores, double hires);
 JSvalue		project_defocus_range(Bproject* project);
 int 		project_ctf_average(Bproject* project, Bstring& psname);
+int 		project_ctf_ewald_average(Bproject* project, Bstring& psname);
 Bimage*		project_powerspectrum_average(Bproject* project, double deftarget);
 int			project_merge_CTF_parameters(Bproject* project, Bproject* ctfproject);
 int			project_CTF_to_part(Bproject* project);

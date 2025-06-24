@@ -261,10 +261,10 @@ int 		main(int argc, char **argv)
 
 	if ( mod_file.length() ) {
 		Bmodel*		model = model_from_multilevel_mask(p);
-		if ( comprad ) models_process(model, comprad, model_set_component_radius);
-		if ( linkrad ) models_process(model, linkrad, model_set_link_radius);
+		if ( comprad > 0 ) models_set_component_radius(model, comprad);
+		if ( linkrad > 0 ) models_set_link_radius(model, linkrad);
 		write_model(mod_file.str(), model);
-		model_kill(model);
+		delete model;
 	}
 
 	if ( optind < argc ) {

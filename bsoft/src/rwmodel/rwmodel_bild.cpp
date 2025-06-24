@@ -70,7 +70,7 @@ Bmodel*		read_model_bild(vector<string> file_list)
 //		mp = model_add(&mp, id);
 //		if ( !model ) model = mp;
 		if ( model ) mp = mp->add(base(filename));
-		else mp = new Bmodel(base(filename));
+		else model = mp = new Bmodel(base(filename));
 		link = NULL;
 		comp = NULL;
 		nc = 0;
@@ -275,6 +275,29 @@ int			write_model_bild(string filename, Bmodel* model, int splt)
 	}
 	
 	return n;
+}
+
+int			write_ewald_scheme(string filename)
+{
+	double			scale(1), a(0.3), sa(scale*sin(a)), ca(scale*cos(a));
+	
+	ofstream		fbld(filename.c_str());
+
+	fbld << ".transparency 0.5" << endl;
+	fbld << ".color 1 0 0" << endl;
+	fbld << ".sphere " << 0 << " " << 0 << " " << -scale << " " << scale << endl;
+	fbld << ".color 0 0 1" << endl;
+	fbld << ".sphere " << 0 << " " << 0 << " " << scale << " " << scale << endl;
+
+//	fbld << ".transparency 1.0" << endl;
+	fbld << ".arrow 0 0 " << scale << " " << sa << " 0 " << scale-ca << " 0.02" << endl;
+
+	fbld << ".color 1 0 0" << endl;
+	fbld << ".arrow " << sa << " 0 " << ca-scale << " 0 0 " << -scale << " 0.02" << endl;
+	
+	fbld.close();
+
+	return 0;
 }
 
 /**

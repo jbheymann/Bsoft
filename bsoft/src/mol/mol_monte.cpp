@@ -74,6 +74,11 @@ Bmolgroup*	monte_carlo_metropolis(Bmolgroup* molgroup, Bmd* md, Bimage* map,
 				double (Efunc)(Bmolgroup*, Bimage*, Bmd*),
 				int (Tfunc)(Bmolgroup*, double, double))
 {
+	if ( !map ) {
+		cerr << "Error: No map specified!" << endl;
+		bexit(-1);
+	}
+
 	int				done(0), accept, select_min(0);
 	long			i, isel(0), cycle(0), naccept(0);
 	double			r, E, pE, bestE, Z(0), Ze, Zi, Emax;
@@ -84,8 +89,9 @@ Bmolgroup*	monte_carlo_metropolis(Bmolgroup* molgroup, Bmd* md, Bimage* map,
 	Bmolgroup*		mgold = NULL;
 	Bmolecule*		mol;
 	
-	double*			Elist = new double[max_iter+1];
-	
+//	double*			Elist = new double[max_iter+1];
+	vector<double>	Elist(max_iter+1,0);
+
 	long			nmg = count_list((char *) molgroup);
 	long			nmol = count_list((char *) molgroup->mol);
 	long			nbond = count_list((char *) molgroup->bond);
@@ -217,7 +223,7 @@ Bmolgroup*	monte_carlo_metropolis(Bmolgroup* molgroup, Bmd* md, Bimage* map,
 	}
 	if ( Z <= 0 ) Z = 1;
 	
-	delete[] Elist;
+//	delete[] Elist;
 	
 	md->Epot = bestE;
 	

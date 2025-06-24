@@ -136,7 +136,7 @@ Reference: 	Press W.H. et al (1992) Numerical Recipes in C.
 **/
 double		Matrix::singular_value_decomposition()
 {
-	long			flag, i, its, j, jj, k, l, nm, m(rows()), n(columns());
+	long			flag, i(0), its, j, jj, k, l, nm, m(rows()), n(columns());
 	double			anorm, c, f, g, h, s, scale, x, y, z, t;
 
 	vector<double>	w(m,0);

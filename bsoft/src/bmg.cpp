@@ -183,7 +183,7 @@ int main (int argc, char **argv)
 	Bstring			outfile;				// Output parameter file name
 	Bstring			dumpfile;				// File to dump particle info to
 	Bstring			psfile;					// File to plot micrograph origins
-	int				split(0);				// Output one big STAR file
+	int				splt(0);				// Output one big STAR file
 	int				read_flags(0);			// Flags to pass to the parameter file reading function
 	int				write_flags(0);			// Flags to pass to the parameter file writing function
 	
@@ -403,12 +403,12 @@ int main (int argc, char **argv)
 		if ( curropt->tag == "Postscript" )
 			psfile = curropt->filename();
 		if ( curropt->tag == "split" ) {
-			if ( curropt->value.contains("id") || curropt->value.contains("ID") ) split = 9;
-			else if ( curropt->value.contains("field") || curropt->value.contains("FIELD") ) split = -9;
-			else if ( ( split = curropt->value.integer() ) < 1 )
+			if ( curropt->value.contains("id") || curropt->value.contains("ID") ) splt = 9;
+			else if ( curropt->value.contains("field") || curropt->value.contains("FIELD") ) splt = -9;
+			else if ( ( splt = curropt->value.integer() ) < 1 )
 				cerr << "-split: An integer must be specified!" << endl;
 			else
-				if ( split > 6 ) split = 6;
+				if ( splt > 6 ) splt = 6;
 		}
 		if ( curropt->tag == "dump" )
 			dumpfile = curropt->filename();
@@ -601,10 +601,10 @@ int main (int argc, char **argv)
 
 //	
 	if ( project ) {
-		if ( split < 0 )
+		if ( splt < 0 )
 			project_split_field_write(project);
-		else if ( outfile.length() || split == 9 ) {
-			project->split = split;
+		else if ( outfile.length() || splt == 9 ) {
+			project->split = splt;
 			write_project(outfile, project, write_flags);
 		}
 	}

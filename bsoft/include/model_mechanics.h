@@ -3,7 +3,7 @@
 @brief	Functions to do molecular mechanics
 @author 	Bernard Heymann
 @date	Created: 20010828
-@date	Modified: 20230717
+@date	Modified: 20250619
 **/
 
 #include "Bmodel.h"
@@ -12,12 +12,16 @@
 
 // Function prototypes 
 double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
-				double max_shift, double velocitylimit);
+				double max_shift);
 int			model_minimize(Bmodel* model, double max_shift);
+int			models_rigid_minimize(Bmodel* model, double max_shift);
 int			model_regularize(Bmodel* model, int reg_iter, double distance,
 				double Kdistance, double Klink, double Kangle, double Kpoly,
 				double Kpolyplane, double Kpoint, double decay);
-double		model_verlet(Bmodel* model, double timestep, double Kfriction, double velocitylimit);
+double		model_find_map_scale(Bmodel* model, Bimage* map, double scale_max, double scale_inc);
+double		model_verlet(Bmodel* model, Bmodparam& md);
+double		models_rigid_verlet(Bmodel* model, Bmodparam& md);
+double		component_distance_potential(Bcomponent* comp1, Bcomponent* comp2, double Kd, int type, bool wrap, Vector3<double> box);
 double		model_electrostatic_energy(Bmodel* model, Bmodparam& md);
 double		model_distance_energy(Bmodel* model, Bmodparam& md);
 double		model_grid_distance_energy(Bmodel* model, Bmodparam& md);
@@ -39,6 +43,7 @@ double		model_guide_energy(Bmodel* model, Bmodparam& md);
 double		model_polyhedron_guide_energy(Bmodel* model, Bmodel* gmod, double Kguide);
 double		model_map_energy(Bmodel* model, Bimage* map, double Kmap);
 double		model_map_energy(Bmodel* model, Bimage* map, double Kmap, double sigma);
+double		model_link_map_energy(Bmodel* model, Bimage* map, double Kmap, int steps);
 int			model_zero_forces(Bmodel* model);
 int			model_calculate_deviations(Bmodel* model);
 int			model_calculate_deviations(Bmodel* model, Bmodparam& md);

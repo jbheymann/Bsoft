@@ -3,13 +3,14 @@
 @brief	Functions to align micrographs or coordinates from micrographs and apply the resultant transformation.
 @author 	Bernard Heymann and Samuel Payne
 @date	Created: 20000505
-@date	Modified: 20240215
+@date	Modified: 20250326
 **/
 
 #include "Bimage.h"
 #include "mg_align.h"
 #include "rwimg.h"
 #include "mg_processing.h"
+#include "mg_extract.h"
 #include "mg_img_proc.h"
 #include "mg_ctf_fit.h"
 #include "mg_select.h"
@@ -1350,6 +1351,190 @@ double		project_align_frames(Bproject* project, int ref_img, long window, long s
 		for ( mg = field->mg; mg; mg = mg->next, nmg++ ) {
 			mg_align_frames(mg, ref_img, window, step, pgr, pmask, hi_res, lo_res, shift_limit,
 				edge_width, gauss_width, bin, subset, flag);
+			d += mg->fom;
+		}
+	}
+	
+	d /= nmg;
+
+	if ( verbose & VERB_RESULT )
+		cout << "Overall average shift per frame: " << d << endl << endl;
+	
+	return d;
+}
+
+double		mg_align_particle_frames(Bmicrograph* mg, long ref_num, long window, long step,
+				Bimage* pgr, Bimage* pmask, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width, 
+				Bstring& subset, int flag)
+{
+	int				mode(flag&16);
+	
+	Bimage*			p = read_img(mg->fframe, 1, -1);
+
+	if ( mg->frame_pixel_size.volume() ) p->sampling(mg->frame_pixel_size);
+//	cout << mg->frame_pixel_size << endl;
+//	cout << p->sampling(0) << endl;
+	
+	if ( mg->origin.length() > 0 ) p->origin(mg->origin);
+	
+	if ( p->sizeZ() > 1 ) p->slices_to_images();
+		
+	if ( p->images() < 2 ) {
+		delete p;
+		return 0;
+	}
+	
+//	p->information();
+
+	if ( pgr ) {
+		if ( verbose )
+			cout << "Multiplying with " << pgr->file_name() << endl;
+		p->multiply(pgr);
+	}
+
+	if ( verbose )
+		cout << "Aligning particle frames from micrograph " << mg->id << endl;
+
+	if ( flag & 1 ) p->histogram_counts(2);
+
+	Vector3<long>			aln_bin(1,1,1);
+	vector<Vector3<double>>	sh;
+
+	Bparticle*				part;
+	Bimage*					ppart = NULL;
+	Bimage*					psum = NULL;
+	Bimage*					pnu = NULL;
+	
+	long					n, nn, npart = mg->part->count();
+	bool					splt(0);
+	if ( mg->part->fpart.length() ) splt = 1;
+	else pnu = new Bimage(Float, TComplex, mg->box_size, npart);
+
+	double			d, cc_avg(0), shift_avg(0), shift_var(0);
+	Vector3<double>	shift;
+
+	if ( verbose )
+		cout << "#\t∆avg\t∆var\tCC" << endl;
+	for ( nn=0, part = mg->part; part; part = part->next, ++nn ) {
+		cc_avg = shift_avg = shift_var = 0;
+		ppart = particle_extract_frames(part, p, mg->box_size, 0, mg->box_size[0]);
+		sh = ppart->align(ref_num, window, step, pmask, hi_res, lo_res, shift_limit,
+						edge_width, gauss_width, aln_bin, mode);
+		for ( n=0; n < sh.size(); ++n ) {
+			ppart->image[n].origin(sh[n] + ppart->size()/2);
+			if ( n ) {
+				shift = (sh[n] - sh[n-1])*part->pixel_size;
+				d = shift.length();
+				shift_avg += d;
+				shift_var += d*d;
+			}
+			cc_avg += sh[n][2];
+		}
+		if ( n ) {
+			shift_avg /= n-1;
+			shift_var /= n-1;
+			shift_var -= shift_avg*shift_avg;
+			part->fom[0] = cc_avg /= n;
+		}
+		if ( verbose )
+			cout << part->id << tab << shift_avg << tab << shift_var << tab << cc_avg << endl;
+		psum = ppart->fspace_shift_sum();
+		if ( splt ) {
+			part->fpart = part->fpart.pre_rev('.') + "_fsum." + part->fpart.post_rev('.');
+			psum->fft_back();
+		 	write_img(part->fpart, psum, 0);
+		} else {
+			pnu->replace(nn, psum);
+		}
+		delete ppart;
+		delete psum;
+	}
+	
+	delete p;
+	
+	if ( pnu ) {
+		mg->fpart = mg->fpart.pre_rev('.') + "_fsum." + mg->fpart.post_rev('.');
+		pnu->fft_back();
+		pnu->fourier_type(Standard);
+		pnu->sampling(mg->frame_pixel_size);
+		pnu->origin(pnu->size()/2);
+		write_img(mg->fpart, pnu, 0);
+		delete pnu;
+	}
+	
+	return 0;
+}
+
+/**
+@brief 	Aligns a particle frames from  micrograph frames by cross-correlation.
+@param 	*project		project parameter structure.
+@param 	ref_img			reference frame number (starts from 0).
+@param 	window			moving sum window (default 1, no moving sum).
+@param 	step			moving sum interval (default 1).
+@param 	*pgr			gain reference.
+@param 	*pmask			reciprocal space mask, 0's and 1's.
+@param 	origin			tilt origin.
+@param 	hi_res			high resolution limit.
+@param 	lo_res			low resolution limit.
+@param 	shift_limit		maximum shift from nominal origin of image.
+@param 	edge_width		edge smoothing width (not done if 0).
+@param 	gauss_width		edge decay width.
+@param 	bin				integer bin factor.
+@param	subset			a subset to sum.
+@param 	flag			options flag.
+@return double			root-mean-square of offsets.
+
+	Each micrograph frame is cross-correlated with the reference
+	frame and the shift determined.
+	Options encoded in the flag:
+	1	rescale image based on histogram.
+	2	weigh by accumulated dose.
+	4	write aligned frames with insert "_aln".
+	8	write aligned frame sum with insert "_sum".
+	16	initial alignment: local rather than progressive.
+
+**/
+double		project_align_particle_frames(Bproject* project, int ref_img, long window, long step,
+				Bimage* pgr, Bimage* pmask, Vector3<double> origin, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag)
+{
+	if ( bin < 1 ) bin = 1;
+	if ( window < 1 ) window = 1;
+	
+	Bfield*			field = project->field;
+	Bmicrograph*	mg;
+	long			nmg = project_count_micrographs(project);
+	long			npart = project_count_mg_particles(project);
+	double			d(0);
+
+//	if ( verbose & ( VERB_LABEL | VERB_PROCESS ) ) {
+	if ( verbose ) {
+		cout << "Aligning particle frames by cross-correlation:" << endl;
+		cout << "Number of micrographs:          " << nmg << endl;
+		cout << "Number of particles:            " << npart << endl;
+		cout << "Reference frame:                " << ref_img << endl;
+		cout << "Moving sum window and step:     " << window << tab << step << endl;
+		cout << "Resolution limits:              " << hi_res << " - " << lo_res << " A" << endl;
+		cout << "Shift limit:                    " << shift_limit << endl;
+		cout << "Edge masking width & smoothing: " << edge_width << " " << gauss_width << endl;
+//		cout << "Binning:                        " << bin << endl;
+		if ( pgr )
+			cout << "Gain reference file:            " << pgr->file_name() << endl;
+		if ( pmask )
+			cout << "Using mask file:                " << pmask->file_name() << endl;
+		if ( flag&16 )
+			cout << "Initial alignment mode:         local" << endl;
+		else
+			cout << "Initial alignment mode:         progressive" << endl;
+		cout << endl;
+	}
+
+	for ( nmg=0, field = project->field; field; field = field->next ) {
+		for ( mg = field->mg; mg; mg = mg->next, nmg++ ) {
+			mg_align_particle_frames(mg, ref_img, window, step, pgr, pmask, hi_res, lo_res, shift_limit,
+				edge_width, gauss_width, subset, flag);
 			d += mg->fom;
 		}
 	}

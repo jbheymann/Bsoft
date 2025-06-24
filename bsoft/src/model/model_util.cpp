@@ -3,16 +3,13 @@
 @brief	Library routines used for model processing
 @author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20240330
+@date	Modified: 20250617
 **/
 
 #include "model_util.h"
 #include "model_transform.h"
 #include "model_select.h"
 #include "model_links.h"
-#include "mol_transform.h"
-#include "mol_compare.h"
-#include "mol_util.h"
 #include "symmetry.h"
 #include "matrix_linear.h"
 #include "matrix_util.h"
@@ -115,7 +112,7 @@ long		models_process(Bmodel* model, string str, long (modfunc)(Bmodel*, string s
 @param 	*model		model parameters.
 @return long			number of components.
 **/
-long		model_component_count(Bmodel* model)
+long		models_component_count(Bmodel* model)
 {
 	long		ncomp(0);
 	Bmodel*		mp;
@@ -131,18 +128,18 @@ long		model_component_count(Bmodel* model)
 @param 	*model		model parameters.
 @return long			number of models.
 **/
-long		model_list(Bmodel* model)
+long		models_list(Bmodel* model)
 {
 	if ( !model ) return 0;
 	
 	long			nmod(0), ncomp, nct(0);
 	Bmodel*			mp;
-	Bcomponent*		comp;
 	string			type_id, sym, fmap;
+	Vector3<double>	coc;
 
-	cout << "Model\tType\tNcomp\tPG\tHand\tFOM\tSelect\tMap\tNumber" << endl;
+	cout << "Model\tType\tNcomp\tPG\tHand\tFOM\tSelect\tMap\tNumber\tCenter" << endl;
 	for ( mp = model; mp; mp = mp->next, nmod++ ) {
-		for ( ncomp=0, comp = mp->comp; comp; comp = comp->next ) ncomp++;
+		ncomp = mp->component_count();
 		nct += ncomp;
 		if ( mp->model_type().length() ) type_id = mp->model_type();
 		else type_id = "?";
@@ -150,8 +147,11 @@ long		model_list(Bmodel* model)
 		else sym = "?";
 		if ( mp->mapfile().length() ) fmap = mp->mapfile();
 		else fmap = "?";
-		cout << mp->identifier() << tab << type_id << tab << ncomp << tab << sym << tab << mp->handedness() << tab <<
-			mp->FOM() << tab << mp->select() << tab << fmap << tab << mp->image_number() << endl;
+		coc = mp->center_of_coordinates();
+		cout << mp->identifier() << tab << type_id << tab << ncomp << tab << sym << 
+			tab << mp->handedness() << tab << mp->FOM() << tab << mp->select() << 
+			tab << fmap << tab << mp->image_number() << 
+			tab << setprecision(2) << coc << endl;
 	}
 	cout << "Total\t\t" << nct << endl << endl;
 	
@@ -163,7 +163,7 @@ long		model_list(Bmodel* model)
 @param 	*model			model parameters.
 @return long			number of models.
 **/
-long		model_list_comp(Bmodel* model)
+long		models_list_comp(Bmodel* model)
 {
 	if ( !model ) return 0;
 	
@@ -215,6 +215,89 @@ long		model_list_comp(Bmodel* model)
 }
 
 /**
+@brief 	Copies a linked list of models.
+@param 	*model		linked list of models.
+@return Bmodel*		new linked list of models.
+**/
+Bmodel*		models_copy(Bmodel* model)
+{
+	if ( verbose & VERB_FULL )
+		cout << "Copying models" << endl;
+
+	vector<Bmodel*>		marr = model->array();
+	long				n(marr.size());
+
+#ifdef HAVE_GCD
+	__block	vector<Bmodel*>	mnuarr(n);
+	dispatch_apply(n, dispatch_get_global_queue(0, 0), ^(size_t i){
+		mnuarr[i] = marr[i]->copy();
+	});
+#else
+	vector<Bmodel*>	mnuarr(n);
+#pragma omp parallel for
+	for ( long i=0; i<n; ++i )
+		mnuarr[i] = marr[i]->copy();
+#endif
+
+	Bmodel*		modnu = mnuarr[0];
+	Bmodel*		mp = modnu;
+		
+	for ( long i=1; i<n; ++i, mp = mp->next )
+		mp->next = mnuarr[i];
+	
+	return modnu;
+}
+
+/**
+@brief 	Copies selected models in a given order.
+@param 	*model		linked list of models.
+@param 	order		list of identifiers to in order.
+@return Bmodel*		new linked list of models.
+
+	Only the models in the order string are copied.
+ 
+**/
+Bmodel*		models_copy(Bmodel* model, string order)
+{
+	Bmodel*			model_nu = NULL;
+	Bmodel*			mp;
+	Bmodel*			mp_nu = NULL;
+
+	if ( verbose )
+		cout << "Copying models:      " << order << endl;
+
+	vector<string>  vs = split(order,',');
+	
+	for ( auto s: vs ) {
+		for ( mp = model; mp && mp->identifier() != s; mp = mp->next ) ;
+		if ( mp ) {
+			cout << mp->identifier() << endl;
+			if ( mp_nu ) mp_nu->add(mp->copy());
+			else model_nu = mp_nu = mp->copy();
+		}
+	}
+
+	if ( model_nu->count() != vs.size() )
+		cerr << "Warning in models_copy: Not all models have been copied!" << endl;
+	
+	return model_nu;
+}
+
+/**
+@brief 	Copies selected models in a given order.
+@param 	**model		pointer to linked list of models.
+@param 	order		list of identifiers to in order.
+
+	Only the models in the order string are copied.
+ 
+**/
+void		models_copy(Bmodel** model, string order) {
+	Bmodel* 	m = models_copy(*model, order);
+	delete *model;
+	*model = m;
+}
+
+/**
 @brief 	Merges components from all models into one.
 @param 	*model		model parameters.
 @return long		number of components.
@@ -247,7 +330,7 @@ long		model_merge(Bmodel* model)
 		if ( link ) for ( ; link->next; link = link->next ) ;
 	}
 	
-	model_kill(model->next);
+	delete model->next;
 	model->next = NULL;
 	
 	for ( nct=0, ct = model->type; ct; ct = ct->next ) nct++;
@@ -324,12 +407,13 @@ long		model_rename(Bmodel* model, char first_name)
 	Only the first model is processed.
 
 **/
-long		model_rename_components(Bmodel* model)
+long		models_rename_components(Bmodel* model)
 {
 	if ( !model ) return 0;
 	if ( !model->select() ) return 0;
 	
 	long			i, n(0);
+	Bmodel*			mp;
 	Bcomponent*		comp;
 
 	string			ctstr[10];
@@ -344,15 +428,49 @@ long		model_rename_components(Bmodel* model)
 	ctstr[8] = "OCT";
 	ctstr[9] = "NON";
 	
-	for ( comp = model->comp; comp; comp = comp->next, n++ ) {
-		for ( i=0; comp->link[i]; i++ ) ;
-		if ( i > 9 ) i = 9;
-//		comp->type = model_add_type_by_id(model, ctstr[i]);
-		comp->type(model->add_type(ctstr[i]));
+	for ( mp = model; mp; mp = mp->next ) {
+		for ( comp = model->comp; comp; comp = comp->next, n++ ) {
+			for ( i=0; comp->link[i]; i++ ) ;
+			if ( i > 9 ) i = 9;
+//			comp->type = model_add_type_by_id(model, ctstr[i]);
+			comp->type(model->add_type(ctstr[i]));
+		}
 	}
 	
 	return n;
 }
+
+/**
+@brief     Reorders models starting from a specified model and looping back.
+@param     **model        model parameters, replaced starting from new first model.
+@param     first        identifier of new first model.
+@return long            number of models.
+
+**/
+long        models_reorder_circular(Bmodel** model, string first)
+{
+    Bmodel*            mod_nu = *model;
+    Bmodel*            mp;
+    long            nmod(mod_nu->count());
+
+    for ( mp = mod_nu; mp->next && mp->next->identifier() != first; mp = mp->next ) ;
+    
+    if ( mp->next ) {
+        mod_nu = mp->next;
+        mp->next = NULL;
+        if ( verbose )
+            cout << "Reordering models, starting from " << mod_nu->identifier() << endl;
+        for ( mp = mod_nu; mp->next; mp = mp->next ) ;
+        mp->next = *model;
+        *model = mod_nu;
+    }
+    
+    if ( mod_nu->count() != nmod )
+        cerr << "Error in models_reorder_circular: The number of models changed!" << endl;
+    
+    return nmod;
+}
+
 
 /**
 @brief 	Associates a model file with a component type.
@@ -426,7 +544,7 @@ int			model_associate_mass(Bmodel* model, string associate_type, double mass)
 	The image numbers are sequentially set as well.
 
 **/
-int			model_set_comptype_filenames(Bmodel* model, string filename)
+int			models_set_comptype_filenames(Bmodel* model, string filename)
 {
 	if ( !model ) return 0;
 	
@@ -446,7 +564,7 @@ int			model_set_comptype_filenames(Bmodel* model, string filename)
 @param 	comprad		component display radius.
 @return long			number of components selected.
 **/
-long		model_set_component_radius(Bmodel* model, double comprad)
+long		models_set_component_radius(Bmodel* model, double comprad)
 {
 	if ( !model ) return 0;
 
@@ -465,7 +583,7 @@ long		model_set_component_radius(Bmodel* model, double comprad)
 @param 	mapfile	map file name.
 @return int			0.
 **/
-int			model_set_map_filenames(Bmodel* model, string mapfile)
+int			models_set_map_filenames(Bmodel* model, string mapfile)
 {
 	Bmodel*		mp;
 	
@@ -484,7 +602,7 @@ int			model_set_map_filenames(Bmodel* model, string mapfile)
 	Sets all the component types to the given string.
 
 **/
-int			model_set_type(Bmodel* model, string set_type)
+int			models_set_type(Bmodel* model, string set_type)
 {
 	if ( !model ) return 0;
 	
@@ -494,8 +612,9 @@ int			model_set_type(Bmodel* model, string set_type)
 	Bcomptype*		ct;
 
 	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
-		comp_type_list_kill(mp->type);
-		mp->type = NULL;
+//		comp_type_list_kill(mp->type);
+//		mp->type = NULL;
+		mp->clear_types();
 		ct = mp->add_type(set_type);
 		for ( comp = mp->comp; comp; comp = comp->next )
 			comp->type(ct);
@@ -542,7 +661,7 @@ int			model_change_type(Bmodel* model, string change_type)
 **/
 double		model_mass(Bmodel* model)
 {
-	double			mass = 0;
+	double			mass(0);
 
 	if ( !model ) return mass;
 	if ( !model->select() ) return mass;
@@ -554,6 +673,8 @@ double		model_mass(Bmodel* model)
 		ct = comp->type();
 		if ( ct ) mass += ct->mass();
 	}
+	
+	model->mass(mass);
 	
 	if ( verbose & VERB_FULL )
 		cout << "Model: " << model->identifier() << "  Mass = " << mass << endl;
@@ -577,8 +698,8 @@ long		model_mass_all(Bmodel* model)
 	if ( verbose )
 		cout << "Model\tMass" << endl;
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-//		cout << mp->identifier() << tab << model_mass(mp) << endl;
-		cout << mp->identifier() << tab << mp->mass() << endl;
+		if ( verbose )
+			cout << mp->identifier() << tab << mp->mass() << endl;
 		nmod++;
 	}
 	if ( verbose )
@@ -587,37 +708,28 @@ long		model_mass_all(Bmodel* model)
 	return nmod;
 }
 
-
 /**
-@brief 	Calculates the center-of-mass of a model.
-@param 	*model			model parameters.
-@return Vector3<double>	center-of-mass.
+@brief 	Calculates the masses of all the models in the list.
+@param 	*model		linked list of model parameters.
+@return double		mass in Dalton.
 
-	Only the first model in the list is processed.
+	The component type masses must be provided.
 
 **/
-Vector3<double>	model_center_of_mass(Bmodel* model)
+long		models_mass(Bmodel* model)
 {
-	Vector3<double>	com;
-
-	if ( !model ) return com;
-	if ( !model->select() ) return com;
+	double			mass(0);
+	Bmodel*			mp;
 	
-	int				n = 0;
-	Bcomponent*		comp;
-
-	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-		com += comp->location();
-		n++;
-	}
+	for ( mp = model; mp; mp = mp->next )
+		if ( mp->select() )
+			mass += mp->mass();
 	
-	com /= n;
-	
-	return com;
+	return mass;
 }
 
 /**
-@brief 	Calculates the center-of-mass of a list of models.
+@brief 	Calculates the center-of-coordinates of a list of models.
 @param 	*model			model parameters.
 @return Vector3<double>	center-of-mass.
 
@@ -711,7 +823,7 @@ Vector3<double>	model_geometric_median(Bmodel* model)
 	double			tol(0.01), dd, ddd(1), ds;
 	Vector3<double>	gm, pgm;
 	
-	pgm = model_center_of_mass(model);
+	pgm = model->center_of_coordinates();
 	ddd = dd = pgm.length();
 	ds = model_distance_sum(model, gm);
 	if ( verbose & VERB_PROCESS ) {
@@ -750,7 +862,7 @@ double		model_gyration_radius(Bmodel* model)
 	double			d, R;
 	Bcomponent*		comp;
 	
-	Vector3<double>	com = model_center_of_mass(model);
+	Vector3<double>	com = model->center_of_coordinates();
 	
 	for ( n = 0, R = 0, comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
 		d = (comp->location() - com).length();
@@ -783,7 +895,7 @@ double		model_effective_thickness(Bmodel* model)
 	Bcomponent*		comp;
 	
 	for ( mp = model; mp; mp = mp->next ) {
-		for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() ) {
 			za += comp->location()[2];
 			zv += comp->location()[2]*comp->location()[2];
 			n++;
@@ -819,8 +931,6 @@ Vector3<double> 	model_principal_axes(Bmodel* model, Vector3<double>* eigenvec)
 	Vector3<double>	loc, vec, vec2, vecx;
 	Bcomponent*		comp;
 
-//	Vector3<double>	com = model_center_of_mass(model);
-	
 	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
 		loc = comp->location();
 		vec += loc;					// Sums
@@ -948,229 +1058,6 @@ long		model_radial_distribution(Bmodel* model, double interval)
 	return 0;
 }
 
-long		molgroup_write_into_grid(Bmolgroup* molgroup, Vector3<int> size, Vector3<double> min, double sampling, int* grid)
-{
-	long			i, x, y, z;
-	Bmolecule*		mol;
-	Bresidue*		res;
-	Batom*			atom;
-
-	long	vol = (long) size.volume();
-	char*			tgrid = new char[vol];
-	for ( i=0; i<vol; i++ ) tgrid[i] = 0;
-	
-	for ( mol=molgroup->mol; mol; mol=mol->next ) {
-		for ( res=mol->res; res; res=res->next ) {
-			for ( atom=res->atom; atom; atom=atom->next ) {
-				x = (int) ((atom->coord[0] - min[0])/sampling);
-				y = (int) ((atom->coord[1] - min[1])/sampling);
-				z = (int) ((atom->coord[2] - min[2])/sampling);
-				i = (z*size[1]+y)*size[0]+x;
-				if ( i < 0 || i > vol ) {
-					cerr << "Error in molgroup_write_into_grid: i=" << i << " (vol=" << vol << ")" << endl;
-					return -1;
-				}
-				tgrid[i] = 1;
-			}
-		}
-	}
-	
-	for ( i=0; i<vol; i++ ) grid[i] += tgrid[i];
-
-	delete[] tgrid;
-	
-	return 0;
-}
-
-/**
-@brief 	Concatenates selected molecules into one group.
-@param 	*model		model parameters.
-@param 	paramfile	atomic parameter file.
-@param 	separate	flag to generate separate molecule groups.
-@return Bmolgroup*	list of molecule groups.
-
-	Only the first model in the linked list is processed.
-
-**/
-Bmolgroup*	model_assemble(Bmodel* model, string paramfile, int separate)
-{
-	Bcomponent*		comp = NULL;
-//	Bcomptype*		comptype = NULL;
-
-	Bmolgroup*		mglist = NULL;
-	Bmolgroup*		molgroup = NULL;
-	Bmolgroup*		molgroup1 = NULL;
-	Bmolecule*		mol = NULL;
-    string    		atom_select("all");
-	Quaternion		q;
-	Transform		t;
-
-	long			i, nsel, nover;
-	double			sampling = 5;
-	Vector3<double>	min(model->comp->location()), max(model->comp->location());
-	Vector3<int>	size;
-	
-	if ( verbose )
-		cout << "Assembling components" << endl;
-	
-	for ( nsel=0, comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-		min = min.min(comp->location());
-		max = max.max(comp->location());
-		nsel++;
-	}
-	
-	string 		fn(model->type->file_name());
-	molgroup1 = read_molecule(fn.c_str(), atom_select.c_str(), paramfile.c_str());
-	min -= molgroup1->box;
-	max += molgroup1->box;
-	molgroup_kill(molgroup1);
-	for ( i=0; i<3; i++ ) size[i] = (int) ((max[i] - min[i])/sampling);
-	
-	if ( nsel < 1 ) {
-		cerr << "Error: No components are selected!" << endl;
-		return NULL;
-	}
-	
-	long	vol = (long) size.volume();
-	int*			grid = new int[vol];
-	for ( i=0; i<vol; i++ ) grid[i] = 0;
-	
-	for ( nsel=0, comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-		nsel++;
-//		comptype = model_get_type(model, comp->type);
-		fn = comp->type()->file_name();
-		molgroup1 = read_molecule(fn.c_str(), atom_select.c_str(), paramfile.c_str());
-		molgroup1->id = comp->identifier();
-//		q = quaternion_from_view(comp->view);
-		q = comp->view().quaternion();
-//		t = transform_from_quaternion(q);
-		t = Transform(q);
-		t.origin = molgroup_center_of_mass(molgroup1);
-		t.trans = comp->location() - t.origin;
-		molgroup_coor_rotate(molgroup1, t);
-		molgroup_stats(molgroup1);
-		if ( molgroup_write_into_grid(molgroup1, size, min, sampling, grid) < 0 ) {
-			error_show("Error in model_assemble", __FILE__, __LINE__);
-			return NULL;
-		}
-		if ( separate ) {
-			if ( !mglist ) mglist = molgroup = molgroup1;
-			else {
-				molgroup->next = molgroup1;
-				molgroup = molgroup1;
-			}
-		} else {
-			if ( molgroup ) {
-				if ( mol ) {
-					for ( ; mol->next; mol = mol->next ) ;
-					mol->next = molgroup1->mol;
-				} else {
-					mol = molgroup->mol = molgroup1->mol;
-				}
-				molgroup1->mol = NULL;
-				molgroup_kill(molgroup1);
-			} else {
-				mglist = molgroup = molgroup1;
-				mol = molgroup->mol;
-			}
-		}
-	}
-
-	for ( i=nover=0; i<vol; i++ ) if ( grid[i] > 1 ) nover++;
-	
-	delete[] grid;
-		
-	if ( verbose ) {
-		cout << "Components assembled:           " << nsel << endl;
-		cout << "Molecule group overlap:         " << 
-			sampling*sampling*sampling*nover << " A3 (" << nover*100.0/size.volume() << " %)" << endl << endl;
-	}
-	
-	return mglist;
-}
-
-/**
-@brief 	Calculates the centers-of-mass of molecule group components and generates a new model.
-@param 	*molgroup	list of molecule groups.
-@return Bmodel*		new model.
-
-	Each molecule is assumed to be a component.
-
-**/
-Bmodel*		model_generate_com(Bmolgroup* molgroup)
-{
-	string			id, path;
-	string			comptype("VER");
-	Bmolgroup*		mg;
-	Bmolecule*		mol;
-	
-	int				i, j, n=0;
-	Bmodel*			model = NULL;
-	Bmodel*			mp = NULL;
-	Bcomponent*		comp = NULL;
-
-	if ( verbose & VERB_PROCESS )
-		cout << "Generating a centers-of-mass model" << endl << endl;
-	
-	for ( i=1, mg = molgroup; mg; mg = mg->next, i++ ) {
-//		mp = (Bmodel *) add_item((char **) &mp, sizeof(Bmodel));
-//		if ( !model ) model = mp;
-//		if ( mg->id.length() ) mp->identifier(mg->id.str());
-//		else mp->identifier() = to_string(i);
-		if ( mg->id.length() ) id = mg->id.str();
-		else id = to_string(i);
-		if ( model ) mp = mp->add(id);
-		else mp = model = new Bmodel(id);
-		comp = NULL;
-		for ( j=1, mol = molgroup->mol; mol; mol = mol->next, j++, n++ ) {
-			cout << "Adding molecule " << j << " as component" << endl;
-//			comp = component_add(&comp, j);
-//			if ( !mp->comp ) mp->comp = comp;
-			if ( comp ) comp = comp->add(j);
-			else mp->comp = comp = new Bcomponent(j);
-			comp->location(mol_center_of_mass(mol));
-			if ( mol->id.length() ) id = mol->id.no_space().str();
-			else id = comptype;
-//			comp->type = model_add_type_by_id_and_filename(mp, id, molgroup->filename, 0);
-			comp->type(mp->add_type(id, molgroup->filename.c_str(), 0));
-		}
-	}
-	
-	cout << "Models generated:               " << --i << endl;
-	cout << "Components generated:           " << n << endl << endl;
-
-	model_check(model, path);
-	
-	return model;
-}
-
-/**
-@brief 	Updates the centers-of-mass of molecule group components.
-@param 	*model		model parameters.
-@param 	*molgroup	list of molecule groups.
-@return long		number of selected components.
-
-	The identifiers of the molecule groups must correspond to the component identifiers.
-
-**/
-long		model_update_centers_of_mass(Bmodel* model, Bmolgroup* molgroup)
-{
-	long			nsel(0);
-	Bcomponent*		comp = NULL;
-	Bmolgroup*		mg = NULL;
-	
-	if ( verbose )
-		cout << "Updating component centers-of-mass" << endl << endl;
-
-	for ( nsel=0, comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-		nsel++;
-		for ( mg = molgroup; mg; mg = mg->next ) if ( comp->identifier() == mg->id.str() ) break;
-		if ( mg ) comp->location(molgroup_center_of_mass(mg));
-	}
-	
-	return nsel;
-}
-
 /**
 @brief     Averages sequential components.
 @param 	*model		model structure to be modified.
@@ -1208,7 +1095,7 @@ long		model_average_components(Bmodel* model, int number)
 		if ( comp_avg ) comp_avg->location(comp_avg->location() / comp_avg->select());
 	}
 	
-	return model_delete_non_selected(&model);
+	return models_delete_non_selected(&model);
 }
 
 /**
@@ -1325,11 +1212,11 @@ vector<Vector3<double>>	models_calculate_bounds(Bmodel* model)
 	Components located outside the grid will be added to the edges.
 
 **/
-vector<vector<Bcomponent*>>	model_component_grid(Bmodel* model, Vector3<long>& size,
+vector<vector<Bcomponent*>>	models_component_grid(Bmodel* model, Vector3<long>& size,
 			Vector3<double>& origin, Vector3<double>& sampling)
 {
 	if ( sampling.volume() < 1 ) {
-		cerr << "Error in model_component_grid: sampling must be specified!" << endl;
+		cerr << "Error in models_component_grid: sampling must be specified!" << endl;
 		bexit(-1);
 	}
 
@@ -1365,10 +1252,40 @@ vector<vector<Bcomponent*>>	model_component_grid(Bmodel* model, Vector3<long>& s
 	}
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_component_grid: Done!" << endl;
+		cout << "DEBUG models_component_grid: Done!" << endl;
 	
 	return grid;
 }
+
+/**
+@brief	Calculates an estimate of the volume of a model.
+@param 	*model 				model.
+@return double				volume in angstrom^3.
+**/
+double		models_volume(Bmodel* model)
+{
+	double			vol(0);
+	Vector3<long> 	size;
+	Vector3<double>	origin, sampling(1,1,1);
+	
+	vector<vector<Bcomponent*>>	grid = models_component_grid(model, size, origin, sampling);
+	
+	for ( auto c: grid )
+		vol += c.size();
+	
+	return vol;
+}
+
+/**
+@brief	Calculates an estimate of the density of a model.
+@param 	*model 				model.
+@return double				density in Dalton/angstrom^3.
+**/
+double		models_density(Bmodel* model)
+{
+	return	models_mass(model)/models_volume(model);
+}
+
 
 /**
 @brief	Generates an array of pointers to model components.
@@ -1484,3 +1401,128 @@ vector<Bmodel*>	model_split_into_slice_models(Bmodel* model, double bottom, doub
 	
 	return model_slice;
 }
+
+
+/**
+@brief	Inserts one model into another.
+@param 	*model		 	model to be modified.
+@param 	*modinsert 		model to insert. (deallocated)
+@param 	distance		cutoff distance to remove atoms.
+@return int				0.
+
+	Components overlapping in the receiving molecule group are deleted.
+	The footprint of the models being inserted is calculated on a grid
+	and all components within this footprint is tested for deletion.
+	Note: The model list is transferred from the insertion group to 
+		the main group and the insertion group is deallocated.
+
+**/
+int			model_insert(Bmodel* model, Bmodel* modinsert, double distance) 
+{
+	if ( distance <= 0 ) distance = 2;  // Default
+	if ( distance < 1 ) distance = 1;   // Limits on cutoff distance in angstrom
+	if ( distance > 5 ) distance = 5;
+	
+	long			i, delete_comp, ncompdel(0), nmoddel(0);
+	long			ii, x, y, z, xx, yy, zz, ix, iy, iz;
+	Vector3<double>	sampling(distance, distance, distance);
+	Bmodel			*m, *pm;
+	Bcomponent		*c, *pc;
+	Vector3<double>	box = model->maximum() - model->minimum();
+	Vector3<long>	gridsize((long) (box[0]/sampling[0] + 0.001), 
+		(long) (box[1]/sampling[1] + 0.001), (long) (box[2]/sampling[2] + 0.001));
+	gridsize = gridsize.max(1);
+	for ( i=0; i<3; i++ ) sampling[i] = box[i]/gridsize[i] + 0.001;
+//	long	gridvol = (long) gridsize.volume();
+	
+	if ( verbose )
+		cout << "Inserting a model and deleting overlapping components" << endl;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Distance cutoff:                " << distance << " A" << endl;
+
+	Vector3<double>	gridori;
+	vector<vector<Bcomponent*>>	grid = models_component_grid(modinsert, gridsize, gridori, sampling);
+	
+	// Find the atoms under the footprint to be deleted
+	for ( m = pm = model; m; ) {
+		for( c = pc = m->comp; c; ) {
+			delete_comp = 0;
+			x = (long) ((c->location()[0] - model->minimum()[0])/sampling[0]);
+			y = (long) ((c->location()[1] - model->minimum()[1])/sampling[1]);
+			z = (long) ((c->location()[2] - model->minimum()[2])/sampling[2]);
+			if ( x >=0 && x < gridsize[0] && y >= 0 && y < gridsize[1] && z >= 0 && z < gridsize[2] ) {
+				i = (z*gridsize[1] + y)*gridsize[0] + x;
+				for ( zz=z-1; zz<=z+1; zz++ ) {
+					iz = zz;
+					if ( iz < 0 ) iz += gridsize[2];
+					if ( iz >= gridsize[2]) iz -= gridsize[2];
+					for ( yy=y-1; yy<=y+1; yy++ ) {
+						iy = yy;
+						if ( iy < 0 ) iy += gridsize[1];
+						if ( iy >= gridsize[1] ) iy -= gridsize[1];
+						for ( xx=x-1; xx<=x+1; xx++ ) {
+							ix = xx;
+							if ( ix < 0 ) ix += gridsize[0];
+							if ( ix >= gridsize[0] ) ix -= gridsize[0];
+							ii = (iz*gridsize[1] + iy)*gridsize[0] + ix;
+							for ( auto& c2: grid[ii] ) {
+								if ( c->location().distance(c2->location()) < distance )
+									delete_comp = 1;
+							}
+						}
+					}
+				}
+			}
+			if ( delete_comp ) {
+				if ( verbose & VERB_FULL )
+					cout << "Removing a component" << endl;
+				if ( c == m->comp ) {
+					m->comp = pc = c->next;
+					delete c;
+					c = m->comp;
+				} else {
+					pc->next = c->next;
+					delete c;
+					c = pc->next;
+				}
+				ncompdel++;
+			} else {
+				pc = c;
+				if ( c ) c = c->next;
+			}
+		}
+		if ( !m->comp ) {
+			if ( verbose & VERB_FULL )
+				cout << "Removing a model" << endl;
+			if ( model == m ) {
+				model = pm = m->next;
+				delete m;
+				m = model;
+			} else {
+				pm->next = m->next;
+				delete m;
+				m = pm->next;
+			}
+			nmoddel++;
+		} else {
+			pm = m;
+			if ( m ) m = m->next;
+		}
+	}
+
+	grid.clear();
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Models and components deleted: " << nmoddel << " " << ncompdel << endl;
+	
+	// Add the new molecules
+	if ( model ) {
+		for ( m = model; m->next; m = m->next ) ;
+		m->next = modinsert;
+	} else  model = modinsert;
+	modinsert = NULL;
+	
+	return 0;
+}
+

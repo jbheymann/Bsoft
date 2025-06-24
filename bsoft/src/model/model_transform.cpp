@@ -21,37 +21,12 @@ extern int 	verbose;		// Level of output to the screen
 @param 	*model		model parameters.
 @return long				number of components processed.
 
-	Only the first model in the list is processed.
-
 **/
-long		model_center(Bmodel* model)
+long		models_center(Bmodel* model)
 {
-	Vector3<double>	com = model_center_of_mass(model);
+	Vector3<double>	com = models_center_of_coordinates(model);
 
-	return model_shift(model, -com);
-}
-
-/**
-@brief 	Shifts a model.
-@param 	*model	model parameters.
-@param 	shift	translation vector.
-@return long	number of components processed.
-
-	Only the first model in the list is processed.
-
-**/
-long		model_shift(Bmodel* model, Vector3<double> shift)
-{
-	long			ncomp(0);
-	Bcomponent*		comp;
-
-	if ( verbose & VERB_FULL )
-		cout << "Shifting " << model->identifier() << " by " << shift << endl;
-	
-	for ( comp = model->comp; comp; comp = comp->next, ncomp++ )
-		comp->shift(shift);
-	
-	return ncomp;
+	return models_shift(model, -com);
 }
 
 /**
@@ -60,13 +35,14 @@ long		model_shift(Bmodel* model, Vector3<double> shift)
 @param 	shift	translation vector.
 @return long					number of components processed.
 
-	All models in the list are processed.
-
 **/
 long		models_shift(Bmodel* model, Vector3<double> shift)
 {
 	long			ncomp(0);
 	Bmodel*			mp;
+	
+	if ( verbose & VERB_FULL )
+		cout << "Models shifted by:              " << shift << endl;
 	
 	for ( mp = model; mp; mp = mp->next )
 		ncomp += mp->shift(shift);
@@ -221,8 +197,6 @@ double		model_reflect_and_compare(Bmodel* model, Vector3<double> normal, Vector3
 	normal.normalize();
 
 	for ( comp = model->comp; comp; comp = comp->next ) {
-//		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
-//		if ( !complist ) complist = comp2;
 		if ( complist ) comp2 = comp2->add(++n);
 		else comp2 = complist = new Bcomponent(++n);
 		comp2->location(comp->location() - origin);
@@ -243,7 +217,6 @@ double		model_reflect_and_compare(Bmodel* model, Vector3<double> normal, Vector3
 
 	R = sqrt(R/n);
 	
-//	kill_list((char *) complist, sizeof(Bcomponent));
 	complist->clear();
 	
 	return R;
@@ -522,8 +495,6 @@ double		model_rotate_and_compare(Bmodel* model, Transform t)
 	Vector3<double>	shift = t.origin + t.trans;
 
 	for ( comp = model->comp; comp; comp = comp->next ) {
-//		comp2 = (Bcomponent *) add_item((char **) &comp2, sizeof(Bcomponent));
-//		if ( !complist ) complist = comp2;
 		if ( complist ) comp = comp2->add(++n);
 		else comp2 = complist = new Bcomponent(++n);
 		comp2->location(comp->location() - t.origin);
@@ -543,7 +514,6 @@ double		model_rotate_and_compare(Bmodel* model, Transform t)
 
 	R = sqrt(R/n);
 	
-//	kill_list((char *) complist, sizeof(Bcomponent));
 	complist->clear();
 	
 	return R;
@@ -605,25 +575,31 @@ long		model_align_to_guide(Bmodel* model, Bmodel* guide)
 }
 
 /**
-@brief 	A model is fitted to a reference model.
+@brief 	A model is fitted to a reference model with the identical set of components.
 @param 	*model			model.
 @param 	*refmod			template model.
 @return Transform			transform.
 
 	The components in the model and the reference must match exactly.
-	Only the first model and template in the lists are processed.
+	Only the first model and template in the lists are compared.
 
 **/
 Transform	model_find_transform(Bmodel* model, Bmodel* refmod)
 {
 	Transform		t;
+	
+	long 			n1 = model->component_count_selected();
+	long 			n2 = refmod->component_count_selected();
 		
-	if ( model_component_number_difference(model, refmod) ) return t;
+	if ( n1 != n2 ) {
+		cerr << "Error: Selected component counts not equal! (" << n1 << " != " << n2 << ")" << endl;
+		return t;
+	}
 
 	if ( verbose & VERB_PROCESS )
 		cout << "Mapping model " << model->identifier() << " to reference " << refmod->identifier() << endl;
 	
-	long			i, j;
+	long			i, j, n(0);
 	Bcomponent*		comp, *compr;
 	vector<double>	bx(4), by(4), bz(4), v(4,0);
 	Matrix			a(4,4);
@@ -632,30 +608,39 @@ Transform	model_find_transform(Bmodel* model, Bmodel* refmod)
 	
 	for ( i=0; i<4; i++ ) bx[i] = by[i] = bz[i] = 0;
 	
-	Vector3<double>	com = model_center_of_mass(model);
-	Vector3<double>	comr = model_center_of_mass(refmod);
+	Vector3<double>	com = model->center_of_coordinates();
+	Vector3<double>	comr = refmod->center_of_coordinates();
 	Vector3<double>	loc, locr;
 	
-	for ( comp = model->comp, compr = refmod->comp; comp && compr; comp = comp->next, compr = compr->next ) {
-		if ( verbose & VERB_FULL )
-			cout << "Mapping component " << comp->identifier() << " to reference " << compr->identifier() << endl;
+	// The first selected component on both models sets the alignment mapping
+	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) break;
+	for ( compr = refmod->comp; comp && compr; comp = comp->next ) if ( comp->select() ) {
+		for ( ; compr; compr = compr->next ) if ( compr->select() ) break;		
 		loc = comp->location() - com;
 		locr = compr->location() - comr;
 		if ( verbose & VERB_FULL )
-			cout << loc[2] << tab << locr[2] << tab << loc[2] - locr[2] << endl;
+//			cout << ++n << tab << comp->identifier() << " - " << compr->identifier() << tab 
+//				<< loc[2] << tab << locr[2] << tab << loc[2] - locr[2] << endl;
+			cout << ++n << tab << comp->description()[4] << " - " << compr->description()[4] << tab 
+				<< loc[2] << tab << locr[2] << tab << loc[2] - locr[2] << endl;
 		v[0] = loc[0];
 		v[1] = loc[1];
 		v[2] = loc[2];
-		for ( i=0; i<4; i++ ) {
+		for ( i=0; i<4; ++i ) {
 			bx[i] += v[i]*locr[0];
 			by[i] += v[i]*locr[1];
 			bz[i] += v[i]*locr[2];
-			for ( j=0; j<=i; j++ ) a[i][j] += v[i]*v[j];
+//			for ( j=0; j<=i; j++ ) a[i][j] += v[i]*v[j];
+			for ( j=0; j<4; ++j ) a[i][j] += v[i]*v[j];
 		}
+		compr = compr->next;
 	}
+	
+	if ( verbose & VERB_FULL )
+		cout << "Transformation matrix:" << endl << a << endl;
 
-	t = transform_matrix_solve(a, bx, by, bz, 0);
-	t.trans = comr - com;
+	t = transform_matrix_solve(a, bx, by, bz, 1);
+	t.trans += comr - com;
 	t.origin = com;
 		
 	return t;

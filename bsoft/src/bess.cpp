@@ -2,7 +2,7 @@
 @file	bess.cpp
 @brief	Electron scattering simulation
 @author	Bernard Heymann
-@date	20190724 - 20230802
+@date	20190724 - 20250407
 
 clang++ -o bin/bess src/bess.cpp -I. -I/usr/local/include -I/Users/bernard/b20/bsoft/include -L/Users/bernard/b20/bsoft/lib -lbsoft -std=c++11 -I/Users/bernard/b20/fftw-3.3.6-pl2/include 
 **/
@@ -35,6 +35,7 @@ const char* use[] = {
 " ",
 "Actions:",
 "-center                  Center coordinates before calculations.",
+"-thickness               Calculate effective thickness from z coordinates and voltage.",
 "-View 0.3,-0.5,0.8,33    View to rotate the molecule to.",
 "-dose 20,2.8             Simulate dose and radiation damage effects:",
 "                         dose/fluence (e/A2), mean atom displacement (A).",
@@ -73,8 +74,8 @@ int		main(int argc, char** argv)
 {
 	// Initialize variables
 	bool			center(0);				// Flag to center coordinates
-	bool			ab_flag(0);				// Flag to apply aberration weights
-//	int				ewald_flag(0);			// Flag to apply Ewald sphere shift: 1=up, 2=lo, 3=combine
+	bool			eff_thick(0);			// Flag for effective thickness calculation
+	int				ab_flag(0);				// Flag to apply aberration weights
 	int				ewald_flag(0);			// 0=central section, 1=upper, -1=lower, 2=combine, 3=both
 	View2<double>	view;					// View to generate
 	bool 			set_backtransform(0);	// Flag for back transformation
@@ -129,18 +130,21 @@ int		main(int argc, char** argv)
 	// Parse other options
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "center" ) center = 1;
+		if ( curropt->tag == "thickness" ) eff_thick = 1;
 /*		if ( curropt->tag == "ewald" ) {
 			ewald_flag = 1;
 			if ( curropt->value[0] == 'l' ) ewald_flag = 2;
 			if ( curropt->value[0] == 'c' ) ewald_flag = 3;
-		}*/
+		}
 		if ( curropt->tag == "ewald" ) {
 			ewald_flag = 1;
 			if ( curropt->value[0] == 'u' ) ewald_flag = 1;
 			if ( curropt->value[0] == 'l' ) ewald_flag = -1;
 			if ( curropt->value[0] == 'c' ) ewald_flag = 2;
 			if ( curropt->value[0] == 'b' ) ewald_flag = 3;
-		}
+		}*/
+		if ( curropt->tag == "ewald" )
+			ewald_flag = curropt->ewald_flag();
 		if ( curropt->tag == "View" )
 			view = curropt->view();
 		if ( curropt->tag == "snr" )
@@ -221,9 +225,6 @@ int		main(int argc, char** argv)
 		bexit(-1);
 	}
 	
-	string			imgfile;
-	if ( optind < argc ) imgfile = argv[optind++];
-	
 	if ( center )
 		models_shift(model, -models_center_of_coordinates(model));
 
@@ -235,6 +236,22 @@ int		main(int argc, char** argv)
 		models_rotate(model, view);
 	}
 	
+	if ( eff_thick ) {
+		double		t;
+		if ( cp.volt() < 1e3 ) {
+			t = model_effective_thickness(model);
+			cout << "Effective thickness:            " << t << " Å" << endl << endl;
+		} else {
+			t = model_effective_thickness(model, cp.volt());
+			cout << "Effective thickness at " << cp.volt()*1e-3 << "kV:   " << t << endl << endl;
+		}
+		models_selection_stats(model);
+	}
+
+	string			imgfile;
+	if ( optind < argc ) imgfile = argv[optind++];
+	else return 0;
+
 	vector<Vector3<double>>	bounds = models_calculate_bounds(model);
 
 	if ( size.volume() < 100 ) {
@@ -259,7 +276,7 @@ int		main(int argc, char** argv)
 		end[2] = bounds[1][2] + 1;
 	}
 	long				nsel = models_select_within_bounds(model, start, end);
-	nsel = model_delete_non_selected(&model);
+	nsel = models_delete_non_selected(&model);
 	bounds = models_calculate_bounds(model);
 	if ( verbose ) {
 		cout << "Model bounds:" << tab << bounds[0] << tab << bounds[1] << endl;
@@ -267,11 +284,11 @@ int		main(int argc, char** argv)
 		cout << "Components selected:" << tab << nsel << endl;
 	}
 
-	if ( verbose ) model_show_selection(model);
+	if ( verbose ) models_show_selection(model);
 
 	img_electron_scattering(model, 1, p, cp, dose, mad, atompropfile, ewald_flag, ab_flag);
 	
-	if ( ewald_flag == 2  ) p->combine_ewald();
+	if ( ewald_flag == EW_COMB  ) p->combine_ewald();
 
 //	if ( dose.size() )
 //		p->fspace_weigh_accumulated_dose(dose);

@@ -166,8 +166,7 @@ int 		main(int argc, char **argv)
 		star.write(outstar, split);
 	}
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }
@@ -186,12 +185,13 @@ int 		show_tags(Bstar& star)
 		cout << endl << "data_" << ib.tag() << endl;
 		cout << endl << "loop_" << endl;
 		cout << "_star_tag" << endl;
+		cout << "_star_loop" << endl;
 		cout << "_star_type" << endl;
 		for ( auto it: ib.items() ) {
 			if ( verbose & VERB_DEBUG )
 				cout << "DEBUG show_tags: tag = " << it.first << tab << it.second << endl;
 			tag = "\"_" + it.first + "\"";
-			cout << left << setw(40) << tag;
+			cout << left << setw(40) << tag << " no  ";
 			if ( check_for_number(it.second) )
 				cout << "Number" << endl;
 			else
@@ -204,7 +204,7 @@ int 		show_tags(Bstar& star)
 				if ( verbose & VERB_DEBUG )
 					cout << "DEBUG show_tags: loop tag = " << it.first << tab << it.second << endl;
 				tag = "\"_" + it.first + "\"";
-				cout << left << setw(40) << tag;
+				cout << left << setw(40) << tag << " yes ";
 				if ( check_for_number(il[0][it.second]) )
 					cout << "Number" << endl;
 				else

@@ -24,14 +24,14 @@ double		component_coverage(Bimage* p, int img_num, Bcomponent* comp, double thre
 
 /**
 @author Daniel Nemecek and Bernard Heymann
-@brief     Calculates the occupancy of components in a map.
+@brief	Calculates the occupancy of components in a map.
 @param 	*model		model structure to be modified.
-@param	*pmask
+@param	*pmask		mask to limit the map.
 @param 	mol_weight	molecular weight to determine threshold.
 @param 	rho			protein density in Da/A3.
 @param 	cutoff		coverage cutoff to use for assigning occupancy.
-@param 	invert_flag		flag to invert map density.
-@return int					0.
+@param 	invert_flag	flag to invert map density.
+@return int			0.
 
 	The map must have positive density (higher values are considered density).
 	The coverage for a component is defined as the fraction of voxels within

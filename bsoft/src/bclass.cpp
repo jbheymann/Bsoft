@@ -150,8 +150,7 @@ int 		main(int argc, char **argv)
 	project_kill(project);
 	if ( kernel ) delete kernel;
 
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

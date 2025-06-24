@@ -281,9 +281,9 @@ int 	main(int argc, char **argv)
 			p->change_transform_size(size);
 	
 	if ( p->compound_type() == TComplex ) {
-		if ( setfom ) {
+//		if ( setfom ) {
 			if ( zero_origin ) p->zero_fourier_origin();
-		}
+//		}
 	
 		if ( colour_phase_scale > 0 ) {
 			pnu = p->intensities_phase_colored(colour_phase_scale);

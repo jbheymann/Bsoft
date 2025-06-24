@@ -301,38 +301,6 @@ int 		main(int argc, char **argv)
 			}
 		}
 #include "ctf.inc"
-/*		if ( curropt->tag == "basetype" ) {
-			basetype = curropt->value.integer();
-			if ( basetype < 1 || basetype > 6 ) {
-				basetype = 1;
-				cerr << "Warning: The baseline type must be 1, 2 or 3. Reset to 1." << endl;
-			} else
-				setbase = 1;
-		}
-		if ( curropt->tag == "baseline" ) {
-			vector<double>	d = curropt->value.split_into_doubles(",");
-			for ( size_t i=0; i<d.size(); i++ ) base[i] = d[i];
-			if ( d.size() < 1 )
-				cerr << "-baseline: At least one coefficient must be specified!" << endl;
-			else
-				setbase = 2;
-		}
-		if ( curropt->tag == "envtype" ) {
-			envtype = curropt->value.integer();
-			if ( envtype < 1 || envtype > 4 ) {
-				envtype = 4;
-				cerr << "Warning: The envelope type must be 1, 2, 3 or 4. Reset to 4." << endl;
-			} else
-				setenv = 1;
-		}
-		if ( curropt->tag == "envelope" ) {
-			vector<double>	d = curropt->value.split_into_doubles(",");
-			for ( size_t i=0; i<d.size(); i++ ) env[i] = d[i];
-			if ( d.size() < 1 )
-				cerr << "-envelope: At least an envelope amplitude must be specified!" << endl;
-			else
-				setenv = 2;
-		}*/
 		if ( curropt->tag == "Range" )
 			if ( curropt->real_units(def_start, def_end, def_inc) < 2 )
 				cerr << "-Range: At least two values must be specified!" << endl;
@@ -367,11 +335,12 @@ int 		main(int argc, char **argv)
 	
 	double			ti = timer_start();
 	
+//	cout << jsctf << endl;
+	
 	CTFparam		cp = ctf_from_json(jsctf);
 	cp.defocus_average(def_avg);
 	cp.astigmatism(def_dev, ast_angle);
-//	if ( setbase ) cp.baseline(basetype, base);
-//	if ( setenv ) cp.envelope(envtype, env);
+//	cp.show();
 
 //			ctf_to_json(cp).write("test.json");
 
@@ -406,7 +375,7 @@ int 		main(int argc, char **argv)
 			if ( action < 1 ) action = 2;	// Only CTF function - no baseline or envelope
 			if ( wave_aberration ) {
 				p = img_wave_aberration(cp, size, sam);
-			} else if ( action > 2 ) {
+			} else if ( action > 1 ) {
 				p = img_ctf_calculate(cp, action, wiener, size,
 						sam, resolution_lo, resolution_hi);
 			} else {
@@ -591,6 +560,7 @@ int 		main(int argc, char **argv)
 	
 	if ( psavgfile.length() )
 		project_ctf_average(project, psavgfile);
+//		project_ctf_ewald_average(project, psavgfile);
 	
    // Write an average power spectrum if a file name is given
 	Bimage*		ps = NULL;

@@ -596,7 +596,7 @@ int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View2<dou
 @param 	*molgroup 	molecule group structure.
 @param 	&sym		point group symmetry.
 @param 	ref_view	reference view (default should be 0,0,1,0).
-@param 	*simat		residue similarity matrix.
+@param 	&simat		residue similarity matrix.
 @return int 		0.
 
 	Each pair of chains in the molecule groupis tested for sequence
@@ -614,7 +614,7 @@ int 		molgroup_find_standard_view(Bmolgroup* molgroup, Bsymmetry& sym, View2<dou
 
 **/
 int 		molgroup_orient_to_standard_view(Bmolgroup* molgroup, Bsymmetry& sym,
-				View2<double> ref_view, Bresidue_matrix* simat)
+				View2<double> ref_view, Bresidue_matrix& simat)
 {
 	random_seed();
 	
@@ -652,15 +652,20 @@ int 		molgroup_orient_to_standard_view(Bmolgroup* molgroup, Bsymmetry& sym,
 	for ( i=0; i<nmol; i++ ) g[i] = 0;
 	
 	Transform		t;
-	int				offset, notfound;
+	long			offset;
+	bool			notfound;
+	string			seq1, seq2;
 	
 	// Calculate a matrix of rotations between pairs of molecules 
 	for ( k=0, i=1; k<nmol; k++, i++, i=(i>ngroup)?1:i ) g[k] = i;
 	for ( i=0, mol = molgroup->mol; mol->next; mol = mol->next, i++ ) {
 		nres_cut = mol->nres/2;
+		seq1 = mol->seq.str();
 		if ( nres_cut > cut_max ) for ( j=i+1, mol2 = mol->next; mol2; mol2 = mol2->next, j++ ) {
+			seq2 = mol2->seq.str();
 			// if two sequences can be aligned, find the transformation to superimpose them
-			offset = seq_find_best_offset(mol, mol2, nid, simat);
+//			offset = seq_find_best_offset(mol, mol2, nid, simat);
+			offset = seq_find_best_offset(seq1, seq2, nid, simat);
 			if ( nid > cut_max || nid >= nres_cut ) {
 				g[j] = g[i];
 				t = mol_find_transformation(mol, mol2, offset);

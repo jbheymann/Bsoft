@@ -127,7 +127,7 @@ Bmodel*		model_platonic(Bsymmetry& sym, double radius)
 		comp->location(Vector3<double>(0, radius/sqrt(2+GOLDEN), radius/sqrt(3-GOLDEN)));
 	} else {
 		cerr << "Error: Symmetry " << sym.label() << " not supported!" << endl;
-		model_kill(model);
+		delete model;
 		return NULL;
 	}
 	
@@ -141,7 +141,7 @@ Bmodel*		model_platonic(Bsymmetry& sym, double radius)
 
 	Vector3<double>		origin;
 	View2<double>		ref_view;
-	model_apply_point_group(model, model->symmetry(), origin, ref_view, 1);
+	models_apply_point_group(model, sym, origin, ref_view, 1);
 
 	return model;
 }
@@ -732,7 +732,7 @@ Bmodel*		model_create_dodecahedron(double radius, long divisions, double sphere_
 	
 	model_scale(model, scale, origin);
 
-	model_set_component_radius(model, radius/(4*divisions));
+	models_set_component_radius(model, radius/(4*divisions));
 
 	return model;
 }
@@ -779,7 +779,7 @@ Bmodel*		model_create_icosahedron(double radius, long divisions, double sphere_f
 		
 	model_scale(model, scale, origin);
 
-	model_set_component_radius(model, radius/(4*divisions));
+	models_set_component_radius(model, radius/(4*divisions));
 
 	return model;
 }

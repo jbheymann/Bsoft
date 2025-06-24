@@ -75,7 +75,7 @@ int 		main(int argc, char **argv)
 	bool			phase_shift(0);
 	int				calcintensity(0);
 	int				calcpure(0);
-	int				split(0);
+	int				splt(0);
 	int				combine(0);
 	double			cmin(0), cmax(0);			// Min/max for conversion to spectrum
 	double			red_min(0), white_min(0), white_max(0), blue_max(0);
@@ -138,7 +138,7 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "tocmyk" )
         	to_cmyk = 1;
 		if ( curropt->tag == "split" )
-        	split = 1;
+        	splt = 1;
 		if ( curropt->tag == "combine" )
  			if ( ( combine = curropt->value.integer() ) < 1 )
 				cerr << "-combine: The number of channels must be specified!" << endl;
@@ -223,7 +223,7 @@ int 		main(int argc, char **argv)
 			delete p2;
 		}
 		
-		if ( split ) {
+		if ( splt ) {
 			Bimage*		pnu = p->split_channels();
 			delete p;
 			p = pnu;

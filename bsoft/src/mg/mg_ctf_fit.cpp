@@ -1581,7 +1581,7 @@ double		img_aberration_phase_fit_iter(Bimage* p, long nn, double lores, double h
 			}
 //			simp.limits(j++, -dwin*fabs(w.second), +dwin*fabs(w.second));
 		} else {
-			simp.limits(j++, -20, 20);
+			simp.limits(j++, -50, 50);
 		}
 		if ( verbose )
 			cout << w.first.first << tab << w.first.second << tab <<

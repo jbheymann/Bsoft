@@ -3,7 +3,7 @@
 @brief	Functions to do molecular mechanics
 @author 	Bernard Heymann
 @date	Created: 20010828
-@date	Modified: 20230717
+@date	Modified: 20250619
 **/
 
 #include "model_mechanics.h"
@@ -29,7 +29,6 @@ extern int 	verbose;		// Level of output to the screen
 @param 	mm_type			type of mechanics: 0=minimization, 1=dynamics
 @param 	max_iter		number of minimization iterations.
 @param 	max_shift		maximum shift per iteration.
-@param 	velocitylimit	limit on velocity per time step.
 @return double			final energy.
 
 	The inclusion of energy terms is based on positive K-constants in the 
@@ -37,7 +36,7 @@ extern int 	verbose;		// Level of output to the screen
 	Only the first model in the linked list is used.
 **/
 double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
-				double max_shift, double velocitylimit)
+				double max_shift)
 {
 	if ( !model->select() ) {
 		cerr << "Error: No model selected!" << endl << endl;
@@ -124,8 +123,6 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 
 	model_calculate_deviations(model, md);
 	
-//	Vector3<double>	refcom = model_center_of_mass(model);
-	
 	double			gyrad0 = model_gyration_radius(model);
 	
 //	if ( verbose & VERB_PROCESS ) {
@@ -167,9 +164,13 @@ double		model_mechanics(Bmodel* model, Bmodparam& md, int mm_type, int max_iter,
 			for ( i=0; i<ETERMS; i++ ) E0[i] = E[i];
 			Epot0 = md.Epot;
 		}
-		if ( mm_type < 1 ) model_minimize(model, max_shift);
-		else md.Ekin = model_verlet(model, md.timestep, md.Kfriction, velocitylimit);
-//		model_shift(model, refcom - model_center_of_mass(model));
+		if ( md.rigid > 1 ) {
+			if ( mm_type < 1 ) model_minimize(model, max_shift);
+			else md.Ekin = model_verlet(model, md);
+		} else {
+			if ( mm_type < 1 ) models_rigid_minimize(model, max_shift);
+			else md.Ekin = models_rigid_verlet(model, md);
+		}
 //		if ( verbose & VERB_PROCESS ) {
 		if ( verbose ) {
 			cout << iter;
@@ -231,6 +232,35 @@ int			model_minimize(Bmodel* model, double max_shift)
 		shift = shift.max(-max_shift);
 		comp->shift(shift);
 		comp->FOM(comp->force().length());
+	}
+	
+	return n;
+}
+
+/**
+@brief 	Move models random distances down the energy gradient.
+@param 	*model		linked list of models.
+@param 	max_shift	maximum shift for each model.
+@return int			number of models.
+
+	The distance of movement is limited to the maximum shift.
+
+**/
+int			models_rigid_minimize(Bmodel* model, double max_shift)
+{
+	int					n;
+	Bmodel*				mp;
+	
+	double				irm = 1.0/get_rand_max();
+	Vector3<double>		shift;
+	
+	for ( n=0, mp = model; mp; mp = mp->next, n++ ) if ( mp->select() ) {
+		if ( mp->mass() > 0 ) mp->force(mp->force() / mp->mass());
+		shift = mp->force() * (random()*irm);
+		shift = shift.min(max_shift);
+		shift = shift.max(-max_shift);
+		mp->shift(shift);
+		mp->FOM(mp->force().length());
 	}
 	
 	return n;
@@ -303,7 +333,7 @@ int			model_regularize(Bmodel* model, int max_iter, double distance,
 
 	model_calculate_deviations(model);
 	
-	Vector3<double>	refcom = model_center_of_mass(model);
+	Vector3<double>	refcom = models_center_of_coordinates(model);
 	Vector3<double>	box;
 	
 	if ( verbose & VERB_PROCESS )
@@ -327,7 +357,7 @@ int			model_regularize(Bmodel* model, int max_iter, double distance,
 			E0 = E;
 		}
 		model_minimize(model, max_shift);
-		model_shift(model, refcom - model_center_of_mass(model));
+		models_shift(model, refcom - models_center_of_coordinates(model));
 		if ( verbose & VERB_PROCESS )
 			cout << iter << tab << Edist << tab << Elink << tab << Eangle << tab
 				<< Epoly << tab << Eplane << tab << Epoint << tab << E << endl;
@@ -349,13 +379,55 @@ int			model_regularize(Bmodel* model, int max_iter, double distance,
 	return 0;
 }
 
+double		model_find_map_scale(Bmodel* model, Bimage* map, double scale_max, double scale_inc)
+{
+	if ( scale_max > 0.1 ) {
+		cerr << "Error: Maximum scale adjustment is greater than 0.1!" << endl;
+		bexit(-1);
+	}
+	
+	if ( scale_inc <= 0 || scale_inc > scale_max/2 )
+		scale_inc = scale_max/10;
+	
+	double				s, bs(1);
+	double				E, bE(1e10);
+	Vector3<double>		sam(map->image->sampling());
+	
+	if ( verbose ) {
+		cout << "Determining the best scaling fit of the map to the model:" << endl;
+		cout << "Map sampling:                   " << sam << endl;
+		cout << "Maximum scale adjustment:       " << scale_max << endl;
+		cout << "Scale incement:                 " << scale_inc << endl;
+		cout << "Scale\tSampling (A/px)\tEnergy" << endl;
+	}
+	
+	for ( s=1-scale_max; s<=1+scale_max; s+=scale_inc ) {
+		map->sampling(sam*s);
+		E = model_map_energy(model, map, 1);
+		if ( bE > E ) {
+			bE = E;
+			bs = s;
+		}
+		if ( verbose )
+			cout << s << tab << sam[0]*s << tab << E << endl;
+	}
+
+	map->sampling(sam*bs);
+	
+	if ( verbose ) {
+		cout << "Best scaling fit:" << endl;
+		cout << "Map sampling:                   " << map->image->sampling() << endl;
+		cout << "Scale adjustment:               " << bs << endl;
+		cout << "Energy:                         " << bE << endl;
+	}
+	
+	return bE;
+}
 
 /**
-@brief 	Model dynamics using the velocity verlet integrator.
-@param 	*model			model structure.
-@param 	timestep		dynamics time step.
-@param 	Kfriction		friction coefficient.
-@param 	velocitylimit	limit on velocity per time step.
+@brief 	Model dynamics using the velocity verlet integrator for rigid models.
+@param 	*model			linked list of models.
+@param 	&md				model parameters.
 @return double			kinetic energy.
 
 	Leapfrog integration for any coordinate x, velocity vx and force Fx:
@@ -368,17 +440,54 @@ int			model_regularize(Bmodel* model, int max_iter, double distance,
 	The velocity is limited each time step to damp chaotic oscillations.
 	Only the first model in the linked list is used.
 **/
-double		model_verlet(Bmodel* model, double timestep, double Kfriction, double velocitylimit)
+double		models_rigid_verlet(Bmodel* model, Bmodparam& md)
 {
 	double				vel, Ekin(0);
-	double				minvel = -velocitylimit, maxvel = velocitylimit;	// Maximum velocity per time step
+	double				ts(md.timestep);
+	double				minvel(-md.velocitylimit), maxvel(md.velocitylimit);	// Maximum velocity per time step
+	Bmodel*				mp;
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		mp->velocity(mp->velocity() + mp->force() * (ts/mp->mass()));
+		mp->velocity(mp->velocity() * md.Kfriction);
+		mp->velocity(vector3_scalar_range(mp->velocity(), minvel, maxvel));
+		mp->shift(mp->velocity() * ts);
+		vel = mp->velocity().length();
+		Ekin += 0.5*mp->mass()*vel*vel;
+		mp->FOM(vel);
+	}
+	
+	return Ekin;
+}
+
+/**
+@brief 	Model dynamics using the velocity verlet integrator.
+@param 	*model			model structure.
+@param 	&md				model parameters.
+@return double			kinetic energy.
+
+	Leapfrog integration for any coordinate x, velocity vx and force Fx:
+		x(t+1) = x(t) + vx(t+1) * dt
+		vx(t+1) = (Fx(t) * dt/m + vx(t)) * kf
+		where
+			kf:	friction constant (1=no friction)
+			dt:	time step
+			m: atomic mass
+	The velocity is limited each time step to damp chaotic oscillations.
+	Only the first model in the linked list is used.
+**/
+double		model_verlet(Bmodel* model, Bmodparam& md)
+{
+	double				vel, Ekin(0);
+	double				ts(md.timestep);
+	double				minvel(-md.velocitylimit), maxvel(md.velocitylimit);	// Maximum velocity per time step
 	Bcomponent*			comp;
 	
 	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
-		comp->velocity(comp->velocity() * ( 1 + (timestep/comp->type()->mass())));
-		comp->velocity(comp->velocity() * Kfriction);
+		comp->velocity(comp->velocity() + comp->force() * (ts/comp->type()->mass()));
+		comp->velocity(comp->velocity() * md.Kfriction);
 		comp->velocity(vector3_scalar_range(comp->velocity(), minvel, maxvel));
-		comp->shift(comp->velocity() * timestep);
+		comp->shift(comp->velocity() * ts);
 //		if ( wrap ) comp->location(vector3_set_PBC(comp->location(), box);
 		vel = comp->velocity().length();
 		Ekin += 0.5*comp->type()->mass()*vel*vel;
@@ -788,7 +897,7 @@ double		model_grid_distance_energy(Bmodel* model, Bmodparam& md)
 
 	Vector3<long> 	gsize;
 	Vector3<double>	gori, gsam(md.cutoff, md.cutoff, md.cutoff);
-	vector<vector<Bcomponent*>>	grid = model_component_grid(model, gsize, gori, gsam);
+	vector<vector<Bcomponent*>>	grid = models_component_grid(model, gsize, gori, gsam);
 
 	int				dodist;
 	long			i, ii, x, y, z, xx, yy, zz, ix, iy, iz;
@@ -1463,7 +1572,57 @@ double		model_polyhedron_guide_energy(Bmodel* model, Bmodel* gmod, double Kguide
 
 	The map must be possitive density.
 	Only the first model in the linked list is used.
+	The energy is calculated as:
+		E = sum(avg-rho)/(ncomp*sigma)
+	where
+		rho: density value
+		avg: density average
+		sigma: density standard deviation
+		ncomp: number of components
 **/
+double		model_map_energy(Bmodel* model, Bimage* map, double Kmap)
+{
+	if ( !model ) return 0;
+	if ( !map ) return 0;
+	if ( Kmap == 0 ) return 0;
+	
+	map->change_type(Float);
+	
+	long				i, n(0);
+	long				nx(map->sizeX()), nxy(nx*map->sizeY());
+	double				E(0), sigma(map->standard_deviation());
+	Vector3<long>		coor;
+	Vector3<double>		invunit((0.5*Kmap)/map->sampling(0));
+	Vector3<double>		F;
+	Bcomponent*			comp;
+	
+	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() ) {
+		coor = map->image->image_coordinates(comp->location());
+		if ( map->within_boundaries(coor) ) {
+			i = map->index(coor, 0);
+			F = Vector3<double>((*map)[i+1] - (*map)[i-1], 
+					(*map)[i+nx] - (*map)[i-nx], 
+					(*map)[i+nxy] - (*map)[i-nxy]);
+			E -= (*map)[i];
+			comp->force(comp->force() + F * invunit);
+		} else {
+			E += sigma;
+		}
+		n++;
+	}
+	
+	if ( n < 1 ) {
+		if ( verbose & VERB_PROCESS )
+			cout << "Warning: Model outside map boundaries!" << endl;
+		E = 1e100;
+	} else
+		E = Kmap*((E/n + map->average())/sigma);
+	
+	model->FOM(E);
+	
+	return E;
+}
+/*
 double		model_map_energy(Bmodel* model, Bimage* map, double Kmap)
 {
 	if ( !model ) return 0;
@@ -1508,7 +1667,7 @@ double		model_map_energy(Bmodel* model, Bimage* map, double Kmap)
 	
 	return E;
 }
-
+*/
 double		model_map_gradient_energy(Bmodel* model, Bimage* map, double Kmap)
 {
 	if ( !model ) return 0;
@@ -1545,7 +1704,7 @@ double		model_map_gradient_energy(Bmodel* model, Bimage* map, double Kmap)
 			cout << "Warning: Model outside map boundaries!" << endl;
 		E = 1e100;
 	} else
-		E = Kmap*((E/n + map->average())/map->standard_deviation() + 10);
+		E = Kmap*((E/n + map->average())/map->standard_deviation());
 	
 	return E;
 }
@@ -1567,7 +1726,7 @@ double		model_map_energy(Bmodel* model, Bimage* map, double Kmap, double sigma)
 	Vector3<int>		ksize = Vector3<int>((int) (6*pixsigma[0]), (int) (6*pixsigma[1]), (int) (6*pixsigma[2]));
 	ksize = ksize.max(3);
 	Vector3<int>		hksize = ksize/2;
-	double*				kernel = new double[(long)ksize.volume()];
+	vector<double>		kernel((long)ksize.volume(),0);
 	
 	long				i, k, n(0);
 	long				x, y, z, ix, iy, iz, kx, ky, kz;
@@ -1613,7 +1772,7 @@ double		model_map_energy(Bmodel* model, Bimage* map, double Kmap, double sigma)
 			E1 /= w;		// Average density, correction for kernel volume
 			F /= w;			// Average force
 			comp->density(E1);
-			if ( comp->type()->mass() ) {
+			if ( comp->type() && comp->type()->mass() ) {
 				E1 *= comp->type()->mass();
 				F *= comp->type()->mass();
 			}
@@ -1630,7 +1789,78 @@ double		model_map_energy(Bmodel* model, Bimage* map, double Kmap, double sigma)
 	} else
 		E = Kmap*E/n;
 	
-	delete[] kernel;
+	return E;
+}
+
+/**
+@brief 	Energy calculation of a model link fit into a map.  
+@param 	*model			model list.
+@param 	*map			map.
+@param 	Kmap			map energy constant.
+@param 	steps			number of steps along a bond.
+@return double			energy.
+
+
+	The energy is the negative of the density at each step along a bond, rho, 
+	plus a fudge factor to make it positive:
+		E = Kmap * ((-sum(rho)/n + avg)/std)
+	where n is the number of voxels sampled, avg is the average of the map,
+	and std is the standard deviation of the map.
+	The force associated with this energy is the gradient at each step:
+		Fx = Kmap * (rho(x+1) - rho(x-1))/(2*u)
+	where u is the voxel size. The contribution of a force to an atom at 
+	a step is weighted by the fractional distance the step is away from
+	the atom along the bond. 
+
+**/
+double		model_link_map_energy(Bmodel* model, Bimage* map, double Kmap, int steps)
+{
+	map->change_type(Float) ;
+	
+	Blink*			link;
+	Bcomponent		*comp1, *comp2;
+	long			i, n(0);
+	long			slicesize = map->sizeX()*map->sizeY();
+	long			x, y, z;
+	double			frac, df, frac1, s1, s2, E(0);
+	double			invunit = 0.5*Kmap/map->sampling(0)[0];
+	Vector3<double>	F, F1, F2, loc;
+	
+	for ( link = model->link; link; link = link->next ) {
+		comp1 = link->comp[0];
+		comp2 = link->comp[1];
+		df = 1.0L/steps;
+		s1 = s2 = 0;
+		F1 = F2 = 0;
+		for ( frac=0; frac<=1; frac+=df ) {
+			frac1 = 1 - frac;
+			loc = comp1->location() * frac1 + comp2->location() * frac;
+			x = (long) (loc[0]/map->sampling(0)[0] + map->image->origin()[0] + 0.5);
+			y = (long) (loc[1]/map->sampling(0)[1] + map->image->origin()[1] + 0.5);
+			z = (long) (loc[2]/map->sampling(0)[2] + map->image->origin()[2] + 0.5);
+			if ( x>0 && x<map->sizeX()-1 && y>0 && y<map->sizeY()-1 && z>0 && z<map->sizeZ()-1 ) {
+				i = map->index(0, x, y, z, 0);
+				F = Vector3<double>((*map)[i+1] - (*map)[i-1], (*map)[i+map->sizeX()] - (*map)[i-map->sizeX()], 
+					(*map)[i+slicesize] - (*map)[i-slicesize]);
+				F1 += F * frac1;
+				F2 += F * frac;
+				if ( !isfinite((*map)[i]) ) cout << "Infinite value at " << x << " " << y << " " << z << endl;
+				E -= (*map)[i];
+				s1 += frac1;
+				s2 += frac;
+			}
+			n++;
+		}
+		comp1->force(comp1->force() + F1 * (invunit/s1));
+		comp2->force(comp2->force() + F2 * (invunit/s2));
+	}
+
+	if ( n < 1 ) {
+		if ( verbose & VERB_PROCESS )
+			cout << "Warning: Molecule outside map boundaries!" << endl;
+		E = 1e100;
+	} else
+		E = Kmap * ((E/n + map->average())/map->standard_deviation());
 	
 	return E;
 }
@@ -1647,8 +1877,12 @@ int			model_zero_forces(Bmodel* model)
 	int				n(0);
 	Bcomponent*		comp;
 
-	for ( comp = model->comp; comp; comp = comp->next, n++ )
+	for ( comp = model->comp; comp; comp = comp->next, n++ ) {
 		comp->force(Vector3<float>(0,0,0));
+		comp->FOM(0);
+	}
+	
+	model->FOM(0);
 	
 	return n;
 }

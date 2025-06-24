@@ -116,7 +116,7 @@ int 	main(int argc, char **argv)
 		if ( model ) {
 			if ( linklength != 1 )
 				model_scale(model, scale, origin);
-			models_process(model, 0.1*linklength, model_set_link_radius);
+			models_set_link_radius(model, 0.1*linklength);
 		} else {
 			cerr << "Error: No model files specified or generated!" << endl;
 			bexit(-1);
@@ -130,16 +130,16 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( compradius ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 
 	model_poly_generate(model);
 
 	if ( dual ) {
 		Bmodel*		new_model = model_poly_dual(model, 0);
 		if ( new_model ) {
-			model_kill(model);
+			delete model;
 			model = new_model;
 		}
 	}
@@ -148,7 +148,7 @@ int 	main(int argc, char **argv)
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

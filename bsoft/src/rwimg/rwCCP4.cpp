@@ -162,6 +162,9 @@ int 	readCCP4(Bimage* p, int readdata)
 	UnitCell	uc(header->a, header->b, header->c, header->alpha, header->beta, header->gamma);
 	p->unit_cell(uc);
 	p->label(header->labels);
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG readCCP4: unit cell: " << uc << endl;
 	
 	// Allocating the single sub-image and setting its origin
 	p->origin(-header->nxStart, -header->nyStart, -header->nzStart);
@@ -263,6 +266,10 @@ int 	writeCCP4(Bimage* p)
 		header->nzStart = (int) -(p->image->origin()[2] + 0.5);
 	else
 		header->nzStart = (int) -(p->image->origin()[2] - 0.5);
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG writeCCP4: unit cell: " << uc << endl;
+
 	header->mx = (int) (uc.a()/p->sampling(0)[0] + 0.5);
 	header->my = (int) (uc.b()/p->sampling(0)[1] + 0.5);
 	header->mz = (int) (uc.c()/p->sampling(0)[2] + 0.5);
@@ -273,7 +280,6 @@ int 	writeCCP4(Bimage* p)
 	header->amax = p->maximum();
 	header->amean = p->average();
 	header->arms = p->standard_deviation();
-//	cout << "Unitcell %g %g %g\n", uc.a(), uc.b(), uc.c());
 	header->a = uc.a();
 	header->b = uc.b();
 	header->c = uc.c();

@@ -3,7 +3,7 @@
 @brief	Header file for option handlers 
 @author Bernard Heymann 
 @date	Created: 20010613
-@date	Modified: 20240320
+@date	Modified: 20250407
 **/
 
 #include "Bstring.h"
@@ -297,7 +297,7 @@ public:
 		View2<double>	v;
 		vector<double>	d = value.split_into_doubles(",");
 		if ( d.size() < 3 ) {
-			cerr << "-View: At least 3 values for the vector must be specified!" << endl;
+			cerr << "-" << tag << ": At least 3 values for the vector must be specified!" << endl;
 			err++;
 		}
 		for ( unsigned long i=0; i<d.size(); i++ ) v[i] = d[i];
@@ -423,12 +423,29 @@ public:
 //			if ( value.contains("app") &&
 //				value.contains("env") ) action = 10;
 			if ( value.contains("ew") ) action = 9;
+//			if ( value.contains("sb") ) action = 10;
 			if ( value.contains("prep") ) action = 11;
 			if ( value.contains("fit") ) action = 12;
 			if ( value.contains("prep") &&
 				value.contains("fit") ) action = 13;
 		}
 		return action;
+	}
+	int				ewald_flag() {
+		int			flag(value.integer());
+		if ( value.length() < 1 )
+			cerr << "-ewald: An ewald sphere option must be specified!" << endl;
+		else {
+			char		c(tolower(value[0]));
+//			if ( c == 'n' ) flag = EW_NONE;
+			if ( c == 'u' || c == 'p' ) flag = EW_POS;
+			if ( c == 'l' || c == 'n' ) flag = EW_NEG;
+			if ( c == 'c' || c == 'i' ) flag = EW_COMB;
+			if ( c == 'b' || c == 'd' ) flag = EW_BOTH;
+			if ( c == 'r' ) flag = EW_RAND;
+			if ( c == 's' ) flag = EW_SIDEBAND;
+		}
+		return flag;
 	}
 } ;
 	 

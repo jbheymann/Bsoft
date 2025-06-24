@@ -102,6 +102,14 @@ public:
 	void	y(const double d) { v[1] = d; }
 	void	z(const double d) { v[2] = d; }
 	void	angle(const double d) { a = d; }
+	Vector3<double>	rotation_axis() {
+		Quaternion	q = quaternion();
+		return q.axis();
+	}
+	double		rotation_angle() {
+		Quaternion	q = quaternion();
+		return q.angle();
+	}
 	vector<double>	array() {
 		return {v[0], v[1], v[2], a};
 	}
@@ -117,6 +125,11 @@ public:
 	}
 	// View conversions
 	void	negate() { v = -v; a = -a; }	// Negates the view
+	View2	opposite() {
+		View2	vopp(-v[0], -v[1], v[2], a - M_PI);
+		vopp.check();
+		return vopp;
+	}
 	View2	backward() {			// Returns the backwards/inverse form of the view
 		double		ca = cos(a);
 		double		sa = sin(a);

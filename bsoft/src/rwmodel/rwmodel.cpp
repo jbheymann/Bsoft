@@ -3,7 +3,7 @@
 @brief	Library routines to read and write model parameters
 @author Bernard Heymann
 @date	Created: 20060919
-@date	Modified: 20230706
+@date	Modified: 20250623
 **/
 
 #include "rwmodel.h"
@@ -16,12 +16,14 @@
 #include "rwmodel_pdb.h"
 #include "rwmodel_cif.h"
 #include "rwmodel_vega.h"
+#include "rwmodel_ply.h"
+#include "rwmodel_gro.h"
+#include "rwmodel_wah.h"
 #include "rwmodel_xyz.h"
 #include "model_links.h"
 #include "model_mol.h"
 #include "file_util.h"
 #include "string_util.h"
-//#include "linked_list.h"
 #include "Color.h"
 #include "utilities.h"
 
@@ -111,15 +113,25 @@ Bmodel*		read_model(vector<string> file_list, string paramfile, int type_select)
 		model = read_model_bild(file_list);
 	else if ( ext == "v3d" )
 		model = read_model_vega(file_list);
+	else if ( ext == "ply" )
+		model = read_model_ply(file_list);
 	else if ( ext == "pdb" || ext == "pdb1" || ext == "ent" )
 		model = read_model_pdb(file_list);
 	else if ( ext == "cif" )
 		model = read_model_cif(file_list);
-	else if ( ext == "xyz" ) {
+	else if ( ext == "gro" ) {
+		if ( param.size() < 1 ) param = read_atom_properties(paramfile);
+		model = read_model_gro(file_list, param);
+	} else if ( ext == "wah" ) {
+		if ( param.size() < 1 ) param = read_atom_properties(paramfile);
+		model = read_model_wah(file_list, param);
+	} else if ( ext == "xyz" ) {
 		if ( param.size() < 1 ) param = read_atom_properties(paramfile);
 		model = read_model_xyz(file_list, param);
-    } else
-		model = read_model_molecule(file_list, paramfile);
+	} else if ( ext == "mol" ) {
+		if ( param.size() < 1 ) param = read_atom_properties(paramfile);
+		model = read_model_mol(file_list, param);
+    };
 
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG read_model: id=" << model->identifier() << endl;
@@ -128,7 +140,7 @@ Bmodel*		read_model(vector<string> file_list, string paramfile, int type_select)
 		cerr << "Error: File with extension " << ext << " not read!" << endl;
 		error_show(file_list[0].c_str(), __FILE__, __LINE__);
 	} else {
-//		if ( !model->link ) model_list_setup_links(model);
+//		if ( !model->link ) models_list_setup_links(model);
 //		path = file_list->pre_rev('/');
 		path = file_list[0].substr(file_list[0].rfind("/")+1);
 		model_check(model, path);
@@ -191,30 +203,42 @@ int			write_model(string filename, Bmodel* model, int splt)
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG write_model: extension=" << ext << endl;
 
-	if ( verbose & VERB_LABEL )
-	    cout << "Writing file:                   " << filename << endl;
-
+	if ( verbose & VERB_LABEL ) {
+		if ( splt )
+			cout << "Writing and splitting file:     " << filename << endl;
+		else
+			cout << "Writing file:                   " << filename << endl;
+	}
+	
 //	string			path = filename.pre_rev('/');
 //	model_check(model, path);
 	
     if ( ext == "star" )
 		n = write_model_star(filename, model, splt);
     else if ( ext == "xml" )
-		n = write_model_xml(filename, model);
+		n = write_model_xml(filename, model, splt);
     else if ( ext == "cmm" )
 		n = write_model_chimera(filename, model, splt);
     else if ( ext == "bld" ||  ext == "bild" )
 		n = write_model_bild(filename, model, splt);
     else if ( ext == "v3d" )
 		n = write_model_vega(filename, model, splt);
+    else if ( ext == "ply" )
+		n = write_model_ply(filename, model, splt);
 	else if ( ext == "pdb" )
 		n = write_model_pdb(filename, model, splt);
 	else if ( ext == "cif" )
-		n = write_model_cif(filename, model);
+		n = write_model_cif(filename, model, splt);
+	else if ( ext == "gro" )
+		n = write_model_gro(filename, model, splt);
+	else if ( ext == "wah" )
+		n = write_model_wah(filename, model, splt);
 	else if ( ext == "xyz" )
 		n = write_model_xyz(filename, model, splt);
+	else if ( ext == "mol" )
+		n = write_model_mol(filename, model, splt);
     else
-		n = write_model_molecule(filename, model);
+		n = -1;
 	
 	if ( n < 0 ) {
 		cerr << "Error: File with extension " << ext << " not written!" << endl;
@@ -374,6 +398,51 @@ int			model_check(Bmodel* model, string path)
 }
 
 /**
+@brief 	Returns the model types in a JSON format.
+@param 	*model		linked list of models.
+@return Bmodel*		model copy.
+
+**/
+JSvalue		model_types(Bmodel *model)
+{
+	JSvalue			js(JSarray);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		JSvalue		m(JSobject);
+		m["model"] = mp->identifier();
+		m["type"] = mp->model_type();
+		m["description"] = mp->description();
+		js.push_back(m);
+	}
+	
+	return js;
+}
+
+/**
+@brief 	Assigns new model types from a JSON format.
+@param 	*model		linked list of models.
+@param 	&js			JSON format array of model parameters.
+@return Bmodel*		model copy.
+
+**/
+int			models_assign_types(Bmodel* model, JSvalue& js)
+{
+	Bmodel*			mp;
+
+	for ( mp = model; mp; mp = mp->next ) {
+		for ( auto m: js.array() )
+			if ( m["model"].value() == mp->identifier() )
+				mp->model_type(m["type"].value());
+		for ( auto m: js.array() )
+			if ( m["type"].value() == mp->model_type() )
+				mp->description(m["description"].value());
+	}
+	
+	return 0;
+}
+
+/**
 @brief 	Copies a model.
 @param 	*model		model parameters.
 @return Bmodel*		model copy.
@@ -450,8 +519,6 @@ Bmodel*		model_copy(Bmodel* model)
 	}
 	
 	for ( link = model->link; link; link = link->next ) {
-//		link_nu = (Blink *) add_item((char **) &link_nu, sizeof(Blink));
-//		if ( !model_nu->link ) model_nu->link = link_nu;
 		if ( model_nu->link ) link_nu = model_nu->link->add(link);
 		else link_nu = model_nu->link = new Blink(link);
 		for ( comp = model->comp, comp_new = model_nu->comp; comp; comp = comp->next, comp_new = comp_new->next ) {
@@ -464,8 +531,6 @@ Bmodel*		model_copy(Bmodel* model)
 	}
 	
 	for ( poly = model->poly; poly; poly = poly->next ) {
-//		poly_nu = (Bpolygon *) add_item((char **) &poly_nu, sizeof(Bpolygon));
-//		if ( !model_nu->poly ) model_nu->poly = poly_nu;
 		if ( model_nu->poly ) poly_nu = model_nu->poly->add(poly);
 		else poly_nu = model_nu->poly = new Bpolygon(poly);
 		poly_nu->normal(poly->normal());
@@ -476,60 +541,18 @@ Bmodel*		model_copy(Bmodel* model)
 		}
 	}
 
-	model_setup_links(model_nu);
+	model_nu->setup_links();
 	
 	return model_nu;
 }
 
 /**
-@brief 	Deallocates memory for a list of components.
-@param	*comp	component list.
-@return int					total number of components.
-**/
-int			component_list_kill(Bcomponent* comp)
-{
-	int				n(0);
-	Bcomponent*		c = NULL;
-	Bcomponent*		c2 = NULL;
-	
-	for ( c = comp; c; ) {
-		c2 = c->next;
-		delete c;
-		c = c2;
-		n++;
-	}
-	
-	return  n;
-}
-
-/**
-@brief 	Deallocates memory for a list of component types.
-@param	*type		component type list.
-@return int					total number of component types.
-**/
-int			comp_type_list_kill(Bcomptype* type)
-{
-	int				n(0);
-	Bcomptype*		ct = NULL;
-	Bcomptype*		ct2 = NULL;
-	
-	for ( ct = type; ct; ) {
-		ct2 = ct->next;
-		delete ct;
-		ct = ct2;
-		n++;
-	}
-	
-	return  n;
-}
-
-/**
 @brief 	Deallocates memory for a list of component links.
+@param 	*model		model.
+@return int					total number of component links.
 
 	Only the first model in the list is processed.
 
-@param 	*model		model.
-@return int					total number of component links.
 **/
 int			model_link_list_kill(Bmodel* model)
 {
@@ -559,15 +582,15 @@ int			model_link_list_kill(Bmodel* model)
 
 /**
 @brief 	Deletes a link.
+@param	**link_list	pointer to list of links.
+@param	*comp	one component in the link.
+@param 	i				index for second component in link array of first component.
+@return Bdistmat*			new distance matrix structure.
 
 	The link in the model link list is removed.
 	The associated references to the link in the component link arrays
 	are removed and the link arrays reorganized.
 
-@param	**link_list	pointer to list of links.
-@param	*comp	one component in the link.
-@param 	i				index for second component in link array of first component.
-@return Bdistmat*			new distance matrix structure.
 **/
 int			link_kill(Blink** link_list, Bcomponent* comp, int i)
 {
@@ -622,15 +645,15 @@ int			link_kill(Blink** link_list, Bcomponent* comp, int i)
 
 /**
 @brief 	Deletes a link.
+@param	**link_list	pointer to list of links.
+@param	*comp	one component in the link.
+@param	*comp2	second component in the link.
+@return Bdistmat*			new distance matrix structure.
 
 	The link in the model link list is removed.
 	The associated references to the link in the component link arrays
 	are removed and the link arrays reorganized.
 
-@param	**link_list	pointer to list of links.
-@param	*comp	one component in the link.
-@param	*comp2	second component in the link.
-@return Bdistmat*			new distance matrix structure.
 **/
 int			link_kill(Blink** link_list, Bcomponent* comp, Bcomponent* comp2)
 {
@@ -644,27 +667,6 @@ int			link_kill(Blink** link_list, Bcomponent* comp, Bcomponent* comp2)
 	link_kill(link_list, comp, i);
 	
 	return 0;
-}
-
-/**
-@brief 	Deallocates memory for a list of polygons.
-@param 	*poly		polygon list.
-@return int					total number of polygons.
-**/
-int			poly_list_kill(Bpolygon* poly)
-{
-	int				n(0);
-	Bpolygon*		p = NULL;
-	Bpolygon*		p2 = NULL;
-	
-	for ( p = poly; p; ) {
-		p2 = p->next;
-		delete p;
-		p = p2;
-		n++;
-	}
-	
-	return  n;
 }
 
 /**
@@ -699,28 +701,4 @@ int			comp_associated_links_kill(Bcomponent* comp, Blink** link)
 	
 	return  n;
 }
-
-/**
-@brief 	Deallocates all memory in the list.
-@param 	*model		model parameters.
-@return int					0.
-**/
-int 		model_kill(Bmodel* model)
-{
-	Bmodel*			mp = NULL;
-	Bmodel*			mp2 = NULL;
-	
-	for ( mp = model; mp; ) {
-		mp2 = mp->next;
-		model_link_list_kill(mp);
-		component_list_kill(mp->comp);
-		comp_type_list_kill(mp->type);
-		poly_list_kill(mp->poly);
-		delete mp;
-		mp = mp2;
-	}
-	
-	return 0;
-}
-
 

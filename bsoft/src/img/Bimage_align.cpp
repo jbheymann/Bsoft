@@ -39,7 +39,7 @@ Bimage*		Bimage::align_progressive(long nref, Bimage* pmask,
 	Bimage*			pref = extract(nref);
 	Bimage*			p1;
 	
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Progressive alignment:" << endl;
 		cout << "Image\tShift\t\t\tCC" << endl;
 	}
@@ -57,7 +57,7 @@ Bimage*		Bimage::align_progressive(long nref, Bimage* pmask,
 		delete p1;
 //		shift_avg += shift.length();
 		cc_avg += cc;
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << nn+1 << tab << shift << tab << cc << endl;
 	}
 
@@ -71,7 +71,7 @@ Bimage*		Bimage::align_progressive(long nref, Bimage* pmask,
 	pref->show_scale(shift_avg);
 	pref->image->FOM(cc_avg);
 
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Shift average:                 " << shift_avg << endl;
 		cout << "CC average:                    " << cc_avg << endl;
 	}
@@ -105,7 +105,7 @@ Bimage*		Bimage::align_local(long nref, Bimage* pmask,
 	Vector3<double>	shift;
 	Bimage*			p1;
 	
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Local alignment:" << endl;
 		cout << "Image\tShift\t\t\tCC" << endl;
 	}
@@ -157,7 +157,7 @@ Bimage*		Bimage::align_local(long nref, Bimage* pmask,
 		}
 		shift_avg += shift.length();
 		cc_avg += image[nn].FOM();
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << nn+1 << tab << shift << tab << image[nn].FOM() << endl;
 	}
 
@@ -166,7 +166,7 @@ Bimage*		Bimage::align_local(long nref, Bimage* pmask,
 	pref->show_scale(shift_avg);
 	pref->image->FOM(cc_avg);
 
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Shift average:                 " << shift_avg << endl;
 		cout << "CC average:                    " << cc_avg << endl;
 	}
@@ -213,8 +213,8 @@ Vector3<double>	Bimage::find_shift_in_transform(long nn, Bimage* pref, double sh
 	image[nn].origin(pref->image->origin()-shift);
 //	image[nn].FOM(cc);
 
-	cout << "shift = " << shift << endl;
-	cout << "fom = " << p1->image->FOM() << endl;
+//	cout << "shift = " << shift << endl;
+//	cout << "fom = " << p1->image->FOM() << endl;
 	
 	delete p1;
 	
@@ -241,7 +241,7 @@ Bimage*		Bimage::align_progressive_fast(long nref, double shift_limit)
 	Bimage*			pref = extract(nref);
 	Bimage*			p1;
 	
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Progressive alignment:" << endl;
 		cout << "Image\tShift\t\t\tCC" << endl;
 	}
@@ -256,7 +256,7 @@ Bimage*		Bimage::align_progressive_fast(long nref, double shift_limit)
 		pref->fspace_normalize();
 		cc_avg += image[nn].FOM();
 		shift_prev = shift;
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << nn+1 << tab << shift << tab << image[nn].FOM() << endl;
 	}
 
@@ -270,7 +270,7 @@ Bimage*		Bimage::align_progressive_fast(long nref, double shift_limit)
 	pref->show_scale(shift_avg);
 	pref->image->FOM(cc_avg);
 
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS ) {
 		cout << "Shift average:                 " << shift_avg << endl;
 		cout << "CC average:                    " << cc_avg << endl;
 	}
@@ -289,7 +289,7 @@ vector<Vector3<double>>	interpolate_shifts(Vector3<double>* sh, long nimg, long 
 	
 	vector<Vector3<double>>	shfull(nsh);
 	
-	if ( verbose )
+	if ( verbose & VERB_PROCESS )
 		cout << "Interpolating shifts over window of " << window << " and step of " << step << endl;
 	
 	long			i, j, h((step-1)/2), w, ws, we;
@@ -311,7 +311,7 @@ vector<Vector3<double>>	interpolate_shifts(Vector3<double>* sh, long nimg, long 
 			} else {
 				shfull[0] = sh[0] - (sh[1] - sh[0])*f;
 			}
-//			if ( verbose & VERB_FULL )
+			if ( verbose & VERB_FULL )
 				cout << i << tab << sh[i][0] << tab << sh[i][1] << tab
 					<< f << tab << w << tab << shfull[i][0] << tab << shfull[i][1] << endl;
 		}
@@ -394,13 +394,13 @@ vector<Vector3<double>>	Bimage::align(long ref_num, long window, long step, Bima
 	Bimage*				p1;
 	Vector3<double>*	sh = new Vector3<double>[pt->images()];
 
-	if ( verbose )
+	if ( verbose & VERB_PROCESS )
 		cout << "Iterative refinement:" << endl;
 	for ( i=1; i<=10 && fabs(shift_avg - shift_avg_old) > 0.01
 			&& cc_avg > cc_avg_old; i++ ) {
 		pt->origin(pref->size()/2);
 		
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << "Iteration " << i << endl;
 #ifdef HAVE_GCD
 		dispatch_apply(pt->images(), dispatch_get_global_queue(0, 0), ^(size_t nn){
@@ -421,7 +421,7 @@ vector<Vector3<double>>	Bimage::align(long ref_num, long window, long step, Bima
 	
 		for ( nn=0; nn<n; nn++ ) sh[nn] = sh[ref_num] - sh[nn];
 		
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << "Image\tShift\t\t\tCC" << endl;
 		for ( cc_avg=0, shift_avg=0, nn=0; nn<pt->images(); nn++ ) {
 			p1 = pt->extract(nn);
@@ -431,14 +431,14 @@ vector<Vector3<double>>	Bimage::align(long ref_num, long window, long step, Bima
 			cc_avg += pt->image[nn].FOM();
 			sh[nn] *= aln_bin;
 			if ( nn ) shift_avg += sh[nn].distance(sh[nn-1]);
-			if ( verbose )
+			if ( verbose & VERB_PROCESS )
 				cout << nn+1 << tab << sh[nn] << tab << pt->image[nn].FOM() << endl;
 		}
 		
 		shift_avg /= pt->images()-1;
 		cc_avg /= pt->images();
 		
-		if ( verbose ) {
+		if ( verbose & VERB_PROCESS ) {
 			cout << "Shift average per frame:       " << shift_avg << endl;
 			cout << "CC average:                    " << cc_avg << endl;
 		}
@@ -661,9 +661,9 @@ JSvalue		Bimage::align_fast(long ref_num, Bimage* pmask,
 //	pt->change_transform_size(nusize);
 	scale = 1;
 
-	cout << "new size = " << nusize << endl;
-	cout << "new sampling = " << pt->sampling(0) << endl;
-	cout << "new origin = " << pt->image->origin() << endl;
+//	cout << "new size = " << nusize << endl;
+//	cout << "new sampling = " << pt->sampling(0) << endl;
+//	cout << "new origin = " << pt->image->origin() << endl;
 	
 	pt->fspace_bandpass(hi_res, lo_res, 0);
 	
@@ -709,7 +709,7 @@ JSvalue		Bimage::align_fast(long ref_num, Bimage* pmask,
 	
 		for ( nn=0; nn<n; nn++ ) sh[nn] = sh[ref_num] - sh[nn];
 		
-		if ( verbose )
+		if ( verbose & VERB_PROCESS )
 			cout << "Image\tShift\t\t\tCC" << endl;
 		for ( cc_avg=0, shift_avg=0, nn=0; nn<n; nn++ ) {
 			p1 = pt->extract(nn);
@@ -719,7 +719,7 @@ JSvalue		Bimage::align_fast(long ref_num, Bimage* pmask,
 			cc_avg += pt->image[nn].FOM();
 			sh[nn] *= scale;
 			if ( nn ) shift_avg += sh[nn].distance(sh[nn-1]);
-			if ( verbose )
+			if ( verbose & VERB_PROCESS )
 				cout << nn+1 << tab << sh[nn] << tab << pt->image[nn].FOM() << endl;
 		}
 		
@@ -728,7 +728,7 @@ JSvalue		Bimage::align_fast(long ref_num, Bimage* pmask,
 		shift_avg /= n-1;
 		cc_avg /= n;
 		
-		if ( verbose ) {
+		if ( verbose & VERB_PROCESS ) {
 			cout << "Shift average per frame:       " << shift_avg << endl;
 			cout << "CC average:                    " << cc_avg << endl;
 		}
@@ -1056,7 +1056,7 @@ Bplot*		Bimage::fspace_ssnr(long nimg, double res_hi, double sampling_ratio)
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("s(1/A)");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(1).label("Signal");
 	plot->page(0).column(2).label("Noise");
 	plot->page(0).column(3).label("SSNR");
@@ -1178,7 +1178,7 @@ Bplot*		Bimage::fspace_subset_ssnr(int subset, double res_hi, double sampling_ra
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("s(1/A)");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(0).axis(1);
 	for ( i=1; i<ncol; i++ ) {
 		dose = Bstring(dose_per_frame*i, "%g");

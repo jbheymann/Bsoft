@@ -169,7 +169,7 @@ int             main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
+	if ( comprad > 0 ) models_set_component_radius(model, comprad);
 
     Bimage*         pt = NULL;
 	Bimage*         pmask = NULL;
@@ -207,7 +207,7 @@ int             main(int argc, char **argv)
 	if ( PSname.length() )
 		ps_model_occupancy(model, cutoff, bins, nfit, distrib, prob, R, PSname);
 	
-	model_selection_stats(model);
+	models_selection_stats(model);
 	
 	// Write the model 
     if ( model && ( outmod.length() || split == 9 ) )
@@ -215,7 +215,7 @@ int             main(int argc, char **argv)
 
     delete pt;
     delete pmask;
-    model_kill(model);
+    delete model;
 
 	
 		timer_report(ti);

@@ -68,12 +68,12 @@ Bmodel*		read_model_xyz(vector<string> file_list, map<string,Bcomptype>& atompar
 				}
 				natom++;
 				if ( comp ) comp = comp->add(natom);
-				else comp = model->comp = new Bcomponent(natom);
+				else comp = mp->comp = new Bcomponent(natom);
 				comp->location(loc);
 				comp->density(occ);
 				comp->FOM(wobble);
 				comp->select(1);
-				ct = model->add_type(Zsymbol[Z]);
+				ct = mp->add_type(Zsymbol[Z]);
 				comp->type(ct);
 				ct->index(Z);
 				comp->description(Zsymbol[Z]);
@@ -136,5 +136,5 @@ int			write_model_xyz(string& filename, Bmodel* model, int splt)
 		fmod.close();
 	}
 	
-	return 0;
+	return n;
 }

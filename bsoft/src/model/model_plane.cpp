@@ -207,7 +207,7 @@ Bmodel*		model_generate_from_plane_guide(Bmodel* guide, double separation, doubl
 
 	int				i;
 	Vector3<double>	origin;
-	Vector3<double>	shift = model_center_of_mass(guide);
+	Vector3<double>	shift = guide->center_of_coordinates();
 	Matrix3			mat;
 	
 	for ( i=0; i<3; i++ ) mat[i] = eigenvec[i];

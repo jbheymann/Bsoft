@@ -3,13 +3,13 @@
 @brief	Header file for reading and writing EMBL sequence files
 @author Bernard Heymann
 @date	Created: 19990123
-@date	Modified: 20000729
+@date	Modified: 20250509
 
 	Format: Protein sequence file format
 **/
 
-#include "rwmolecule.h"
+#include "Bsequence.h"
 
 // I/O prototypes
-int 	readEMBL(Bstring& filename, Bmolgroup* molgroup);
-int 	writeEMBL(Bstring& filename, Bmolgroup* molgroup);
+vector<Bsequence>	readEMBL(string& filename);
+int 	writeEMBL(string& filename, vector<Bsequence> seqs);

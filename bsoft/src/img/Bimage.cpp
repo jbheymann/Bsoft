@@ -3,7 +3,7 @@
 @brief	Methods for the image class
 @author Bernard Heymann
 @date	Created: 20110603
-@date 	Modified: 20230321
+@date 	Modified: 20250202
 **/
 
 #include "Bimage.h"
@@ -826,6 +826,7 @@ unsigned char*	Bimage::data_alloc(long nbytes)
 		exit(-1);
 	}
 	
+//	cout << "---" << datasize << tab << data_type_size() << tab << alloc_size() << endl;
 	long			ds(datasize*data_type_size());
 	if ( datatype == Bit ) ds /= 8;
 	
@@ -1790,13 +1791,14 @@ void		Bimage::fix_type()
 
 /**
 @brief Get the data type indicated by a single letter code.
-@param 	letter 	letter indicating data type.
+@param 	letter 			letter indicating data type.
+@param	keep_scale		flag to keep the original scale.
 
 	This function is used in optional command-line arguments to indicate 
 	a new data type for an image.
 
 **/
-void		Bimage::change_type(char letter)
+void		Bimage::change_type(char letter, bool keep_scale)
 {
 	DataType		nutype;
 	
@@ -1819,14 +1821,15 @@ void		Bimage::change_type(char letter)
 		default: nutype = Unknown_Type; break;
 	}
 	
-	change_type(nutype);
+	change_type(nutype, keep_scale);
 }
 
 /**
 @brief Get the data type from a string.
-@param 	*string 	string describing the data type.
+@param 	*string 			string describing the data type.
+@param	keep_scale		flag to keep the original scale.
 **/
-void		Bimage::change_type(char* string)
+void		Bimage::change_type(char* string, bool keep_scale)
 {
 	if ( strlen(string) == 1 ) {
 		change_type(string[0]);
@@ -1854,14 +1857,50 @@ void		Bimage::change_type(char* string)
 		else if ( strstr(string, "double") ) nutype = Double;
 	}
 	
-	change_type(nutype);
+	change_type(nutype, keep_scale);
+}
+
+/**
+@brief Get the data type from a string.
+@param 	&s 				string describing the data type.
+@param	keep_scale		flag to keep the original scale.
+**/
+void		Bimage::change_type(string s, bool keep_scale)
+{
+	if ( s.length() == 1 ) {
+		change_type(s[0], keep_scale);
+		return;
+	}
+
+	DataType		nutype = Unknown_Type;
+	
+	s = to_lower(s);
+	
+	if ( s.find("unsigned") != string::npos ) {
+		if ( s.find("char") != string::npos ) nutype = UCharacter;
+		else if ( s.find("short") != string::npos ) nutype = UShort;
+		else if ( s.find("int") != string::npos ) nutype = UInteger;
+		else if ( s.find("long") != string::npos ) nutype = ULong;
+	} else {
+		if ( s.find("bit") != string::npos ) nutype = Bit;
+		else if ( s.find("byte") != string::npos ) nutype = UCharacter;
+		else if ( s.find("char") != string::npos ) nutype = SCharacter;
+		else if ( s.find("short") != string::npos ) nutype = Short;
+		else if ( s.find("int") != string::npos ) nutype = Integer;
+		else if ( s.find("long") != string::npos ) nutype = Long;
+		else if ( s.find("float") != string::npos ) nutype = Float;
+		else if ( s.find("double") != string::npos ) nutype = Double;
+	}
+	
+	change_type(nutype, keep_scale);
 }
 
 /**
 @brief Change the data to the new type.
-@param 	nutype 	new data type.
+@param 	nutype 			new data type.
+@param	keep_scale		flag to keep the original scale.
 **/
-void		Bimage::change_type(DataType nutype)
+void		Bimage::change_type(DataType nutype, bool keep_scale)
 {
 	if ( datatype == nutype || nutype == Unknown_Type ) return;
 	
@@ -1901,6 +1940,10 @@ void		Bimage::change_type(DataType nutype)
 			}
 			if ( compoundtype == TComplex && datatype == Short ) {
 				scale = 0.5*mx/max;
+				shift = 0;
+			}
+			if ( keep_scale && scale > 1 ) {
+				scale = 1;
 				shift = 0;
 			}
 		} else {
@@ -2227,7 +2270,7 @@ long	Bimage::set_subset_selection(Bstring list)
 	The new data replaces the old data.
 
 **/
-long	Bimage::delete_images(Bstring list, int retain)
+long	Bimage::delete_images(string list, int retain)
 {
 	long			ni, no, ns(0);
 	
@@ -2258,7 +2301,7 @@ long	Bimage::delete_images(Bstring list, int retain)
 	return ns;
 }
 
-long	Bimage::select_images(Bstring list)
+long	Bimage::select_images(string list)
 {
 	return delete_images(list, 1);
 }
@@ -2713,9 +2756,8 @@ int			Bimage::moments(long max_order, long nn)
 	cout << "Moments for image " << nn << ":" << endl;
 	
 	long			i, j, k, ds(image_size());
-	double			v, vc, cm[max_order], m[max_order];
-	
-	for ( k=0; k<max_order; ++k ) cm[k] = m[k] = 0;
+	double			v, vc;
+	vector<double>	cm(max_order,0), m(max_order,0);
 	
 	for ( i=0, j=nn*ds; i<ds; ++i, ++j ) {
 		v = (*this)[j];
@@ -2867,6 +2909,8 @@ Bimage* 	Bimage::copy_header(long nu_nimg)
 	img->compound_type(compoundtype);
 	img->page_size(px, py, pz);
 	img->fourier_type(fouriertype);
+//	img->unit_cell(ucell);
+	img->ucell = ucell;
 
 //	cout << "compoundtype=" << img->compoundtype << " c=" << c << endl;
 //	cout << "img compoundtype=" << img->compoundtype << " c=" << img->c << endl;
@@ -3475,8 +3519,11 @@ void 		Bimage::reslice(Bstring order)
 			cout << tab << order[i] << " " << sign[j];
 	}
 
-	if ( verbose & VERB_DEBUG )
-		cout << endl << "DEBUG Bimage::reslice: nusize" << tab << nusize << endl;
+	if ( verbose & VERB_FULL ) {
+		cout << "Reslicing order:          " << order << endl;
+		cout << "Old size:                 " << size() << endl;
+		cout << "New size:                 " << nusize << endl << endl;
+	}
 	
 	long			elementsize(c*data_type_size());
 	long			ds(x*y*z*n);
@@ -4260,6 +4307,23 @@ void		Bimage::divide_one(Bimage* p, double scale, double shift)
 	}
 	
 	statistics();
+}
+
+Bimage*		Bimage::expand(long zz)
+{
+	long			i, j, k, nn, xyc(x*y*c);
+	Bimage*			pex = copy_header(n);
+	pex->z = zz;
+	pex->data_alloc();
+	
+	for ( j=nn=0; nn<n; ++nn ) {
+		for ( zz=0; zz<pex->z; ++zz ) {
+			for ( i=nn*xyc, k=0; k<xyc; ++i, ++k, ++j )
+				pex->set(j, (*this)[i]);
+		}
+	}
+	
+	return pex;
 }
 
 /**

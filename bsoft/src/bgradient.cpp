@@ -3,7 +3,7 @@
 @brief	Calculating image gradients.
 @author Bernard Heymann
 @date	Created: 20201224
-@date	Modified: 20210302
+@date	Modified: 20250305
 **/
 
 #include "rwimg.h"
@@ -26,11 +26,13 @@ const char* use[] = {
 "Types:",
 "	Central difference in 2 or 3 directions",
 "	Gradient across a 3x3(x3) kernel",
-"	Frequency space gradient by imposing gaussians in 2 or 3 directions",
+"	Differential gradient by imposing gaussians in 2 or 3 directions in frequency space",
+"	Frequency space gradient by interpolation",
+"	Frequency space differential gradient by imposing gaussians in 2 or 3 directions in real space",
 " ",
 "Actions:",
 "-gaussian 2.4,5.1,20.4   Anisotropic gaussian filter (one value sets all).",
-"-gradient 3x3            Gradient type: cd, 3x3, freq.",
+"-gradient 3x3            Gradient type: cd, 3x3, dif, int, freq.",
 "-magnitude               Convert gradient vectors to lengths.",
 "-anisotropic 10,0.5      Anisotropic gradient smoothing: iterations and weight.",
 " ",
@@ -100,19 +102,22 @@ int 		main(int argc, char **argv)
 	
 	Bimage*		pg = NULL;
 	
-	if ( gtype[0] != 'f' &&  sigma.length() ) {
-		if ( p->fourier_type() == NoTransform ) p->fft();
-		p->fspace_weigh_gaussian(0, sigma);
-		p->fft_back();
-	}
 	
 	if ( gtype.length() ) {
 		if ( gtype[0] == 'c' )
 			pg = p->gradient();
 		else if ( gtype[0] == '3' )
 			pg = p->gradient3x3();
+		else if ( gtype[0] == 'd' )
+			pg = p->fspace_rspace_gradient(sigma);
+		else if ( gtype[0] == 'i' )
+			pg = p->fspace_gradient();
 		else if ( gtype[0] == 'f' )
 			pg = p->fspace_gradient(sigma);
+	} else if ( sigma.length() ) {
+		if ( p->fourier_type() == NoTransform ) p->fft();
+		p->fspace_weigh_gaussian(0, sigma);
+		p->fft_back();
 	}
 	
 	if ( pg && mag ) pg->vector_to_simple();
@@ -127,8 +132,7 @@ int 		main(int argc, char **argv)
 	
 	delete pg;
 
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

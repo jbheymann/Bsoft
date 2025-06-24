@@ -190,7 +190,7 @@ void		Bplot::resolution_display(vector<double>& fsccut, vector<double>& dprcut)
 	DPR = FSC + nr;
 	
 	cout << "Resolution curves:" << endl;
-	cout << "s(1/A)\tRes(A)\t" << label;
+	cout << "Spatial Frequency (1/A)\tRes(A)\t" << label;
 	if ( nc > 2 ) cout << "\tDPR";
 	cout << endl;
 	

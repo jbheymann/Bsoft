@@ -36,26 +36,28 @@ proc setupImageMenu {} {
 
 	menu .menuBar.image.dt -tearoff 0
 	.menuBar.image add cascade -menu .menuBar.image.dt -label "Change data type" -underline 0
+	.menuBar.image.dt add command -label "Unsigned char (byte: 0-255)" -underline 0 \
+		-command { changeDataType byte 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Unsigned char (byte)" -underline 0 \
-		-command { changeDataType byte } -accelerator "Ctrl-z"
+		-command { changeDataType byte 1 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Signed char" -underline 0 \
-		-command { changeDataType char } -accelerator "Ctrl-z"
+		-command { changeDataType char 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Unsigned short" -underline 0 \
-		-command { changeDataType "unsigned short" } -accelerator "Ctrl-z"
+		-command { changeDataType "unsigned short" 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Signed short" -underline 0 \
-		-command { changeDataType short } -accelerator "Ctrl-z"
+		-command { changeDataType short 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Unsigned int" -underline 0 \
-		-command { changeDataType "unsigned int" } -accelerator "Ctrl-z"
+		-command { changeDataType "unsigned int" 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Signed int" -underline 0 \
-		-command { changeDataType int } -accelerator "Ctrl-z"
+		-command { changeDataType int 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Unsigned long" -underline 0 \
-		-command { changeDataType "unsigned long" } -accelerator "Ctrl-z"
+		-command { changeDataType "unsigned long" 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Signed long" -underline 0 \
-		-command { changeDataType long } -accelerator "Ctrl-z"
+		-command { changeDataType long 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Float" -underline 0 \
-		-command { changeDataType float } -accelerator "Ctrl-z"
+		-command { changeDataType float 0 } -accelerator "Ctrl-z"
 	.menuBar.image.dt add command -label "Double" -underline 0 \
-		-command { changeDataType double } -accelerator "Ctrl-z"
+		-command { changeDataType double 0 } -accelerator "Ctrl-z"
 
 	.menuBar.image add command -label "Fix type sign" -underline 0 \
 		-command { fixType }
@@ -533,11 +535,11 @@ proc modifyImage_and_DestroyWindow { w } {
 ## @brief This chnages the data type.
 #
 
-proc changeDataType { datatype } {
+proc changeDataType { datatype keep_scale } {
 	global theimg
 	set olddatatype [Bimage get $theimg datatype]
 	if { $datatype != $olddatatype } {
-		Bimage set $theimg datatype $datatype
+		Bimage set $theimg datatype $datatype $keep_scale
 	}
 	Update 1
 	reconfigureScales

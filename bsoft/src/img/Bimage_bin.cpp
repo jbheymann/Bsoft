@@ -314,10 +314,7 @@ Bimage*		Bimage::bin_copy(Vector3<long> bk)
 		cout << "Binning: Sums done" << endl;
 	
 	pb->statistics();
-	
-//	pb->information();
-//	delete pb;
-	
+
 	return pb;
 }
 

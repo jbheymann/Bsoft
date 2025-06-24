@@ -273,8 +273,7 @@ int 	main(int argc, char **argv)
 			bexit(-1);
 		}
 		if ( reset )
-			for ( mp = model; mp; mp = mp->next )
-				model_reset_selection(mp);
+			models_select_all(model);
 	}
 
 	if ( guidefile.length() ) guide = read_model(guidefile.str(), paramfile.str());
@@ -309,11 +308,11 @@ int 	main(int argc, char **argv)
 		mp->next = sph;
 	}
 	
-	if ( reset ) model_reset_selection(sph);
+	if ( reset ) models_select_all(sph);
 	
-	if ( mod_select.length() ) model_select(sph, mod_select);
+	if ( mod_select.length() ) models_select(sph, mod_select);
 
-	if ( nutype.length() ) model_set_type(sph, nutype.str());
+	if ( nutype.length() ) models_set_type(sph, nutype.str());
 	
 	if ( guide ) model_align_to_guide(sph, guide);
 	
@@ -323,13 +322,13 @@ int 	main(int argc, char **argv)
 
 	if ( comp2shell ) {
 		sph = model_components_to_shells(model, comp2shell, nutype.str(), twod);
-		model_kill(model);
+		delete model;
 		model = sph;
 	}
 	
 	if ( mapfile.length() ) sph->mapfile(mapfile.str());
 
-	if ( linklength > 0 ) model_link_list_generate(sph, linklength);
+	if ( linklength > 0 ) models_link_list_generate(sph, linklength);
 	
 	if ( calc_views.length() ) model_calculate_views(sph, calc_views);
 
@@ -352,20 +351,20 @@ int 	main(int argc, char **argv)
 		delete p;
 	}
 
-	if ( compradius ) model_set_component_radius(sph, compradius);
+	if ( compradius ) models_set_component_radius(sph, compradius);
 
-	if ( linkradius ) model_set_link_radius(sph, linkradius);
+	if ( linkradius ) models_set_link_radius(sph, linkradius);
 
 	if ( merge ) model_merge(model);
 	
-	model_selection_stats(model);
+	models_selection_stats(model);
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() ) {
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

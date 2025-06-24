@@ -215,9 +215,14 @@ int 		Bimage::fft(fft_plan plan, int norm_flag, ComplexConversion conv)
 	data_type(Float);
 	compound_type(TComplex);
 	channels(2);
-//	fourier_type(Standard);
-//	metadata["type"] = "Fourier transform";
-
+	if ( fourier_type() == Standard ) {
+		fourier_type(NoTransform);
+		metadata["type"] = "Fourier backtransform";
+	} else {
+		fourier_type(Standard);
+		metadata["type"] = "Fourier transform";
+	}
+	
 	complex_convert(conv);
 
 	return 0;

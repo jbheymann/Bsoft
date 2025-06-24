@@ -3,7 +3,7 @@
 @brief	Library routines to read and write PDB coordinate files
 @author 	Bernard Heymann
 @date	Created: 20211231
-@date	Modified: 20230706
+@date	Modified: 20250227
 **/
 
 #include "rwmodel.h"
@@ -46,11 +46,11 @@ Bmodel*		read_model_pdb(vector<string> file_list)
 	Bmodel*			mp = NULL;
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG read_model_molecule: " << file_list[0] << endl;
+		cout << "DEBUG read_model_pdb: " << file_list[0] << endl;
 	
 	for ( auto filename: file_list ) {
-		if ( verbose & VERB_LABEL )
-			cout << "Reading file:                   " << filename << endl;
+//		if ( verbose & VERB_LABEL )
+//			cout << "Reading file:                   " << filename << endl;
 		mp = readPDB(filename, ++i);
 		if ( mp ) {
 			if ( model ) model->add(mp);
@@ -64,7 +64,7 @@ Bmodel*		read_model_pdb(vector<string> file_list)
 	if ( verbose )
 		cout << "Models read:                    " << i << endl;
 
-	models_process(model, model_setup_links);
+	models_setup_links(model);
 	
 	return model;
 }
@@ -83,8 +83,8 @@ Bmodel* 	readPDB(string& filename, long n)
 	}
 
 	string			s, recordname, chain("-"), grpch, resnumstr;
-	int				i, nmol(0), natom(0), ngrp(0);
-	int				resnum, atomnum, ba;
+	long			i, nmol(0), natom(0), ngrp(0);
+	long			resnum, atomnum, ba;
 //	char			insert, prev_insert = ' ';
 	string			gid, seq, el, restype, atomtype, typestr;
 //	string			molname(" ");
@@ -93,8 +93,8 @@ Bmodel* 	readPDB(string& filename, long n)
 
 //	UnitCell		unitcell = molgroup->unitcell;
 
-	Bmodel*			model = new Bmodel(base(filename));
-	Bmodel*			mp = model;
+	Bmodel*			model = NULL;
+	Bmodel*			mp = NULL;
 	Bcomponent*		comp = NULL;
 	Bcomponent*		comp2 = NULL;
 	Blink*			link = NULL;
@@ -110,68 +110,96 @@ Bmodel* 	readPDB(string& filename, long n)
 //		}
 		if ( recordname == "MODEL " ) {
 //			if ( to_integer(s.substr(6,8)) > 1 ) break;
-			i = to_integer(s.substr(6,8));
-			if ( i > 1 ) mp = mp->next = new Bmodel(i);
-			else mp->identifier(to_string(i));
+//			i = to_integer(s.substr(6,8));
+			if ( model ) mp = model->find_or_add(s.substr(6,8));
+			else model = mp = new Bmodel(s.substr(6,8));
+			comp = mp->comp;
+			if ( verbose & VERB_FULL )
+				cout << "Adding model: " << mp->identifier() << endl;
 		}
 		if ( recordname == "HELIX " ) {
 			grpch = s[19];
+			if ( model ) mp = model->find_or_add(grpch);
+			else model = mp = new Bmodel(grpch);
 //			gid = s.substr(11, 3);
 			gid = s.substr(6, 4) + " " + s.substr(11, 3);
 			if ( verbose & VERB_FULL )
 				cout << "Adding helix: " << gid << endl;
-			group = model->add_group(gid);
+			group = mp->add_group(gid);
 			group->group_type(recordname);
 			group->type(s.substr(38, 2));					// Type of helix
 			// Chain residue1 residue2
 			group->description(grpch + " " + s.substr(15, 3) + " " + s.substr(27, 3));
-			seq = s.substr(21, 4) + "-" + s.substr(33, 4);	// Residue numbers
-			group->sequence(seq);
+//			seq = s.substr(21, 4) + "-" + s.substr(33, 4);	// Residue numbers
+//			group->sequence(seq);
+			resnum = to_integer(s.substr(21, 4));			// Residue numbers
+			group->start(resnum);					
+			resnum = to_integer(s.substr(33, 4));
+			group->end(resnum);
 //				sec->num = to_integer(s.substr(6, 4));
 			ngrp++;
 		}
 		if ( recordname == "SHEET " ) {
 			grpch = s[21];
+			if ( model ) mp = model->find_or_add(grpch);
+			else model = mp = new Bmodel(grpch);
 			gid = s.substr(6, 4) + " " + s.substr(11, 3);
 			if ( verbose & VERB_FULL )
 				cout << "Adding strand: " << gid << endl;
-			group = model->add_group(gid);
+			group = mp->add_group(gid);
 			group->group_type(recordname);
 			group->type(s.substr(38, 2));					// Direction of strand
 			// Chain residue1 residue2 strands_in_sheet
 			group->description(grpch + " " + s.substr(17, 3) + " " + s.substr(28, 3) + " " + s.substr(14, 2));
-			seq = s.substr(22, 4) + "-" + s.substr(33, 4);	// Residue numbers
-			group->sequence(seq);
+//			seq = s.substr(22, 4) + "-" + s.substr(33, 4);	// Residue numbers
+//			group->sequence(seq);
+			resnum = to_integer(s.substr(22, 4));			// Residue numbers
+			group->start(resnum);					
+			resnum = to_integer(s.substr(33, 4));
+			group->end(resnum);
 			ngrp++;
 		}
 		if ( recordname == "TURN  " ) {
 			grpch = s[19];
+			if ( model ) mp = model->find_or_add(grpch);
+			else model = mp = new Bmodel(grpch);
 			gid = s.substr(7, 4) + s.substr(11, 3);
 			if ( verbose & VERB_FULL )
 				cout << "Adding turn: " << gid << endl;
-			group = model->add_group(gid);
+			group = mp->add_group(gid);
 			group->group_type(recordname);
 //			group->type(s.substr(38, 2));					// ??
 			group->description(grpch);
-			seq = s.substr(20, 4) + "-" + s.substr(31, 4);	// Residue numbers
-			group->sequence(seq);
+//			seq = s.substr(20, 4) + "-" + s.substr(31, 4);	// Residue numbers
+//			group->sequence(seq);
+			resnum = to_integer(s.substr(20, 4));			// Residue numbers
+			group->start(resnum);					
+			resnum = to_integer(s.substr(31, 4));
+			group->end(resnum);
 			ngrp++;
 		}
 		if ( ( recordname == "ATOM  " || recordname == "HETATM" ) && s[16] != 'B' ) {
 			if ( s[21] != chain[0] ) {
 				if ( natom ) {
-					seq += "-" + resnumstr;
-					group->sequence(seq);
-					if ( verbose & VERB_FULL )
-						cout << seq << endl;
+//					seq += "-" + resnumstr;
+//					group->sequence(seq);
+					resnum = to_integer(resnumstr);
+					group->end(resnum);
+//					if ( verbose & VERB_FULL )
+//						cout << seq << endl;
 				}
 				chain = s[21];
+				if ( model ) mp = model->find_or_add(chain);
+				else model = mp = new Bmodel(chain);
 				if ( verbose & VERB_FULL )
-					cout << "Adding molecule: " << chain << endl;
-				group = model->add_group(chain);
+					cout << "Adding chain: " << chain << endl;
+				comp = mp->comp;
+				group = mp->add_group(chain);
 				group->group_type("CHAIN");
 //				group->type(s.substr(38, 2));	// Type of molecule?
-				seq = s.substr(22, 4);			// First residue
+//				seq = s.substr(22, 4);			// First residue
+				resnum = to_integer(s.substr(22, 4));	// First residue
+				group->start(resnum);					
 				nmol++;
 				ngrp++;
 			}
@@ -181,7 +209,7 @@ Bmodel* 	readPDB(string& filename, long n)
 			resnum = to_integer(resnumstr);
 			if ( resnum < 1 ) resnum = natom + 1;
 			if ( comp ) comp = comp->add(atomnum);
-			else comp = model->comp = new Bcomponent(atomnum);
+			else comp = mp->comp = new Bcomponent(atomnum);
 			comp->location()[0] = to_real(s.substr(30, 8));
 			comp->location()[1] = to_real(s.substr(38, 8));
 			comp->location()[2] = to_real(s.substr(46, 8));
@@ -191,15 +219,15 @@ Bmodel* 	readPDB(string& filename, long n)
 			comp->select(1);
 			if ( recordname == "HETATM" ) comp->select(2);
 			atomtype = s.substr(12, 4);
-			atomtype = remove_spaces2(atomtype);
+			atomtype = remove_spaces(atomtype);
 			el = s.substr(76, 2);
 //			cout << "-" << el << "-" << endl;
-			if ( el[0] == ' ' ) el = el.substr(1,1);
-			if ( el.size() < 1 || el[0] == ' ' ) el = atomtype.substr(0,1);
+			if ( el[0] == ' ' ) el = el.substr(1,1);	//Shifted
+			if ( el.size() < 1 || el[0] == ' ' ) el = atomtype.substr(0,1);	//Absent
 			restype = s.substr(17, 3);
 //			typestr = s.substr(12, 14);
 //			typestr = el + " " + atomtype + " " + restype + " " + chain + " " + resnumstr;
-			comp->type(model->add_type(atomtype));
+			comp->type(mp->add_type(atomtype));
 			comp->description(el);
 			comp->add_description(atomtype);
 			comp->add_description(restype);
@@ -220,12 +248,12 @@ Bmodel* 	readPDB(string& filename, long n)
 				ba = to_integer(s.substr(i, 5));
 				if ( ba <= natom && ba > atomnum && al[atomnum] && al[ba] ) {
 					if ( verbose & VERB_DEBUG )
-						printf ("DEBUG readPDB: Atom %d bound to %d\n", atomnum, ba);
+						cout << "DEBUG readPDB: Atom " << atomnum << " bound to " << ba << endl;
 					comp = al[atomnum];
 					comp2 = al[ba];
 					d = comp->location().distance(comp2->location());
 					if ( link ) link = link->add(comp, comp2, d, 1);
-					else link = model->link = new Blink(comp, comp2, d, 1);
+					else link = mp->link = new Blink(comp, comp2, d, 1);
 				}
 			}
 /*		} else if ( recordname == "CRYST1" ) {
@@ -241,8 +269,10 @@ Bmodel* 	readPDB(string& filename, long n)
 	}
 
 	// Final residue
-	seq += "-" + resnumstr;
-	group->sequence(seq);
+//	seq += "-" + resnumstr;
+//	group->sequence(seq);
+	resnum = to_integer(resnumstr);
+	group->end(resnum);
 	if ( verbose & VERB_FULL )
 		cout << seq << endl;
 
@@ -286,10 +316,36 @@ int			write_model_pdb(string& filename, Bmodel* model, int splt)
 	return  n;
 }
 
+long		model_check_component_ids(Bmodel* model)
+{
+	long			i(0);
+	Bcomponent*		comp = NULL;
+	Bcomponent*		comp_last = NULL;
+	
+	for ( comp_last = model->comp; comp_last->next; comp_last = comp_last->next ) ;
+	
+	if ( comp_last->description().size() > 3 && comp_last->description()[3].size() > 1 ) {
+		for ( comp = model->comp; comp; comp = comp->next )
+			comp->description()[3] = comp->description()[3][0];
+	}
+	
+	if ( comp_last->identifier().length() > 5 ) {
+		for ( comp = model->comp; comp; comp = comp->next )
+			comp->identifier(to_string(++i));
+	}
+	
+	return i;
+}
+
 int			writePDB(string& filename, Bmodel* model)
 {
 	if ( verbose )
 		cout << "Writing file:                   " << filename << endl;
+		
+	if ( model_check_component_ids(model) > 99999 ) {
+		cerr << "Error: Too many components for a PDB file!" << endl;
+		bexit(-1);
+	}
 
 	int				i, j, nw(0);
 	string			atomtag, atomtype("?");
@@ -317,16 +373,16 @@ int			writePDB(string& filename, Bmodel* model)
 //			group->group_type() << tab << group->type() << tab << group->sequence() << endl;
 		vector<string>	vi = split(group->identifier());
 		vector<string>	vs = split(group->description());
-		vector<string>	vq = split(group->sequence(), '-');
+//		vector<string>	vq = split(group->sequence(), '-');
 //		cout << vq[0] << tab << vq[1] << endl;
 		if ( group->group_type().find("HELIX") != string::npos ) {
 			fmod << "HELIX " << right << setw(4) << vi[0] << " " <<
 				left << setw(4) << vi[1] <<
 				left << setw(4) << vs[1] << vs[0] <<
-				right << setw(5) << vq[0] <<
+				right << setw(5) << group->start() <<
 				left << "  " <<
 				setw(4) << vs[2] << vs[0] <<
-				right << setw(5) << vq[1] <<
+				right << setw(5) << group->end() <<
 				left << " " <<
 				right << setw(2) << group->type() << endl;
 		}
@@ -335,10 +391,10 @@ int			writePDB(string& filename, Bmodel* model)
 				right << setw(3) << vi[1] <<
 				right << setw(2) << vs[3] << " " <<
 				left << setw(4) << vs[1] << vs[0] <<
-				right << setw(4) << vq[0] <<
+				right << setw(4) << group->start() <<
 				left << "  " <<
 				setw(4) << vs[2] << vs[0] <<
-				right << setw(4) << vq[1] <<
+				right << setw(4) << group->end() <<
 				left << " " <<
 				right << setw(2) << group->type() << endl;
 		}
@@ -346,10 +402,10 @@ int			writePDB(string& filename, Bmodel* model)
 			fmod << "TURN  " << right << setw(4) << vi[0] << " " <<
 				left << setw(4) << vi[1] <<
 				setw(4) << vs[1] << vs[0] <<
-				right << setw(4) << vq[0] <<
+				right << setw(4) << group->start() <<
 				left << "  " <<
 				setw(4) << vs[2] << vs[0] <<
-				right << setw(4) << vq[1] <<
+				right << setw(4) << group->end() <<
 				left << " " << endl;
 		}
 	}
@@ -362,14 +418,15 @@ int			writePDB(string& filename, Bmodel* model)
 		if ( comp->select() ) {
 			atomnum = comp->identifier();
 			if ( atomnum.length() > 5 ) atomnum = "*****";
-			if ( comp->type() )
-				atomtype = comp->type()->identifier().substr(0,4);
 			vector<string>&	vs = comp->description();
 			if ( vs.size() > 0 ) el = vs[0];
+			if ( vs.size() > 1 ) atomtype = vs[1];
 			if ( vs.size() > 2 ) restype = vs[2];
 			if ( vs.size() > 3 ) chain = vs[3];
 			if ( vs.size() > 4 ) resnum = to_integer(vs[4]);
-			if ( comp->select() < 2 ) {
+			if ( comp->type() )
+				atomtype = comp->type()->identifier().substr(0,4);
+			if ( comp->select() < 2 ) { 
 				atomtag = "ATOM  ";
 				if ( el.length() < 1 && comp->type() )
 //					el = comp->type()->identifier().substr(0,1) + " ";

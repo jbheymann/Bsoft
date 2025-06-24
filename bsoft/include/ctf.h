@@ -51,7 +51,7 @@ private:
 	void			initialize() {
 		id = "1";
 		sel = 1;
-		a = de = sw = f = 0;
+		df = a = de = sw = f = 0;
 		av = 300000;
 		fl = 3.5e7;
 		oa = 2e6;

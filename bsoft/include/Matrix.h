@@ -36,15 +36,19 @@ private:
 	}
 public:
 	Matrix() { }
+	Matrix(long rows, long cols) {
+		resize(rows, cols, 0);
+	}
 	Matrix(Matrix& mat) {
 		d.resize(mat.rows());
 		for ( long r=0; r<d.size(); ++r )
 			d[r] = mat[r];
 	}
-	Matrix(long rows, long cols) {
-		resize(rows, cols, 0);
+	Matrix(vector<vector<double>> v) {
+		d = v;
 	}
-	Matrix(Bstring& filename) {
+	Matrix(Bstring& filename) : Matrix(filename.str()) { }
+	Matrix(string filename) {
 		long			m(0), n(0);
 		ifstream		fmat(filename.c_str());
 		if ( fmat.fail() ) return;
@@ -83,6 +87,10 @@ public:
 	}
 	
 	void	write(Bstring& filename) {
+		string		fn(filename.str());
+		write(fn);
+	}
+	void	write(string& filename) {
 		ofstream        fmat(filename.c_str());
 		if ( fmat.fail() ) return;
 		long	 		j;

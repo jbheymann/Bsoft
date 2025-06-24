@@ -3,12 +3,11 @@
 @brief	Header file for models
 @author Bernard Heymann
 @date	Created: 20060919
-@date	Modified: 20230622
+@date	Modified: 20250514
 **/
 
 #include "Bmaterial.h"
 #include "View2.h"
-//#include "Bstring.h"
 #include "Color.h"
 
 #include <map>
@@ -80,11 +79,20 @@ public:
 		rad = c->rad;
 		rgba = c->rgba;
 		den = c->den;
+		chrg = c->chrg;
 		fom = c->fom;
 		sel = c->sel;
 	}
+	void			clear() {
+		Bcomponent*		c = this;
+		Bcomponent*		c2 = NULL;
+		while ( c ) {
+			c2 = c->next;
+			delete c;
+			c = c2;
+		}
+	}
 	void			identifier(string s) { id = s; }
-//	void			identifier(Bstring s) { id = s.str(); }
 	string&			identifier() { return id; }
 	void			description(string t) { dsc.clear(); dsc.push_back(t); }
 	void			description(vector<string> t) { dsc = t; }
@@ -94,6 +102,7 @@ public:
 	void			type(Bcomptype* t) { typ = t; }
 	Bcomptype*		type() { return typ; }
 	void			location(Vector3<double> v) { loc = v; }
+	void			location(double x, double y, double z) { loc[0] = x; loc[1] = y; loc[2] = z; }
 	Vector3<float>&	location() { return loc; }
 	void			shift(Vector3<double> v) { loc += v; }
 	void			scale(Vector3<double> v) { loc *= v; }
@@ -118,6 +127,14 @@ public:
 	void			select(long i) { sel = i; }
 	long			select() { return sel; }
 	long			select_increment() { return sel++; }
+	void			select_all() {
+		for ( Bcomponent* c = this; c; c = c->next )
+			c->sel = 1;
+	}
+	void			deselect_all() {
+		for ( Bcomponent* c = this; c; c = c->next )
+			c->sel = 0;
+	}
 	Bcomponent*		add(string s) {
 		Bcomponent* 	c(this);
 		while ( c->next ) c = c->next;
@@ -160,6 +177,11 @@ public:
 		}
 		return cc;
 	}
+	void			update_chain_ids(string nu_id) {
+		if ( dsc.size() > 3 )
+		for ( Bcomponent* c = this; c; c = c->next )
+			c->dsc[3] = nu_id;			
+	}
 	bool			find_link_exists(Bcomponent* c) {
 		for ( auto it = link.begin(); it != link.end(); ++it )
 			if ( *it == c ) return 1;
@@ -182,15 +204,6 @@ public:
 		long			n(0);
 		for ( Bcomponent* c=this; c; c=c->next ) if ( c->sel ) n++;
 		return n;
-	}
-	void			clear() {
-		Bcomponent*		c = this;
-		Bcomponent*		c2 = NULL;
-		while ( c ) {
-			c2 = c->next;
-			delete c;
-			c = c2;
-		}
 	}
 	string			element() {
 		string		cel = dsc[0].substr(0,2);
@@ -298,6 +311,15 @@ public:
 		fom = l->fom;
 		sel = l->sel;
 	}
+	void			clear() {
+		Blink*		l = this;
+		Blink*		l2 = NULL;
+		while ( l ) {
+			l2 = l->next;
+			delete l;
+			l = l2;
+		}
+	}
 	void			angle(double a) { ang = a; }
 	double			angle() { return ang; }
 	void			length(double d) { len = d; }
@@ -361,15 +383,6 @@ public:
 		for ( Blink* l=this; l; l=l->next ) n++;
 		return n;
 	}
-	void			clear() {
-		Blink*		l = this;
-		Blink*		l2 = NULL;
-		while ( l ) {
-			l2 = l->next;
-			delete l;
-			l = l2;
-		}
-	}
 	bool			check() {
 		if ( len < 1e-6 )
 			len = comp[0]->location().distance(comp[1]->location());
@@ -408,7 +421,7 @@ private:
 	}
 public:
 	Bangle*		next;	 		// Next angle in linked list
-	Bcomponent*	comp[3];	// List of components
+	Bcomponent*	comp[3];		// List of components
 private:
 	double		ang;			// Reference angle
 	float		fom;			// Figure-of-merit
@@ -429,6 +442,15 @@ public:
 		ang = a->ang;
 		fom = a->fom;
 		sel = a->sel;
+	}
+	void			clear() {
+		Bangle*		a = this;
+		Bangle*		a2 = NULL;
+		while ( a ) {
+			a2 = a->next;
+			delete a;
+			a = a2;
+		}
 	}
 	void			angle(double a) { ang = a; }
 	double			angle() { return ang; }
@@ -466,15 +488,6 @@ public:
 		long			n(0);
 		for ( Bangle* a=this; a; a=a->next ) n++;
 		return n;
-	}
-	void			clear() {
-		Bangle*		a = this;
-		Bangle*		a2 = NULL;
-		while ( a ) {
-			a2 = a->next;
-			delete a;
-			a = a2;
-		}
 	}
 	bool			check() {
 		if ( ang < 1e-6 ) {
@@ -521,6 +534,15 @@ public:
 		fom = p->fom;
 		sel = p->sel;
 	}
+	void			clear() {
+		Bpolygon*	p = this;
+		Bpolygon*	p2 = NULL;
+		while ( p ) {
+			p2 = p->next;
+			delete p;
+			p = p2;
+		}
+	}
 	long			size() { return comp.size(); }
 	void			normal(Vector3<float> n) { norm = n; }
 	Vector3<float>&	normal() { return norm; }
@@ -563,9 +585,35 @@ private:
 	string			gtp;			// Group type identifier
 	string			tp;				// Type identifier
 	string			dsc;			// Additional description
-	string			sq;				// Sequence
+	long			st, en;			// Sequence start and end
+	RGBA<float> 	col;			// Color for display
 public:
 	Bgroup(string s) { next = NULL; id = s; }
+	Bgroup(Bgroup* g) {
+		next = NULL;
+		id = g->id;
+		gtp = g->gtp;
+		tp = g->tp;
+		dsc = g->dsc;
+		st = g->st;
+		en = g->en;
+		col = g->col;
+	}
+	Bgroup(string s, long ns, long ne, RGBA<float> c) {
+		next = NULL;
+		st = ns;
+		en = ne;
+		col = c;
+	}
+	void			clear() {
+		Bgroup*		g = this;
+		Bgroup*		g2 = NULL;
+		while ( g ) {
+			g2 = g->next;
+			delete g;
+			g = g2;
+		}
+	}
 	void			identifier(string s) { id = s; }
 	string&			identifier() { return id; }
 	void			group_type(string s) { gtp = s; }
@@ -574,12 +622,23 @@ public:
 	string&			type() { return tp; }
 	void			description(string s) { dsc = s; }
 	string&			description() { return dsc; }
-	void			sequence(string s) { sq = s; }
-	string&			sequence() { return sq; }
+//	void			sequence(string s) { sq = s; }
+//	string&			sequence() { return sq; }
+	void			start(long i) { st = i; }
+	long			start() { return st; }
+	void			end(long i) { en = i; }
+	long			end() { return en; }
+	void			color(RGBA<float> c) { col = c; }
+	RGBA<float>&	color() { return col; }
 	Bgroup*			add(string s) {
 		Bgroup* 		g(this);
 		while ( g->next ) g = g->next;
 		return g->next = new Bgroup(s);
+	}
+	Bgroup*			add(Bgroup* ga) {
+		Bgroup* 		g(this);
+		while ( g->next ) g = g->next;
+		return g->next = new Bgroup(ga);
 	}
 } ;
 
@@ -598,11 +657,13 @@ private:
 		sym = "C1";
 		fmap = "?";
 		img_num = 0;
+		mas = 0;
 		fom = 0;
 		sel = 1;
 		type = NULL;
 		comp = NULL;
 		link = NULL;
+		angle = NULL;
 		poly = NULL;
 		group = NULL;
 	}
@@ -612,15 +673,19 @@ private:
 	string			com;			// Model comment string
 	string			id;				// Model identifier
 	string			type_id;		// Type identifier
+	string			dsc;			// Model description
 	string			fmap;			// Density map file name
 	string			fmask;			// Multi-level mask file name
 	int				img_num;		// Image number in map file
 	string			sym;			// Symmetry label
 	int				hand;			// Hand or enantiomorph
-	float			fom;			// Figure-of-merit
+	double			mas;			// Model mass
+	double			fom;			// Figure-of-merit
 	int				sel;			// Selection flag
 	Vector3<double>	min;			// Coordinate minima
 	Vector3<double>	max;			// Coordinate maxima
+	Vector3<double>	vec;			// Vector for use as force or displacement
+	Vector3<double>	vel;			// Vector for use as velocity
 public:
 	Bcomptype*		type;			// Component type list
 	Bcomponent*		comp;			// Component list
@@ -630,15 +695,24 @@ public:
 	Bgroup*			group;			// Component group list
 	Bmodel() { initialize(); }
 	Bmodel(string s) { initialize(); id = s; }
-//	Bmodel(Bstring s) { initialize(); id = s.str(); }
 	Bmodel(long i) { initialize(); id = to_string(i); }
+	~Bmodel()		{
+		if ( next ) delete next;	// Delete by recursion
+		clear_types();
+		clear_components();
+		clear_links();
+		clear_angles();
+		clear_polys();
+		clear_groups();
+	}
 	void			comment(string s) { com = s; }
 	string&			comment() { return com; }
 	void			identifier(string s) { id = s; }
-//	void			identifier(Bstring s) { id = s.str(); }
 	string&			identifier() { return id; }
 	void			model_type(string s) { type_id = s; }
 	string&			model_type() { return type_id; }
+	void			description(string s) { dsc = s; }
+	string&			description() { return dsc; }
 	void			mapfile(string s) { fmap = s; }
 	string&			mapfile() { return fmap; }
 	void			maskfile(string s) { fmask = s; }
@@ -649,6 +723,12 @@ public:
 	string&			symmetry() { return sym; }
 	void			handedness(long i) { hand = i; }
 	long			handedness() { return hand; }
+	void			mass(double d) { mas = d; }
+	double			mass() { if ( mas < 1 ) update_mass(); return mas; }
+	void			force(Vector3<double> v) { vec = v; }
+	Vector3<double>&	force() { return vec; }
+	void			velocity(Vector3<double> v) { vel = v; }
+	Vector3<double>&	velocity() { return vel; }
 	void			FOM(double d) { fom = d; }
 	double			FOM() { return fom; }
 	void			select(long i) { sel = i; }
@@ -656,15 +736,45 @@ public:
 	long			select_increment() { return sel++; }
 	long			select_all() {
 		long		n(0);
+		sel = 1;
 		for ( Bcomponent* c = comp; c; c = c->next ) {
 			c->select(1);
 			n++;
 		}
+		for ( Bcomptype* t = type; t; t = t->next )
+			t->select(1);
+		for ( Blink* l = link; l; l = l->next )
+			l->select(1);
+		for ( Bangle* a = angle; a; a = a->next )
+			a->select(1);
+		for ( Bpolygon* p = poly; p; p = p->next )
+			p->select(1);
 		return n;
 	}
 	void			deselect_all() {
+		sel = 0;
 		for ( Bcomponent* c = comp; c; c = c->next )
 			c->select(0);
+		for ( Bcomptype* t = type; t; t = t->next )
+			t->select(0);
+		for ( Blink* l = link; l; l = l->next )
+			l->select(0);
+		for ( Bangle* a = angle; a; a = a->next )
+			a->select(0);
+		for ( Bpolygon* p = poly; p; p = p->next )
+			p->select(0);
+	}
+	long			invert_selection() {
+		long		n(0);
+		for ( Bcomponent* c = comp; c; c = c->next ) {
+			c->select(0);
+			if ( c->select() ) c->select(0);
+			else {
+				c->select(1);
+				n++;
+			}
+		}
+		return n;
 	}
 	// Deselects outside bounds
 	long			select_within_bounds(Vector3<double>& start, Vector3<double>& end) {
@@ -682,6 +792,7 @@ public:
 	}
 	Vector3<double>&	minimum() { return min; }
 	Vector3<double>&	maximum() { return max; }
+	Vector3<double>		box() { return max - min; }
 	Bmodel*			add(string s) {
 		Bmodel* 		m(this);
 		while ( m->next ) m = m->next;
@@ -702,10 +813,16 @@ public:
 		while ( m && m->id != s ) m = m->next;
 		return m;
 	}
+	Bmodel*			find_or_add(string s) {
+		if ( find(s) ) return find(s);
+		return add(s);
+	}
 	Bmodel*			copy() {
+//		cout << "Copying " << id << endl;
 		Bmodel*			m = new Bmodel(id);
 		m->next = NULL;
 		m->type_id = type_id;
+		m->dsc = dsc;
 		m->com = com;
 		m->sym = sym;
 		m->fmap = fmap;
@@ -714,9 +831,17 @@ public:
 		m->fom = fom;
 		m->hand = hand;
 		m->type = copy_types();
-		m->comp = copy_components();
+		m->comp = copy_components(m->type);
 		m->link = copy_links(m->comp);
+		m->angle = copy_angles(m->comp);
 		m->poly = copy_polygons(m->comp);
+		m->group = copy_groups();
+		return m;
+	}
+	Bmodel*			copy(string nu_id) {
+		Bmodel*			m = copy();
+		m->id = nu_id;
+		m->comp->update_chain_ids(nu_id);
 		return m;
 	}
 	Bcomptype*		copy_types() {
@@ -729,14 +854,20 @@ public:
 		}
 		return ctn;
 	}
-	Bcomponent*		copy_components() {
+	Bcomponent*		copy_components(Bcomptype* ct) {
 		Bcomponent*		c;
 		Bcomponent*		cn = NULL;
 		Bcomponent*		c1 = NULL;
+		Bcomptype*		ct1 = NULL;
+		string			s;
 		for ( c = comp; c; c = c->next ) {
 			if ( c1 ) c1 = c1->add(c);
 			else cn = c1 = new Bcomponent(c);
-			c1->type(add_type(c->type()->identifier()));
+			s = c->type()->identifier();
+			ct1 = ct->find(s);
+			if ( ct1 && ct1->identifier() == s ) c1->type(ct1);
+			else c1->type(ct->add(s));
+//			c1->type(add_type(c->type()->identifier()));
 			for ( auto it = c->link.begin(); it != c->link.end(); ++it )
 				cn->find_and_add_links(c->identifier(), (*it)->identifier());
 		}
@@ -779,9 +910,23 @@ public:
 		}
 		return pn;
 	}
+	Bgroup*			copy_groups() {
+		Bgroup*			g;
+		Bgroup*			g1 = NULL;
+		Bgroup*			gn = NULL;
+		for ( g = group; g; g = g->next )
+			if ( g1 ) g1 = g1->add(g);
+			else gn = g1 = new Bgroup(g);
+		return gn;
+	}
 	long			count() {
 		long			n(0);
 		for ( Bmodel* m=this; m; m=m->next ) n++;
+		return n;
+	}
+	long			count_selected() {
+		long			n(0);
+		for ( Bmodel* m=this; m; m=m->next ) if ( m->select() ) n++;
 		return n;
 	}
 	Bcomponent*		add_component(string s) {
@@ -801,7 +946,7 @@ public:
 		return NULL;
 	}
 	void			clear_components() {
-		comp->clear();
+		if ( comp ) comp->clear();
 		comp = NULL;
 	}
 	Blink*			add_link(Bcomponent* c1, Bcomponent* c2) {
@@ -819,13 +964,51 @@ public:
 		if ( link ) return link->find(s1, s2);
 		return NULL;
 	}
+	long			setup_links() {
+		long			i, j, n(0);
+		Blink*			l;
+		Bcomponent*		c1;
+		Bcomponent*		c2;
+		for ( l = link; l; l = l->next ) {
+			c1 = l->comp[0];
+			c2 = l->comp[1];
+			for ( i=0; i<c1->link.size() && c1->link[i] != c2; i++ ) ;
+			for ( j=0; j<c2->link.size() && c2->link[j] != c1; j++ ) ;
+			if ( i < c1->link.size() && j < c2->link.size() ) {
+				if ( verbose & VERB_FULL )
+					cerr << "Warning: " << c1->identifier() << " already linked to " << 	c2->identifier() << 
+						"! (" << i << " -" << j << ")" << endl;
+			} else {
+				c1->link.push_back(c2);
+				c2->link.push_back(c1);
+				c1->flag.push_back(1);
+				c2->flag.push_back(1);	// flag=1 indicates link
+				n++;
+			}
+			if ( l->length() < 1e-6 ) l->length(c1->location().distance(c2->location()));
+		}
+		calculate_normals();
+		return n;
+	}
 	void			clear_links() {
-		link->clear();
+		if ( link ) link->clear();
 		link = NULL;
 	}
 	void			clear_angles() {
-		angle->clear();
+		if ( angle ) angle->clear();
 		angle = NULL;
+	}
+	void			clear_types() {
+		if ( type ) type->clear();
+		type = NULL;
+	}
+	void			clear_polys() {
+		if ( poly ) poly->clear();
+		poly = NULL;
+	}
+	void			clear_groups() {
+		if ( group ) group->clear();
+		group = NULL;
 	}
 	long			component_count() { return comp->count(); }
 	long			component_count_selected() { return comp->count_selected(); }
@@ -879,11 +1062,6 @@ public:
 		if ( type ) return type->add(s);
 		return type = new Bcomptype(s);
 	}
-/*	Bcomptype*		add_type(Bstring s) {
-		if ( find_type(s.str()) ) return find_type(s.str());
-		if ( type ) return type->add(s.str());
-		return type = new Bcomptype(s.str());
-	}*/
 	Bcomptype*		add_type(long i) {
 		if ( type ) return type->add(i);
 		return type = new Bcomptype(i);
@@ -930,6 +1108,10 @@ public:
 	Bgroup*			add_group(string s) {
 		if ( group ) return group->add(s);
 		return group = new Bgroup(s);
+	}
+	Bgroup*			add_group(Bgroup* g) {
+		if ( group ) return group->add(g);
+		return group = new Bgroup(g);
 	}
 	Bangle*			add_angle(Bcomponent* c1, Bcomponent* c2, Bcomponent* c3) {
 		if ( angle ) return angle->add(c1, c2, c3);
@@ -993,17 +1175,17 @@ public:
 		if ( w ) com /= w;
 		return com;
 	}
-	double			mass() {
-		double			m(0), m1(1);
+	double			update_mass() {
+		double			m(1);
 		Bcomponent*		c;
-		for ( c = comp; c; c = c->next ) if ( c->select() ) {
+		for ( mas = 0, c = comp; c; c = c->next ) if ( c->select() ) {
 			if ( c->type() ) {
-				m1 = c->type()->mass();
-				if ( m1 <= 0 ) m1 = 1;
+				m = c->type()->mass();
+				if ( m <= 0 ) m = 1;
 			}
-			m += m1;
+			mas += m;
 		}
-		return m;
+		return mas;
 	}
 	double			projected_area() {
 		double			vol(0), d(0.8);
@@ -1052,6 +1234,12 @@ public:
 		for ( Blink* l = link; l; l = l->next )
 			cout << l->comp[0]->identifier() << tab << l->comp[1]->identifier() << endl;
 	}
+	vector<Bmodel*>	array() {
+		vector<Bmodel*>	marr;
+		for( Bmodel* m = this; m; m = m->next )
+			marr.push_back(m);
+		return marr;
+	}
 	vector<Bcomponent*>	component_array() {
 		vector<Bcomponent*>	carr;
 		for( Bcomponent* c = comp; c; c = c->next ) if ( c->select() )
@@ -1063,28 +1251,4 @@ public:
 #define _Bmodel_
 #endif
 
-/* Function prototypes */
-/*Bmodel*		model_add(Bmodel** model, string id);
-Bcomponent*	component_add(Bcomponent** comp, string& id);
-Bcomponent*	component_add(Bcomponent** comp, unsigned long number);
-Blink*		link_add(Blink** link, Bcomponent* comp1, Bcomponent* comp2, double length, double radius);
-Blink*		link_add(Blink** link, Bcomponent* comp1, Bcomponent* comp2);
-int			model_set_map_filenames(Bmodel* model, Bstring& mapfile);
-int			model_set_type(Bmodel* model, Bstring& set_type);
-int			model_change_type(Bmodel* model, Bstring& change_type);
-int			model_check(Bmodel* model, Bstring path);
-Bmodel*		model_list_copy(Bmodel* model);
-int			component_list_kill(Bcomponent* comp);
-int			comp_type_list_kill(Bcomptype* type);
-int			model_link_list_kill(Bmodel* model);
-int			link_kill(Blink** link_list, Bcomponent* comp, int i);
-int			link_kill(Blink** link_list, Bcomponent* comp, Bcomponent* comp2);
-int			poly_list_kill(Bpolygon* poly);
-int			comp_associated_links_kill(Bcomponent* comp, Blink** link);
-int 		model_kill(Bmodel* model);
-int			model_associate(Bmodel* model, Bstring& associate_type, Bstring& associate_file);
-int			model_associate_mass(Bmodel* model, Bstring& associate_type, double mass);
-int			model_set_comptype_filenames(Bmodel* model, Bstring& filename);
-long		model_set_component_radius(Bmodel* model, double comprad);
-*/
 

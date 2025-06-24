@@ -8,8 +8,8 @@
 	Format: Protein sequence file format
 **/
 
-#include "rwmolecule.h"
+#include "rwsequence.h"
 
 // I/O prototypes
-int 	readClustal(Bstring& filename, Bmolgroup* molgroup);
-int 	writeClustal(Bstring& filename, Bmolgroup* molgroup);
+vector<Bsequence>	readClustal(string& filename);
+int 	writeClustal(string& filename, vector<Bsequence> seqs);

@@ -103,20 +103,20 @@ int 	main(int argc, char **argv)
 		models_shift(model, t);
 	
 	if ( lattice.volume() > 1 ) {
-		model_generate_lattice(model, uc, lattice);
+		models_generate_lattice(model, uc, lattice);
 		model_merge(model);
 	}
 		
     if ( first_name )
 		model_rename(model, first_name);
     
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model )
 		write_model(outfile.str(), model);
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

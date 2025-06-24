@@ -496,25 +496,6 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
 	
 	for ( i=0; i<datasize; i++ ) {
 		v = (*this)[i];
-/*		red = grn = blu = 255;						// White part
-		if ( v > blue_max ) {						// Blue part
-			red = grn = 0;
-		} else if ( v < red_min ) {					// Red part
-			blu = grn = 0;
-		} else if ( v > white_max ) {				// Blue gradient
-      		red = (int) (blue_scale*(blue_max - v));
-      		grn = (int) (blue_scale*(blue_max - v));
-		} else if ( v < white_min ) {				// Red gradient
-      		blu = (int) (red_scale*(v - red_min));
-      		grn = (int) (red_scale*(v - red_min));
-		}
-      	if ( red < 0 ) red = 0;
-      	if ( red > 255 ) red = 255;
-      	if ( grn < 0 ) grn = 0;
-      	if ( grn > 255 ) grn = 255;
-      	if ( blu < 0 ) blu = 0;
-      	if ( blu > 255 ) blu = 255;
-		nudata[i] = RGB<unsigned char>(red, grn, blu);*/
 		rgb.red_white_blue(v, red_min, white_min, white_max, blue_max);
 		nudata[i] = rgb;
 	}
@@ -536,25 +517,6 @@ Bimage*		Bimage::red_white_blue(double red_min, double white_min,
 	
     for ( i=0; i<p->sizeX(); i++ ) {
 		v = scale*i + min;
-/*		red = grn = blu = 255;					// White part
-		if ( v > blue_max ) {					// Blue part
-			red = grn = 0;
-		} else if ( v < red_min ) { 			// Red part
-			blu = grn = 0;
-		} else if ( v > white_max ) {			// Blue gradient
-			red = (int) (blue_scale*(blue_max - v));
-			grn = (int) (blue_scale*(blue_max - v));
-		} else if ( v < white_min ) {			// Red gradient
-			blu = (int) (red_scale*(v - red_min));
-			grn = (int) (red_scale*(v - red_min));
-		}
-		if ( red < 0 ) red = 0;
-		if ( red > 255 ) red = 255;
-		if ( grn < 0 ) grn = 0;
-		if ( grn > 255 ) grn = 255;
-		if ( blu < 0 ) blu = 0;
-		if ( blu > 255 ) blu = 255;
-		rgb = RGB<unsigned char>(red, grn, blu);*/
 		rgb.red_white_blue(v, red_min, white_min, white_max, blue_max);
 		for ( j=0, k=i; j<p->sizeY(); j++, k+=p->sizeX() ) p->set(k, rgb);
 	}

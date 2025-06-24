@@ -222,7 +222,7 @@ int 		main(int argc, char **argv)
 		if ( model_file.length() ) {
 			model = model_from_densities(p, ptemp, views, alpha, alpha_step, hires, lores, pmask, cutoff);
 			write_model(model_file.str(), model);
-			model_kill(model);
+			delete model;
 		} else {
 //			pfit = img_multifit(p, ptemp, view, alpha, alpha_step, hires, lores, pmask, cutoff);
 			pfit = p->search_volume(ptemp, views, alpha, alpha_step, hires, lores, pmask, cutoff);

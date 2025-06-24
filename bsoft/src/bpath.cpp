@@ -93,28 +93,28 @@ int 		main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 	
-	if ( cutoff ) models_process(model, cutoff, model_link_list_generate);
-	else models_process(model, minval, model_links_minimum_valency);
+	if ( cutoff ) models_link_list_generate(model, cutoff);
+	else models_links_minimum_valency(model, minval);
 	
 	Bmodel*		modpath = NULL;
 	modpath = model_hamiltonian_cycle(model);
-	model_kill(model);
+	delete model;
 	model = modpath;
 	
-	if ( compradius ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

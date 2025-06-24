@@ -1,9 +1,9 @@
 /**
 @file	mg_extract.h
 @brief	Header file for functions to extract particles from micrographs
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20040406
-@date	Modified: 20200616
+@date	Modified: 20250326
 **/
 
 #include "mg_processing.h"
@@ -25,6 +25,8 @@ Bparticle*	reconstruction_project_extract_particles(Breconstruction* rec, Bimage
 Bimage*		particle_extract(Bparticle* particles, Bbadarea* bad_areas, Bimage* p,
 				Vector3<long> size, double scale, double bad_radius,
 				int back_flag, int norm_flag, double fill, int mask_width);
+Bimage*		particle_extract_frames(Bparticle* part, Bimage* p, 
+				Vector3<long> size, double fill, int mask_width);
 Bimage*		micrograph_extract_gold(Bmicrograph* mg, Bimage* p, double radius);
 Bimage*		reconstruction_extract_gold(Breconstruction* rec, Bimage* p, double radius);
 Bimage*		marker_extract_gold(Bmarker* marker_list, Bimage* p, int img_num, double radius);

@@ -3,7 +3,7 @@
 @brief	Functions for reconstruction
 @author 	Bernard Heymann
 @date	Created: 20010403
-@date	Modified: 20240408
+@date	Modified: 20241224
 **/
 
 #include "rwimg.h"
@@ -101,11 +101,11 @@ int			part_ft_size(int xsize, double scale, int pad_factor)
 Bimage*		particle_reconstruct(Bparticle* partlist, Bsymmetry sym, int sym_mode,
 				double hi_res, Vector3<double> scale, Vector3<double> sam, Vector3<long> size,
 				int ft_size, fft_plan plan, int interp_type,
-				int ctf_action, double wiener, int flags, int first)
+				int ctf_action, double wiener, int ewald, int flags, int first)
 {
 	random_seed();
 	
-	int				twoD_flag(flags & 2), bootstrap(flags & 4), ewald(flags & 8);
+	int				twoD_flag(flags & 2), bootstrap(flags & 4);
 	Bmicrograph*	mg = partlist->mg;
 	Bparticle*		part = partlist;
 	
@@ -208,15 +208,18 @@ Bimage*		particle_reconstruct(Bparticle* partlist, Bsymmetry sym, int sym_mode,
 		p->fft(plan, 1);
 		p->phase_shift_to_origin();
 		
+//		p->information();
+//		cout << "Fourier type = " << p->fourier_type() << endl;
+		
 		//Ewald sphere offset
 		double		ew_wl(0);
 		if ( ewald ) ew_wl = em_ctf.lambda();
 
-		if ( ctf_action ) {
-			if ( ew_wl )
-				img_ctf_apply_ewald(p, em_ctf, 0, hi_res, 0);
+		if ( ctf_action || ewald ) {
+			if ( ewald )
+				img_ctf_apply_ewald(p, em_ctf, 0, hi_res, ewald, 0);
 	 		else
-	 			img_ctf_apply_complex(p, em_ctf, (ctf_action==1), wiener, 0, hi_res);
+	 			img_ctf_apply_complex(p, em_ctf, (ctf_action==1), 0, wiener, 0, hi_res);
 		}
 		
 		if ( sym_mode )
@@ -856,12 +859,8 @@ Bimage* 	project_reconstruct_2D(Bproject* project, Bstring file_name, int transf
 
 	Bstring			filename;
 	
-	int* 			num = new int[nmap];
-	float* 			fom = new float[nmap];
-	for ( i=0; i<nmap; i++ ) {
-		num[i] = 0;
-		fom[i] = 0;
-	}
+	vector<long> 	num(nmap,0);
+	vector<double>	fom(nmap,0);
 
 	if ( verbose & VERB_RESULT ) {
 		cout << "2D real space reconstruction:" << endl;
@@ -955,9 +954,6 @@ Bimage* 	project_reconstruct_2D(Bproject* project, Bstring file_name, int transf
 		cout << endl;
 	}
 	
-	delete[] num;
-	delete[] fom;
-
 	project_update_class_averages(project, prec, file_name);
 
 	return prec;

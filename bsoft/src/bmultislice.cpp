@@ -244,18 +244,16 @@ int 		main(int argc, char **argv)
 		ppot->phase_shift(ppot->image->origin());
 		ppot->fft(FFTW_BACKWARD, 0);
 		ppot->fourier_type(NoTransform);
+		pgrate = ppot->copy();
 		if ( potentialfile.length() ) {
-			pgrate = ppot->copy();
 			ppot->complex_to_real();
 //			ppot->complex_to_intensities();
 			if ( verbose )
 				cout << "Writing the scattering potential image(s)" << endl;
 			ppot->change_type(nudatatype);
 			write_img(potentialfile, ppot, 0);
-			delete ppot;
-		} else {
-			pgrate = ppot;
 		}
+		delete ppot;
 		optind++;
 	}
 	
@@ -294,8 +292,8 @@ int 		main(int argc, char **argv)
 //		if ( def_avg )
 //			img_apply_complex_CTF(p, def_avg, def_dev, ast_angle, volt, Cs, Cc, sin(amp_fac), alpha, energy_spread);
 		if ( def_avg )
-			img_apply_complex_CTF(p, cp);
-		
+//			img_apply_complex_CTF(p, cp);
+			img_ctf_apply_complex(p, cp, 0, 1, 0.1, 0, 0);		
 //		p->fft(FFTW_BACKWARD, 2);
 		p->fft(FFTW_BACKWARD, 1);
 		if ( p->compound_type() == TComplex ) p->complex_to_intensities();

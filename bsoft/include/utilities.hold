@@ -3,10 +3,10 @@
 @brief	Header file for general utilities 
 @author Bernard Heymann
 @date	Created: 19990722
-@date	Modified: 20220713
+@date	Modified: 20250407
 **/
 
-#define BVERSION "2.2.0-20240911"
+#define BVERSION "2.4.0-20250624"
 
 #include <stdio.h>
 #include <string.h>
@@ -211,6 +211,20 @@ enum CompoundType {
 //end
 
 
+/************************************************************************
+@Constants: EW_
+@Description:
+	Ewald sphere application or correction flags..
+@Features:
+	.
+*************************************************************************/
+#define EW_NONE			0		// No Ewald sphere
+#define EW_POS			1		// Ewald sphere
+#define EW_NEG			-1		// Conjugate Ewald sphere
+#define EW_COMB			2		// Combined Ewald spheres
+#define EW_BOTH			3		// Separate Ewald sphere and conjugate
+#define EW_RAND			4		// Random asignmnet of Ewald sphere or conjugate
+#define EW_SIDEBAND		5		// Single sideband Ewald sphere
 
 
 // Function prototypes 
@@ -229,6 +243,7 @@ int			bexit(int value);
 DataType	getdatatype(char letter);
 CompoundType	getcompoundtype(int ch, string sct);
 int			select_numbers(Bstring& string, int n, int* numsel);
+vector<int>	select_numbers(string& s, int n);
 vector<int>	select_numbers(Bstring& string, int n);
 int 		findNextPowerOf(int startNumber, int powerOf);
 int			get_integer(char* ptr, int len);

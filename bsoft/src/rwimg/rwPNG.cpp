@@ -25,9 +25,9 @@ extern int 	verbose;		// Level of output to the screen
 A 2D image format commonly used on the Web.
 	libpng version 1.2.8 - December 3, 2004
 	The PNG image format specifies 5 bit depths, with only three spported here:
-		1		bitmap
-		2		(not supported)
-		4		(not supported)
+		1		bitmap (converted to 8 bit)
+		2		(converted to 8 bit)
+		4		(converted to 8 bit)
 		8		unsigned char
 		16		unsigned short
 	Color models:
@@ -68,38 +68,56 @@ int 	readPNG(Bimage* p, int readdata)
 
     png_read_info(png_ptr, info_ptr);  /* read all PNG info up to image data */
 
+	png_uint_32		width, height;
+	int 			bit_depth, color_type;
+	int				interlace_type, compression_type, filter_method;
+	
+	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, 
+		&interlace_type, &compression_type, &filter_method);
+
     /* expand palette images to RGB, low-bit-depth grayscale images to 8 bits,
      * transparency chunks to full alpha channel; strip 16-bit-per-sample
      * images to 8 bits per sample; and convert grayscale to RGB[A] */
 
-	int				bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-	int				color_type = png_get_color_type(png_ptr, info_ptr);
+//	int				bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+//	int				color_type = png_get_color_type(png_ptr, info_ptr);
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG readPNG: color_type=" << color_type << " bit_depth=" << bit_depth << endl;
 	
     if ( color_type == PNG_COLOR_TYPE_PALETTE )
-        png_set_palette_to_rgb(png_ptr);
-    if ( color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8 )
-        png_set_expand_gray_1_2_4_to_8(png_ptr);
+        png_set_palette_to_rgb(png_ptr);			// changes paletted images to RGB
+	if ( color_type == PNG_COLOR_TYPE_GRAY &&  ( bit_depth == 2 || bit_depth == 4 ) )
+//	if ( color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8 )
+		png_set_expand_gray_1_2_4_to_8(png_ptr);	// transforms grayscale images <8 to 8 bits
     if ( png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS) )
-        png_set_tRNS_to_alpha(png_ptr);
-//    if ( bit_depth == 16 )
-//      png_set_strip_16(png_ptr);
-//    if ( color_type == PNG_COLOR_TYPE_GRAY ||
+        png_set_tRNS_to_alpha(png_ptr);				// adds full alpha channel if there is a tRNS chunk
+//	if ( bit_depth == 16 )
+//		png_set_strip_16(png_ptr);					// strip the pixels down to 8 bit
+//	if ( color_type == PNG_COLOR_TYPE_GRAY ||
 //			color_type == PNG_COLOR_TYPE_GRAY_ALPHA )
-//      png_set_gray_to_rgb(png_ptr);
+//		png_set_gray_to_rgb(png_ptr);
 
-	png_set_interlace_handling(png_ptr);
+	if ( ( bit_depth == 16 ) && ( systype(0) == LittleIEEE ) )
+        png_set_swap(png_ptr);	// big- to little-endian
 	
-    png_read_update_info(png_ptr, info_ptr);
+	png_set_interlace_handling(png_ptr);
 
+	png_read_update_info(png_ptr, info_ptr);
+
+//	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, 
+//		&interlace_type, &compression_type, &filter_method);
+
+	bit_depth = png_get_bit_depth(png_ptr, info_ptr);
 	color_type = png_get_color_type(png_ptr, info_ptr);
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG readPNG: color_type=" << color_type << " bit_depth=" << bit_depth << endl;
 
     int				rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 	
 	// Transferring the information
-	p->size(png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), 1);
+	p->size(width, height, 1);
 	p->channels(png_get_channels(png_ptr, info_ptr));
 	p->images(1);
 
@@ -118,9 +136,7 @@ int 	readPNG(Bimage* p, int readdata)
 	}
 	
 	p->sampling(png_get_x_pixels_per_meter(png_ptr, info_ptr),
-		png_get_y_pixels_per_meter(png_ptr, info_ptr), 1);
-//	p->image->origin(png_get_x_offset_pixels(png_ptr, info_ptr), 
-//		png_get_y_offset_pixels(png_ptr, info_ptr), 0);
+		png_get_y_pixels_per_meter(png_ptr, info_ptr), 1.0);
 	p->origin(png_get_x_offset_pixels(png_ptr, info_ptr), 
 		png_get_y_offset_pixels(png_ptr, info_ptr), 0.0);
 
@@ -140,7 +156,7 @@ int 	readPNG(Bimage* p, int readdata)
 
 		png_bytep*		row_pointers = new png_bytep[p->sizeY()];
 	
-	// Row pointers are inverted with respect to y
+		// Row pointers are inverted with respect to y
 		int				i, j;
 		for ( i=0, j=p->sizeY()-1; i<p->sizeY(); i++, j--, data += rowbytes )
 			row_pointers[j] = (png_bytep) data;

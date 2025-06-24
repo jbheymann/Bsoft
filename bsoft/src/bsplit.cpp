@@ -54,7 +54,7 @@ int 	main(int argc, char **argv)
 	Bstring			order("xyz");
 	int 			first_number(0);			// Number given to first file
 	int 			digits(3);					// File number size
-	Bstring			select_list;				// List of sub-images to select, default all
+	string			select_list;				// List of sub-images to select, default all
 	
 	int				i, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -77,7 +77,7 @@ int 	main(int argc, char **argv)
 			}
 		}
 		if ( curropt->tag == "select" ) {
-			select_list = curropt->value;
+			select_list = curropt->value.str();
 			if ( select_list.length() < 1 )
 				cerr << "-select: Image numbers must be specified!" << endl;
 		}

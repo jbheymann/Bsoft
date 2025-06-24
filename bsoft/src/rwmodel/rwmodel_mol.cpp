@@ -1,19 +1,129 @@
 /**
 @file	rwmodel_mol.cpp
 @brief	Library routines to read and write atomic model parameters
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060919
-@date	Modified: 20100302
+@date	Modified: 20250514
 **/
 
 #include "rwmodel.h"
-#include "rwmolecule.h"
-#include "model_links.h"
-#include "model_util.h"
+//#include "rwmolecule.h"
+//#include "model_links.h"
+//#include "model_util.h"
+#include <fstream>
 #include "utilities.h"
 
 // Declaration of global variables
 extern int 	verbose;		// Level of output to the screen
+
+/**
+@brief 	Reads MDL molfile model parameters.
+@param 	*file_list		list of model parameter file names.
+@param 	&atompar		parameters for atomic Z numbers.
+@return Bmodel*			model parameters.
+**/
+Bmodel*		read_model_mol(vector<string> file_list, map<string,Bcomptype>& atompar)
+{
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG read_model_mol: filename=" << file_list[0] << endl;
+	    
+	Bmodel*			model = NULL;
+	Bmodel*			mp = NULL;
+	Bcomponent*		comp = NULL;
+	Blink*			link = NULL;
+//	Bcomptype*		ct = NULL;
+//	string			id("1"), type("WAH");
+	ifstream		fmod;
+	string			s, el;
+	long			atomnum, natom(0), nlink(0);
+	long			x, y, z, l1, l2;
+	map<long,Bcomponent*>	htab;
+	
+	for ( auto filename: file_list ) {
+		if ( verbose & VERB_LABEL )
+			cout << "Reading file:                   " << filename << endl;
+		fmod.open(filename.c_str());
+		if ( fmod.fail() ) return  NULL;
+		getline(fmod, s);	// Title
+		if ( model ) mp = model->add(s);
+		else mp = model = new Bmodel(s);
+//		mp->model_type(type);
+		mp->select(1);
+		getline(fmod, s);	// Viewer?
+		getline(fmod, s);	// Blank?
+ 		getline(fmod, s);	// Numbers?
+		istringstream	ss(s);
+		ss >> natom >> nlink;
+		cout << "Components: " << natom << " Links: " << nlink << endl;
+		atomnum = 0;
+		while ( !fmod.eof() ) {
+			getline(fmod, s);
+			if ( s.find("END") != string::npos ) break;
+			istringstream	ss(s);
+			if ( atomnum < natom ) {	// Atom
+				ss >> x >> y >> z >> el;
+				atomnum++;
+				if ( mp->comp ) comp = comp->add(atomnum);
+				else comp = mp->comp = new Bcomponent(atomnum);
+				comp->description(el);
+				comp->location(x,y,z);
+				htab[atomnum] = comp;
+			} else {					// Link
+				ss >> l1 >> l2;
+				if ( mp->link ) link = link->add(htab[l1], htab[l2]);
+				else link = mp->link = new Blink(htab[l1], htab[l2]);
+			}
+		}
+		fmod.close();
+	}
+
+	return model;
+}
+
+/**
+@brief 	Writes MDL molfile model parameters.
+@param 	&filename	model parameter file name.
+@param 	*model		model parameters.
+@param 	splt		flag to split into separate models.
+@return int			models written.
+**/
+int			write_model_mol(string& filename, Bmodel* model, int splt)
+{
+	int				n;
+	Bmodel*			mp = NULL;
+	Bcomponent*		comp;
+	Blink*			link;
+	string			onename;
+
+	ofstream		fmod;
+
+	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
+		if ( model->next )
+			onename = insert(filename, n+1, splt);
+		else
+			onename = filename;
+		fmod.open(onename.c_str());
+		if ( fmod.fail() ) return  -1;
+		fmod << mp->identifier() << endl;
+		fmod << "  Bsoft" << endl;
+		fmod << mp->comment() << endl;
+		fmod << mp->component_count() << mp->link_count() << endl;
+		for ( comp = mp->comp; comp; comp = comp->next )
+			fmod << fixed << setprecision(4) << right <<
+				setw(10) << comp->location()[0] << 
+				setw(10) << comp->location()[1] << 
+				setw(10) << comp->location()[2] <<
+				" " << comp->description()[0] << endl;
+		for ( link = mp->link; link; link = link->next )
+			fmod << setw(3) << link->comp[0]->identifier() <<
+				setw(3) << link->comp[0]->identifier() << endl;
+		fmod << "M  END" << endl;
+		fmod << endl;
+		fmod.close();
+	}
+	
+	return 0;
+}
 
 /**
 @brief 	Reads molecular model parameters.
@@ -21,7 +131,7 @@ extern int 	verbose;		// Level of output to the screen
 @param 	&paramfile	parameter file.
 @return Bmodel*		model parameters.
 **/
-Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile)
+/*Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile)
 {
     string    		atom_select("all");
 	string			id;
@@ -82,10 +192,11 @@ Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile)
 		}
 	}
 
-	models_process(model, model_setup_links);
+	models_setup_links(model);
 	
 	return model;
 }
+*/
 
 /**
 @brief 	Writes molecular model parameters.
@@ -93,7 +204,7 @@ Bmodel*		read_model_molecule(vector<string> file_list, string& paramfile)
 @param 	*model		model parameters.
 @return int			models written.
 **/
-int			write_model_molecule(string& filename, Bmodel* model)
+/*int			write_model_molecule(string& filename, Bmodel* model)
 {
 	int				i, n;
 	Bstring			restype("UNK");
@@ -156,4 +267,4 @@ int			write_model_molecule(string& filename, Bmodel* model)
 	
 	return  n;
 }
-
+*/

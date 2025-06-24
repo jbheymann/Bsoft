@@ -3,7 +3,7 @@
 @brief	Header file for image class
 @author Bernard Heymann
 @date	Created: 19990321
-@date 	Modified: 20240904
+@date 	Modified: 20250202
 **/
 
 //#include <time.h>
@@ -372,9 +372,10 @@ public:
 	Bstring			data_type_string();
 	Bstring			compound_type_string();
 	void			fix_type();
-	void			change_type(char letter);
-	void			change_type(char* string);
-	void			change_type(DataType nutype);
+	void			change_type(char letter, bool keep_scale=0);
+	void			change_type(char* string, bool keep_scale=0);
+	void			change_type(string s, bool keep_scale=0);
+	void			change_type(DataType nutype, bool keep_scale=0);
 	Bimage*			split_channels();
 	Bimage*			split_channels_to_images();
 	void			combine_channels(long nc, CompoundType ct = TSimple);
@@ -386,9 +387,12 @@ public:
 	long			channels() { return c; }
 	void			channels(long cc) { c = cc; }
 	Vector3<long>	size() const { return Vector3<long>(x, y, z); }
-	void			size(long nx, long ny, long nz) { x=nx; y=ny; z=nz; }
-	void			size(Vector3<long> vec) { x=vec[0]; y=vec[1]; z=vec[2]; data_size(); }
-	void			size(vector<long> vec) { x=vec[0]; y=vec[1]; z=vec[2]; data_size(); }
+	void			size(long nx, long ny, long nz) { 
+		x=px=nx; y=py=ny; z=pz=nz; 
+		data_size();
+	}
+	void			size(Vector3<long> v) { size(v[0],v[1],v[2]); }
+	void			size(vector<long> v) { size(v[0],v[1],v[2]); }
 	void			sizeX(long nx) { x = nx; }
 	void			sizeY(long ny) { y = ny; }
 	void			sizeZ(long nz) { z = nz; }
@@ -664,8 +668,8 @@ public:
 	int 			channels_to_images();
 	int 			images_to_channels(long nc, CompoundType ct);
 	long			set_subset_selection(Bstring list);
-	long			delete_images(Bstring list, int retain=0);
-	long			select_images(Bstring list);
+	long			delete_images(string list, int retain=0);
+	long			select_images(string list);
 	// Data I/O
 	unsigned char*	read_data(ifstream* fimg, int img_select, int sb, int vax, long pad);
 	int				write(Bstring& fn);
@@ -798,6 +802,7 @@ public:
 	void 			multiply(Bimage* p);
 	void			divide(Bimage* p, double scale=1, double shift=0);
 	void			divide_one(Bimage* p, double scale=1, double shift=0);
+	Bimage*			expand(long zz);
 	void			inverse(double minval=0);
 	void			largest(Bimage* p);
 	void			smallest(Bimage* p);
@@ -969,6 +974,7 @@ public:
 	long			fspace_maximum_radius(double resolution, double sampling_ratio=1);
 	int				fspace_background();
 	Complex<double>	fspace_interpolate(long img_num, Vector3<double> m, FSI_Kernel* kernel);
+	vector<Complex<double>>	fspace_interpolated_gradient(long img_num, Vector3<double> m, FSI_Kernel* kernel);
 	int				fspace_2D_interpolate(Complex<float> cv, Vector3<double> m,
 						double part_weight, int interp_type);
 	int				fspace_pack_2D(Bimage* p, Matrix3 mat, double hi_res, double lo_res,
@@ -1016,6 +1022,8 @@ public:
 	int 			fspace_weigh_RPS_curve(Bplot* plot, double resolution=0);
 	int 			fspace_weigh_FSC_curve(Bplot* plot, double resolution=0);
 	int 			fspace_weigh_gaussian(long nn, Vector3<double> sigma, int dir=0);
+	Bimage*			fspace_rspace_gradient(Vector3<double> sigma);
+	Bimage*			fspace_gradient();
 	Bimage*			fspace_gradient(Vector3<double> sigma);
 	int 			fspace_weigh(Bimage* pref, Bimage* pmask, double resolution=0);
 	int 			fspace_weigh_dose(long nn, double dose_per_frame, vector<double> critdose);

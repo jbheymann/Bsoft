@@ -195,8 +195,10 @@ int 		main(int argc, char **argv)
 		p->phase_shift(shift);
 	}
 	
-	if ( center )
+	if ( center ) {
+		p->origin(0,0,0);
 		p->center_wrap();
+	}
 	
 	if ( friedel ) {
 		p->friedel_check();

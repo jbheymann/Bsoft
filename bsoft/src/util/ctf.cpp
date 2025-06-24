@@ -385,7 +385,8 @@ Bstring		CTFparam::envelope_equation()
 **/
 int			CTFparam::parse_baseline_equation(Bstring base_eq)
 {
-//	cout << "Base eq = " << base_eq << endl;
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG parse_baseline_equation: Base eq = " << base_eq << endl;
 
 	base_eq = base_eq.remove('\"');
 		
@@ -406,7 +407,7 @@ int			CTFparam::parse_baseline_equation(Bstring base_eq)
 			   &base[0], &base[1], &base[2], &base[3], &base[4], &n);
 	} else if ( base_eq.length() ) {
 		bt = 0;
-		sscanf(base_eq.c_str(), "%lf", &base[0]);
+		sscanf(base_eq.c_str(), "%lf%n", &base[0], &n);
 	} else {
 		bt = 0;
 		base[0] = 1;
@@ -456,7 +457,8 @@ int			CTFparam::parse_envelope_equation(Bstring env_eq)
 		et = 5;
 	}
 	
-//	cout << et << tab << env_eq << endl;
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG: parse_envelope_equation: " << et << tab << env_eq << endl;
 
 	switch ( et ) {
 		case 1:		// Single gaussian
@@ -772,12 +774,6 @@ int			ctf_update_from_json(CTFparam &cp, JSvalue &js)
 	if ( js.exists("Beam_convergence") ) cp.alpha(js["Beam_convergence"].real());
 	if ( js.exists("Energy_spread") ) cp.dE(js["Energy_spread"].real());
 
-	if ( js.exists("Amplitude_phase") ) cp.amp_shift(js["Amplitude_phase"].real());
-	if ( js.exists("Defocus_average") ) cp.defocus_average(js["Defocus_average"].real());
-	if ( js.exists("Defocus_deviation") && js.exists("Astigmatism_angle") )
-		cp.astigmatism(js["Defocus_deviation"].real(), js["Astigmatism_angle"].real()*M_PI/180.0);
-	if ( js.exists("Cs") ) cp.Cs(js["Cs"].real());
-	
 	if ( js.exists("Aberration_even") ) {
 		vector<double>	v = parse_real_vector(js["Aberration_even"].value().substr(1));
 		cp.aberration_even_update(v);
@@ -799,6 +795,13 @@ int			ctf_update_from_json(CTFparam &cp, JSvalue &js)
 				cp.aberration_coefficient(t,jsab[t].real());
 	}
 
+	// These modify the aberration terms
+	if ( js.exists("Amplitude_phase") ) cp.amp_shift(js["Amplitude_phase"].real());
+	if ( js.exists("Defocus_average") ) cp.defocus_average(js["Defocus_average"].real());
+	if ( js.exists("Defocus_deviation") && js.exists("Astigmatism_angle") )
+		cp.astigmatism(js["Defocus_deviation"].real(), js["Astigmatism_angle"].real()*M_PI/180.0);
+	if ( js.exists("Cs") ) cp.Cs(js["Cs"].real());
+	
 	if ( js.exists("Baseline_type") ) cp.baseline_type(js["Baseline_type"].integer());
 	if ( js.exists("Baseline") ) cp.baseline() = js["Baseline"].array_real();
 	

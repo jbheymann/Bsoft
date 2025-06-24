@@ -3,7 +3,7 @@
 @brief	Functions for projections
 @author 	Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20240904
+@date	Modified: 20250407
 **/
 
 #include "Bimage.h"
@@ -333,13 +333,14 @@ Bimage*		Bimage::central_section(Matrix3 mat, double resolution, FSI_Kernel* ker
 @param 	resolution		high resolution limit.
 @param 	*kernel			frequency space interpolation kernel.
 @param 	volt			acceleration voltage (V) for Ewald sphere projection, default zero, ± for front or back curvature.
-@param 	ewald_flag		0=central section, 1=upper, -1=lower, 2=combine.
+@param 	ewald_flag		0=central section, 1=upper, -1=lower, 2=combine, 3=2 images.
 @param	back			flag to backtransform the projections.
 @param	conv			conversion type.
 @return Bimage* 			projections as sub-images.
 
 	The map is Fourier transformed and shifted to its phase origin.
-	For each view, a central section or Ewald sphere projection is calculated using reciprocal space interpolation.
+	For each view, a central section or Ewald sphere projection is 
+	calculated using reciprocal space interpolation.
 	All the projections are phase shifted to a central origin.
 	The projections may be back-transformed to real space as specified by the back flag.
 	The image is converted as specified by the conversion flag:
@@ -423,12 +424,12 @@ Bimage*     Bimage::project(vector<View2<double>>& views, double resolution, FSI
 	if ( volt ) {
 		double		scale(1e-10*TWOPI*ECHARGE/(PLANCK*LIGHTSPEED*beta(fabs(volt))));
 //		scale /= proj->real_size().volume();
-		scale /= sqrt(proj->sizeX()*proj->sizeY());
+//		scale /= sqrt(proj->sizeX()*proj->sizeY());
 		proj->multiply(scale);
 	}
 	
-	if ( ewald_flag == 2 ) proj->combine_ewald();
-	if ( ewald_flag == 3 ) proj->append_opposite_ewald();
+	if ( ewald_flag == EW_COMB ) proj->combine_ewald();
+	if ( ewald_flag == EW_BOTH ) proj->append_opposite_ewald();
 
 	proj->friedel_check();
 	

@@ -127,7 +127,7 @@ int 	main(int argc, char **argv)
 			cerr << "Error: Input file not read!" << endl;
 			bexit(-1);
 		}
-		if ( reset ) models_process(model, model_reset_selection);
+		if ( reset ) models_select_all(model);
 		if ( mapfile.length() ) model->mapfile(mapfile.str());
 		if ( model->mapfile().length() ) {
 			p = read_img(model->mapfile(), 0, -1);
@@ -184,7 +184,7 @@ int 	main(int argc, char **argv)
 		}
 	}
 	
-	model_kill(model);
+	delete model;
 	project_kill(project);
 
 	

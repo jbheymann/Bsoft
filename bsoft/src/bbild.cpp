@@ -80,6 +80,9 @@ int 	main(int argc, char **argv)
 	option_kill(option);
 	
 	double			ti = timer_start();
+
+	if ( bild_type[0] == 'e' )	// Ewald spheres scheme
+		write_ewald_scheme(outfile.str());
 	
 	// Read all the model parameter files
 	vector<string>	file_list;
@@ -96,15 +99,15 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 
-	if ( linklength > 0 ) model_link_list_generate(model, linklength);
+	if ( linklength > 0 ) models_link_list_generate(model, linklength);
 
-	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
+	if ( comprad > 0 ) models_set_component_radius(model, comprad);
 
-	if ( linkrad > 0 ) models_process(model, linkrad, model_set_link_radius);
+	if ( linkrad > 0 ) models_set_link_radius(model, linkrad);
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 	
 	// Write an output parameter format file if a name is given
 	Bstring			ext;
@@ -134,10 +137,9 @@ int 	main(int argc, char **argv)
 		}
 	}
 	
-	model_kill(model);
-		
+	delete model;
 	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

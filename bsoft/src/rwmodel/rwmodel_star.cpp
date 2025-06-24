@@ -236,7 +236,7 @@ Bmodel*		read_model_star(vector<string> file_list)
 
 	model->comment(star.comment());
 	
-	models_process(model, model_setup_links);
+	models_setup_links(model);
 
 	return model;
 }

@@ -1017,6 +1017,9 @@ double		radius_wrt_sym_axes(Vector3<double> coor, vector<Vector3<double>> vs)
 **/
 int			Bimage::set_radial_distances(double spherical_fraction, Bsymmetry& sym)
 {
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::set_radial_distances" << endl;
+	
 	change_type(Float);
 	
 	long				i, xx, yy, zz, nn;
@@ -1024,7 +1027,10 @@ int			Bimage::set_radial_distances(double spherical_fraction, Bsymmetry& sym)
 	Vector3<double>		coor;
 
 	vector<Vector3<double>>	vs = sym.get_axes();
-	if ( vs.size() < 1 ) return -1;
+	if ( vs.size() < 1 ) {
+		cerr << "Error: No symmetry axes generated!" << endl;
+		return -1;
+	}
 	
 	if ( sym.point() < 102 || vs.size() < 2 ) spherical_fraction = 1;
 	
@@ -1048,6 +1054,7 @@ int			Bimage::set_radial_distances(double spherical_fraction, Bsymmetry& sym)
 					rf = 1;
 					if ( vs.size() > 1 ) {
 						rf = radius_wrt_sym_axes(coor, vs);
+						rf = 1.0/rf;
 						rf = rf + spherical_fraction*(1 - rf);
 						r = r*rf;
 					}
@@ -1132,6 +1139,9 @@ Bimage*		Bimage::radial_sections(double rad_start, double rad_end,
 				double rad_step, double spherical_fraction,
 				Bsymmetry& sym, int fill_type, double fill)
 {
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::radial_sections" << endl;
+	
 	if ( rad_start < 0 ) rad_start = 0;
 	if ( rad_start >= z/2 ) rad_start = z/2;
 	if ( rad_end <= 0 ) rad_end = z/2;

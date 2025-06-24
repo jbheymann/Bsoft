@@ -167,7 +167,7 @@ int			model_poly_generate(Bmodel* model)
 	
 	// Calculate the vertex normals
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-		com = model_center_of_mass(mp);
+		com = mp->center_of_coordinates();
 		for ( comp = mp->comp; comp; comp = comp->next ) {
 			rloc = comp->location() - com;
 			for ( i=0; i<comp->link.size() && comp->link[i]; i++ ) ;
@@ -201,9 +201,8 @@ int			model_poly_generate(Bmodel* model)
 
 	// Generate the polygon list
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-		poly_list_kill(mp->poly);
+		mp->clear_polys();
 		mp->poly = new Bpolygon();
-//		poly = (Bpolygon *) add_item((char **) &mp->poly, sizeof(Bpolygon));
 		for ( n=0, comp = mp->comp; comp; comp = comp->next ) {
 			for ( i=n=0; i<comp->link.size() && comp->link[i]; i++ ) {
 				if ( verbose & VERB_DEBUG )
@@ -212,10 +211,8 @@ int			model_poly_generate(Bmodel* model)
 				if ( verbose & VERB_DEBUG )
 					cout << "\tn=" << n << endl;
 				if ( n > 2 && n < MAXLINK )
-//					poly = (Bpolygon *) add_item((char **) &poly, sizeof(Bpolygon));
 					poly = poly->add();
 				else
-//					for ( j=0; j<poly->comp.size(); j++ ) poly->comp[j] = NULL;
 					poly->comp.clear();
 			}
 		}	
@@ -331,8 +328,9 @@ int			model_vertex_types(Bmodel* model)
 				poly->comp[i]->flag[j] = poly->size();
 			}
 		}
-		comp_type_list_kill(mp->type);
-		mp->type = NULL;
+//		comp_type_list_kill(mp->type);
+//		mp->type = NULL;
+		mp->clear_types();
 		for ( comp = mp->comp; comp; comp = comp->next ) {
 //			comp->type = 0;
 //			for ( i=0; i<MAXLINK && comp->link[i]; i++ )
@@ -432,8 +430,9 @@ int			model_extended_vertex_types(Bmodel* model)
 				poly->comp[i]->flag[j] += comp->flag[k]/100;	// Third digit = opposed polygon
 			}
 		}
-		comp_type_list_kill(mp->type);
-		mp->type = NULL;
+//		comp_type_list_kill(mp->type);
+//		mp->type = NULL;
+		mp->clear_types();
 		for ( comp = mp->comp; comp; comp = comp->next ) {
 			id = component_6digit_type(comp);
 //			comp->type = model_add_type_by_id(mp, id);
@@ -482,8 +481,6 @@ Bmodel*		model_poly_dual(Bmodel* model, int order)
 		cout << "Generating a polyhedron dual" << endl << endl;
 
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
-//		mp_new = (Bmodel *) add_item((char **) &mp_new, sizeof(Bmodel));
-//		if ( !model_new ) model_new = mp_new;
 		if ( mp_new ) mp_new = mp_new->add(mp->identifier());
 		else model_new = mp_new = new Bmodel(mp->identifier());
 //		mp_new->identifier() = mp->identifier();
@@ -533,7 +530,7 @@ Bmodel*		model_poly_dual(Bmodel* model, int order)
 	
 //	model_stats(model_new);
 	
-	model_link_list_generate(model_new, 1.2*length);
+	models_link_list_generate(model_new, 1.2*length);
 
 	model_poly_generate(model_new);
 	
@@ -757,7 +754,7 @@ double		model_poly_regularity(Bmodel* model)
 	Bmodel*				mp;
 	Bpolygon*			poly;
 
-	Vector3<double>		com = model_center_of_mass(model);
+	Vector3<double>		com = models_center_of_coordinates(model);
 
 	if ( verbose )
 		cout << "Polygon regularity:" << endl;
@@ -1110,7 +1107,7 @@ string		model_poly_find_symmetry(Bmodel* model, double threshold)
 
 	Bsymop*			op = new Bsymop[NSMAX];
 	
-	t.origin = model_center_of_mass(model);
+	t.origin = model->center_of_coordinates();
 	t.angle = M_PI;
 	
 	double			Gr = model_gyration_radius(model);
@@ -1584,8 +1581,8 @@ int			model_poly_compare(Bmodel* model, Bmodel* refmodel)
 	The eigenvalues are characteristic for a polyhedron, although they may not be unique.
 	Only the first model in the list is processed.
 
-	Dover Publications, Inc., Mineola, New York, pages 101 - 104.
 Reference: 	Fowler, P.W. and Manolopoulos, D.E. (2006) An Atlas of Fullerenes. 
+	Dover Publications, Inc., Mineola, New York, pages 101 - 104.
 
 **/
 vector<double>	model_poly_eigenvalues(Bmodel* model, int show)

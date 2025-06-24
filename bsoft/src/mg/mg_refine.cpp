@@ -633,6 +633,8 @@ long		part_refine_orientation(Bparticle* part, Bstring& partfile,
 	part->view2(bestview);
 	part->mag = bestmag;
 	
+//	cout << part->id << tab << part->fom[0] << tab << part->fom[1] << endl;
+	
 	delete p;
 
 	if ( flags & WRITE_PPX ) {
@@ -693,15 +695,23 @@ double		img_recip_space_fom(Bimage* p, Bimage* pref, double hi_res, double lo_re
 //	cout << "real size = " << p->real_size() << endl;
 //	bexit(-1);
 
-	double*			w = new double[p->sizeX()];
-	for ( j=0; j<p->sizeX(); j++ ) w[j] = 1;
-	if ( weight.size() )
-		for ( size_t j=0; j<weight.size(); j++ ) if ( weight[j] ) w[j] = weight[j];
+//	double*			w = new double[p->sizeX()];
+//	for ( j=0; j<p->sizeX(); j++ ) w[j] = 1;
+//	if ( weight.size() )
+//		for ( size_t j=0; j<weight.size(); j++ ) if ( weight[j] ) w[j] = weight[j];
 		
-	double*			fom = new double[p->sizeX()];
-	double*			dsum = new double[p->sizeX()];
-	double*			msum = new double[p->sizeX()];
-	for ( i=0; i<p->sizeX(); i++ ) fom[i] = dsum[i] = msum[i] = 0;
+//	double*			fom = new double[p->sizeX()];
+//	double*			dsum = new double[p->sizeX()];
+//	double*			msum = new double[p->sizeX()];
+//	for ( i=0; i<p->sizeX(); i++ ) fom[i] = dsum[i] = msum[i] = 0;
+
+	vector<double>	w(p->sizeX(), 1);
+	if ( weight.size() )
+		for ( j=0; j<weight.size(); ++j ) if ( weight[j] ) w[j] = weight[j];
+		
+	vector<double>	fom(p->sizeX(),0);
+	vector<double>	dsum(p->sizeX(),0);
+	vector<double>	msum(p->sizeX(),0);
 
 	Complex<float>*	data = (Complex<float> *) p->data_pointer();
 	Complex<float>*	refdata = (Complex<float> *) pref->data_pointer();
@@ -767,10 +777,10 @@ double		img_recip_space_fom(Bimage* p, Bimage* pref, double hi_res, double lo_re
 		cv /= wsum;
 	}
 	
-	delete[] fom;
-	delete[] dsum;
-	delete[] msum;	
-	delete[] w;
+//	delete[] fom;
+//	delete[] dsum;
+//	delete[] msum;	
+//	delete[] w;
 	
 	p->image->FOM(cv);
 	

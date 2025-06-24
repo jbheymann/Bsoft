@@ -3,7 +3,7 @@
 @brief	Functions for CTF (contrast transfer function) processing
 @author 	Bernard Heymann
 @date	Created: 19970715
-@date	Modified: 20240405
+@date	Modified: 20250407
 **/
 
 #include "rwimg.h"
@@ -25,6 +25,7 @@ extern int 	verbose;		// Level of output to the screen
 @brief 	Calculates an aberration image.
 @param 	cp				CTF & aberration parameters.
 @param 	flip			Flip phases of even aberrations.
+@param	env				Apply coherence envelopes.
 @param 	wiener			Wiener factor (fraction), if 0, flip phases.
 @param 	size			new image size.
 @param 	sam				new image pixel size.
@@ -43,7 +44,7 @@ extern int 	verbose;		// Level of output to the screen
 	Note: Defocus is positive for underfocus and negative for overfocus.
 
 **/
-Bimage*		img_ctf_calculate(CTFparam& cp, bool flip, double wiener,
+Bimage*		img_ctf_calculate(CTFparam& cp, bool flip, bool env, double wiener,
 				Vector3<long> size, Vector3<double> sam, double lores, double hires)
 {
 	if ( lores < 0 ) lores = 0;
@@ -106,6 +107,7 @@ Bimage*		img_ctf_calculate(CTFparam& cp, bool flip, double wiener,
 						else if ( wiener )
 							w = wiener1*w/(w*w + wiener);
 						cv = cp.aberration_odd_complex(s2, a);
+						if ( env ) w *= cp.partial_coherence_and_energy_spread(s2);
 						p->set(i, cv.conj() * w);
 					}
 				}
@@ -274,6 +276,7 @@ Bimage*		img_ctf_calculate(CTFparam cp, int action, double wiener, Vector3<long>
 @param 	sam				new image pixel size.
 @param 	lores			low resolution limit.
 @param 	hires			high resolution limit.
+@param	ew_flag			1=upper/lower, -1=lower/upper, 2=combined, 4=random, 5=sideband.
 @return Bimage*			new complex CTF function image.
 
 	Calculates the complex CTFs for the two Ewald spheres and pack them
@@ -283,27 +286,30 @@ Bimage*		img_ctf_calculate(CTFparam cp, int action, double wiener, Vector3<long>
 
 **/
 Bimage*		img_ctf_ewald_calculate(CTFparam& cp,
-				Vector3<long> size, Vector3<double> sam, double lores, double hires)
+				Vector3<long> size, Vector3<double> sam, double lores, double hires, int ew_flag)
 {
 	if ( lores < 0 ) lores = 0;
 	if ( hires <= 0 ) hires = sam[0];
 	if ( lores > 0 && lores < hires ) swap(lores, hires);
 	if ( size[2] == 1 ) sam[2] = 1;
-	
-//	if ( cp.aberration_weights().size() < 1 )
-//		cp.convert_CTF_to_aberration_weights();
 
+	if ( ew_flag == EW_RAND ) {
+		if ( random() < get_rand_max()/2 ) ew_flag = EW_POS;
+		else ew_flag = EW_NEG;
+	}
+	
 	double			shi(1/hires);
 	double			slo = (lores > 0)? 1/lores: 0;
 	double			shi2(shi*shi), slo2(slo*slo);
 	
 	Bimage*			p = new Bimage(Float, TComplex, size, 1);
 	if ( sam.volume() > 0 ) p->sampling(sam);
+	p->fourier_type(Standard);
 	Bimage*			p2 = p->copy();
 	p->next = p2;
 	
 	long 			i, x, y, z;
-	double			sx, sy, sz, s2;
+	double			sx, sy, sz, s2, a, da(M_PI/8.0);
 	Complex<double>	cv(1,0);
 	Vector3<double>	freq_scale(1.0L/p->real_size());
 	Vector3<double>	h((p->size() - 1)/2);
@@ -340,8 +346,27 @@ Bimage*		img_ctf_ewald_calculate(CTFparam& cp,
 					s2 = sx*sx + sy*sy + sz*sz;
 					if ( s2 >= slo2 && s2 <= shi2 ) {
 						cv = cp.calculate_complex(sqrt(s2), atan2(sy,sx));
-						p->set(i, cv);
-						p2->set(i, cv.conj());
+						if ( ew_flag == EW_POS ) {
+							p->set(i, cv);
+							p2->set(i, cv.conj());
+						} else if ( ew_flag == EW_NEG ) {
+							p->set(i, cv.conj());
+							p2->set(i, cv);
+						} else if ( ew_flag == EW_SIDEBAND ) {	// Single sideband/Russo
+							a = fabs(atan2(sy, sx) - da);
+							if ( a > M_PI_2 ) {
+								p->set(i, cv);
+								p2->set(i, cv.conj());
+							} else {
+								p->set(i, cv.conj());
+								p2->set(i, cv);
+							}
+						} else {	// Simple insertion
+							cv += cv.conj();
+							cv /= 2;
+							p->set(i, cv);
+							p2->set(i, cv);
+						}
 					}
 				}
 			}
@@ -350,6 +375,49 @@ Bimage*		img_ctf_ewald_calculate(CTFparam& cp,
 	return p;
 }
 
+int			img_ctf_side_band_russo(Bimage* p, int nsec)
+{
+	long			i, j, xx, yy, nn;
+	double			sx, sy, a, ins(0.5/nsec);
+//	double			amin(0.25), amax(0.75);
+	Vector3<double>	h((p->size() - 1)/2);
+//	Vector3<double>	freq_scale(1.0L/p->real_size());
+	Bimage*			p2 = p->next;
+	
+	Bimage*			pt = p->copy();
+	
+	for ( i=nn=0; nn<p->images(); ++nn ) {
+		for ( yy=0; yy<p->sizeY(); ++yy ) {
+			sy = yy;
+			if ( yy > h[1] ) sy -= p->sizeY();
+//			sy *= freq_scale[1];
+			for ( xx=0; xx<p->sizeX(); ++xx, ++i ) {
+				sx = xx;
+				if ( xx > h[0] ) sx -= p->sizeX();
+//				sx *= freq_scale[0];
+//				s2 = sx*sx + sy*sy;
+//				a = (atan2(sy, sx) + da)/TWOPI;
+				a = atan2(sy, sx)/TWOPI - ins;
+				if ( a < 0 ) a += 1;
+				j = nsec*a;
+//				if ( j < 0 ) j += nsec;
+				pt->set(i, Complex<double>(j,1));
+//				if ( j > nsec/4 || j <= -nsec/4 ) {
+//				if ( a > amin && a < amax ) {
+				if ( a > 0.5 ) {
+					p->set(i, p->complex(i).conj());
+					p2->set(i, p2->complex(i).conj());
+					pt->set(i, Complex<double>(j,-1));
+				}
+			}
+		}
+	}
+	
+	write_img("tj.grd", pt, 0);
+	delete pt;
+	
+	return 0;
+}
 
 double		aberration(long n, long m, double s, double p)
 {
@@ -679,7 +747,7 @@ int 		img_ctf_apply(Bimage* p, CTFparam em_ctf, int action, double wiener,
 		back_transform = 1;
 	}
 
-	if ( action == 9 ) return img_ctf_apply_ewald(p, em_ctf, lores, hires, back_transform);
+	if ( action == 9 ) return img_ctf_apply_ewald(p, em_ctf, lores, hires, 1, back_transform);
 	
 	if ( wiener < 0.01 ) wiener = 0.01;
 
@@ -725,7 +793,7 @@ int 		img_ctf_apply(Bimage* p, CTFparam em_ctf, int action, double wiener,
 			cout << "DEBUG img_ctf_apply: image transformed" << endl;
 	}
 
-	if ( action == 9 ) return img_ctf_apply_ewald(p, em_ctf, lores, hires, back_transform);
+	if ( action == 9 ) return img_ctf_apply_ewald(p, em_ctf, lores, hires, 1, back_transform);
 	
 	Bimage*			pctf = img_ctf_calculate(em_ctf, action, wiener, p->size(), 
 						p->sampling(0), lores, hires);
@@ -764,9 +832,9 @@ int 		img_ctf_apply(Bimage* p, CTFparam em_ctf, int action, double wiener,
 
 **/
 int 		img_ctf_apply_complex(Bimage* p, CTFparam& cp, bool flip,
-				double wiener, double lores, double hires)
+				bool env, double wiener, double lores, double hires)
 {
-	Bimage*			pctf = img_ctf_calculate(cp, flip, wiener,
+	Bimage*			pctf = img_ctf_calculate(cp, flip, env, wiener,
 						p->size(), p->sampling(0), lores, hires);
 	
 	long 			i, j, nn;
@@ -786,6 +854,7 @@ int 		img_ctf_apply_complex(Bimage* p, CTFparam& cp, bool flip,
 @param 	cp				CTF & aberration parameters.
 @param 	lores			low resolution limit.
 @param 	hires			high resolution limit.
+@param	ew_flag			1=separate aberrations, -1=conjugate separate aberrations, 2=combined, 3=sideband
 @param	back_transform	flag to back Fourier transform both Ewald spheres.
 @return int				0, <0 on error.
 
@@ -796,16 +865,23 @@ int 		img_ctf_apply_complex(Bimage* p, CTFparam& cp, bool flip,
 	If there is no linked second image, the first is copied.
 
 **/
-int 		img_ctf_apply_ewald(Bimage* p, CTFparam& cp, double lores, double hires, bool back_transform)
+int 		img_ctf_apply_ewald(Bimage* p, CTFparam& cp, double lores, double hires, int ew_flag, bool back_transform)
 {
-	if ( p->compound_type() != TComplex || p->fourier_type() != Standard ) {
+	if ( p->compound_type() != TComplex ) {
+		cerr << "Error in img_ctf_apply_ewald: The image must be complex!" << endl;
+		bexit(-1);
+	}
+	
+	if ( p->fourier_type() != Standard ) {
 		cerr << "Error in img_ctf_apply_ewald: The image must be a Fourier transform!" << endl;
 		bexit(-1);
 	}
 	
 	Bimage*			pctf = img_ctf_ewald_calculate(cp,
-						p->size(), p->sampling(0), lores, hires);
+						p->size(), p->sampling(0), lores, hires, ew_flag);
 	Bimage*			pctf2 = pctf->next;
+
+//	img_ctf_side_band_russo(pctf, 8);
 	
 	long 			i, j, nn;
 	
@@ -821,6 +897,8 @@ int 		img_ctf_apply_ewald(Bimage* p, CTFparam& cp, double lores, double hires, b
 
 	delete pctf;
 
+//	img_ctf_side_band_russo(p, 8);
+	
 	if ( back_transform ) {
 		p->fft(FFTW_BACKWARD);
 		p2->fft(FFTW_BACKWARD);
@@ -970,7 +1048,7 @@ int			img_ttf_apply(Bimage* p, CTFparam ctf, int action, double wiener,
 	long			nn;
 	double			ca(cos(axis)), sa(sin(axis)), tt(tan(tilt));
 	Vector3<double>	coor;
-	double*			d = new double[pt->images()];
+	vector<double>	d(pt->images(),0);
 	
 //	if ( verbose )
 //		cout << "Tile\tx\ty\t∆f" << endl;
@@ -1039,7 +1117,6 @@ int			img_ttf_apply(Bimage* p, CTFparam ctf, int action, double wiener,
 	p->assemble_tiles(pt, 1);
 
 	delete pt;
-	delete[] d;
 
 	return 0;
 }
@@ -1800,7 +1877,7 @@ double		img_ctf_isotropy(Bimage* p, long n, CTFparam& em_ctf, double lores, doub
 	
 	if ( verbose ) {
 		cout << "Power spectrum isotropy:" << endl;
-		cout << "s(1/A)\tAvg\tStd\tRatio" << endl;
+		cout << "Spatial Frequency (1/A)\tAvg\tStd\tRatio" << endl;
 	}
 //	cout << em_ctf.defocus_average() << " ± " << em_ctf.defocus_deviation() << " @ " << em_ctf.astigmatism_angle()*180.0/M_PI << endl;
 	for ( auto s: maxima ) {
@@ -2052,7 +2129,7 @@ int 		project_ctf_average(Bproject* project, Bstring& psname)
 	plot->page(0).title(title);
 	plot->page(0).columns(ncol);
 	for ( i=0; i<ncol; ++i ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("Spatial Frequency (A)");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(1).label("CTFavg");
 	plot->page(0).column(0).axis(1);
 	plot->page(0).column(1).axis(3);
@@ -2071,7 +2148,6 @@ int 		project_ctf_average(Bproject* project, Bstring& psname)
 				ctf = mg->ctf->calculate(maxrad, 1, recip_interval);
 				for ( i=0, j=maxrad; i<maxrad; ++i, j++ )
 					(*plot)[j] += ctf[i]*ctf[i];
-//				delete ctf;
 				n++;
 			}
 		}
@@ -2087,6 +2163,90 @@ int 		project_ctf_average(Bproject* project, Bstring& psname)
 
 	ps_plot(psname, plot);
 	
+	delete plot;
+	
+	return 0;
+}
+
+int 		project_ctf_ewald_average(Bproject* project, Bstring& psname)
+{
+	Bfield*			field;
+	Bmicrograph*	mg = NULL;
+
+	for ( field = project->field; field; field = field->next )
+		for ( mg = field->mg; mg; mg = mg->next )
+			if ( mg->box_size[0] ) break;
+	
+	if ( !mg ) {
+		cerr << "Error: No micrograph with a box size specified!" << endl;
+		return -1;
+	}
+	
+	int				i, j, n(0);
+	double			hires(mg->pixel_size[0]);
+	double			recip_interval = 1.0/(mg->box_size[0]*mg->pixel_size[0]);
+	Bimage*			p;
+	Bimage*			psum = NULL;
+
+	for ( field = project->field; field; field = field->next ) {
+		for ( mg = field->mg; mg; mg = mg->next ) {
+			if ( mg->ctf ) {
+				p = img_ctf_ewald_calculate(*mg->ctf, mg->box_size, mg->pixel_size, 0, hires, 1);
+				if ( psum ) {
+					psum->add(p);
+					delete p;
+				} else {
+					psum = p;
+				}
+				n++;
+			}
+		}
+	}
+	
+	Bimage*			prad = psum->fspace_radial_power(hires, 1);
+	
+	delete psum;
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG project_ctf_ewald_average: x=" << prad->sizeX() << endl;
+
+	int				ncol(2), maxrad(prad->sizeX());
+	Bstring			title("Compound CTF curves"), txt;
+	Bplot*			plot = new Bplot(1, maxrad, ncol);
+	plot->title(title);
+
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG project_ctf_ewald_average: recip_interval=" << recip_interval << endl;
+
+	plot->page(0).title(title);
+	plot->page(0).columns(ncol);
+	for ( i=0; i<ncol; ++i ) plot->page(0).column(i).number(i);
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
+	plot->page(0).column(1).label("CTFavg");
+	plot->page(0).column(0).axis(1);
+	plot->page(0).column(1).axis(3);
+	plot->page(0).column(1).type(2);
+	plot->page(0).axis(1).flags(1);
+	plot->page(0).axis(1).label("Resolution (A)");
+//	plot->page(0).axis(1).min(0);
+//	plot->page(0).axis(1).max(x_max);
+	plot->page(0).axis(3).label("Average CTF");
+	plot->page(0).axis(3).min(0);
+	plot->page(0).axis(3).max(1);
+	
+	
+	for ( i=0, j=maxrad; i<maxrad; ++i, ++j ) {
+		(*plot)[i] = i*recip_interval;
+		(*plot)[j] = (*prad)[i];
+//		cout << (*plot)[i] << tab << (*plot)[j] << endl;
+	}
+
+	txt = "Number of micrographs:   " + Bstring(n, "%d");
+	plot->page(0).add_text(txt);
+
+	ps_plot(psname, plot);
+	
+	delete prad;
 	delete plot;
 	
 	return 0;
@@ -3011,15 +3171,33 @@ long		project_ctf_statistics(Bproject* project)
 {
 	if ( !project ) return 0;
 	
-	long				nmg(0), n, m, i;
+	long				nmg(0), npart(0), n, m, i;
 	double				v, va, defmin(1e30), defmax(0);
+	Vector3<double>		mpxa, mpxv, ppxa, ppxv;				
 	Bfield*				field;
 	Bmicrograph*		mg;
+	Bparticle*			part;
 	CTFparam			cpa, cps;
-	map<pair<long,long>,double> wm, wa, ws;
-	
+	map<pair<long,long>,double> wm, wa, wv;
+
+	// Set the optics groups
+	map<string,CTFparam>	opt, optvar;
 	for ( field = project->field; field; field = field->next ) {
 		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->ctf ) {
+			opt[mg->ctf->identifier()] = cpa;
+			optvar[mg->ctf->identifier()] = cpa;
+		}
+	}
+
+	for ( field = project->field; field; field = field->next ) {
+		for ( mg = field->mg; mg; mg = mg->next ) if ( mg->ctf ) {
+			mpxa += mg->pixel_size;
+			mpxv += mg->pixel_size*mg->pixel_size;
+			for ( part = mg->part; part; part = part->next ) {
+				ppxa += part->pixel_size;
+				ppxv += part->pixel_size*part->pixel_size;
+				npart++;
+			}
 			v = mg->ctf->defocus_average()*1e-4;
 			if ( defmin > v ) defmin = v;
 			if ( defmax < v ) defmax = v;
@@ -3033,13 +3211,23 @@ long		project_ctf_statistics(Bproject* project)
 			cpa.astigmatism(cpa.defocus_deviation()+v, cpa.astigmatism_angle()+va);
 			cps.astigmatism(cps.defocus_deviation()+v*v, cps.astigmatism_angle()+va*va);
 			wm = mg->ctf->aberration_weights();
+			map<pair<long,long>,double>&	wa = opt[mg->ctf->identifier()].aberration_weights();
+			map<pair<long,long>,double>&	wv = optvar[mg->ctf->identifier()].aberration_weights();
 			for ( auto w: wm ) {
 				wa[w.first] += w.second;
-				ws[w.first] += w.second*w.second;
+				wv[w.first] += w.second*w.second;
 			}
 			nmg++;
 		}
 	}
+	
+	mpxa /= nmg;
+	mpxv /= nmg;
+	mpxv -= mpxa*mpxa;
+	
+	ppxa /= npart;
+	ppxv /= npart;
+	ppxv -= ppxa*ppxa;
 	
 	cpa.defocus_average(cpa.defocus_average()/nmg);
 	cps.defocus_average(sqrt(cps.defocus_average()/nmg-cpa.defocus_average()*cpa.defocus_average()));
@@ -3054,22 +3242,32 @@ long		project_ctf_statistics(Bproject* project)
 	cps.astigmatism(cps.defocus_deviation()/nmg, cps.astigmatism_angle()/nmg);
 
 	cout << "Number of micrographs:          " << nmg << endl;
+	cout << "Micrograph pixel size:          " << mpxa << endl;
+	cout << "Micrograph pixel size variance: " << mpxv << endl;
+	cout << "Number of particles:            " << npart << endl;
+	cout << "Particle pixel size:            " << ppxa << endl;
+	cout << "Particle pixel size variance:   " << ppxv << endl;
 	cout << "Defocus range:                  " << defmin << " - " << defmax << " um" << endl;
 	cout << "Defocus average:                " << cpa.defocus_average() << " um ("
 		<< cps.defocus_average() << ")" << endl;
 	cout << "Defocus deviation:              " << cpa.defocus_deviation() << " um ("
 		<< cps.defocus_deviation() << ")" << endl;
-	cout << "Astigmatism angle:              " << cpa.astigmatism_angle() << " degrees ("
-		<< cps.astigmatism_angle() << ")" << endl;
-	cout << "Aberration weights:" << endl;
-	cout << "n\tm\tavg\tvar" << endl;
-	for ( i=n=0; n<5 && i<wa.size(); ++n ) {
-		for ( m=-n; m<=n; m+=2 ) {
-			wa[{n,m}] /= nmg;
-			ws[{n,m}] /= nmg;
-			ws[{n,m}] -= wa[{n,m}] * wa[{n,m}];
-			ws[{n,m}] = sqrt(ws[{n,m}]);
-			cout << n << tab << m << tab << wa[{n,m}] << tab << ws[{n,m}] << endl;
+	cout << "Astigmatism angle:              " << cpa.astigmatism_angle()*180.0/M_PI << " degrees ("
+		<< cps.astigmatism_angle()*180.0/M_PI << ")" << endl;
+	cout << "Number of optics groups:        " << opt.size() << endl;
+	for ( auto opt1: opt ) {
+		wa = opt1.second.aberration_weights();
+		wv = optvar[opt1.first].aberration_weights();
+		cout << "Aberration weights for group: " << opt1.first << endl;
+		cout << "n\tm\tavg\tvar" << endl;
+		for ( i=n=0; n<5 && i<wa.size(); ++n ) {
+			for ( m=-n; m<=n; m+=2 ) {
+				wa[{n,m}] /= nmg;
+				wv[{n,m}] /= nmg;
+				wv[{n,m}] -= wa[{n,m}] * wa[{n,m}];
+				wv[{n,m}] = sqrt(wv[{n,m}]);
+				cout << n << tab << m << tab << wa[{n,m}] << tab << wv[{n,m}] << endl;
+			}
 		}
 	}
 

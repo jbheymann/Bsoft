@@ -3,7 +3,7 @@
 @brief	Header to read and write model dynamics parameters in STAR format
 @author Bernard Heymann
 @date	Created: 20100305
-@date	Modified: 20230808
+@date	Modified: 20241225
 **/
 
 #include "ctf.h"
@@ -70,6 +70,7 @@ public:
 	Bcomptype(string fn, long img_num) { initialize(); id = "1"; fmod = fn; num = img_num; }
 	Bcomptype(string s, string fn, long img_num) { initialize(); id = s; fmod = fn; num = img_num; }
 	Bcomptype(const Bcomptype& ct) {
+		next = NULL;
 		id = ct.id;
 		ind = ct.ind;
 		fmod = ct.fmod;
@@ -82,7 +83,7 @@ public:
 		fom = ct.fom;
 		sel = ct.sel;
 		coefficients(ct.coefficients());
-//		cout << "In Bcomptype:" << endl;
+//		cout << "In Bcomptype&:" << endl;
 //		show();
 	}
 	Bcomptype(Bcomptype* ct) {
@@ -99,11 +100,19 @@ public:
 		fom = ct->fom;
 		sel = ct->sel;
 		coefficients(ct->coefficients());
-//		cout << "In Bcomptype:" << endl;
+//		cout << "In Bcomptype*:" << endl;
 //		show();
 	}
+	void			clear() {
+		Bcomptype*	ct = this;
+		Bcomptype*	ct2 = NULL;
+		while ( ct ) {
+			ct2 = ct->next;
+			delete ct;
+			ct = ct2;
+		}
+	}
 	void			identifier(string s) { id = s; }
-//	void			identifier(Bstring s) { id = s.str(); }
 	string&			identifier() { return id; }
 	void			index(long i) { ind = i; }
 	long			index() { return ind; }

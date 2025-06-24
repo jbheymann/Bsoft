@@ -3,7 +3,7 @@
 @brief	Header file for functions to align micrographs or coordinates from micrographs and apply the resultant transformation.
 @author 	Bernard Heymann and Samuel Payne
 @date	Created: 20000505
-@date	Modified: 20240215
+@date	Modified: 20250326
 **/
 
 #include "mg_processing.h"
@@ -26,6 +26,10 @@ double		project_write_aligned_images(Bproject* project, Bimage* pgr,
 double		project_write_frame_sums(Bproject* project, Bimage* pgr,
 				DataType datatype, Bstring& subset, double sampling_ratio, int flag);
 double		project_align_frames(Bproject* project, int ref_img, long window, long step,
+				Bimage* pgr, Bimage* pmask, Vector3<double> origin, double hi_res, double lo_res,
+				double shift_limit, double edge_width, double gauss_width,
+				long bin, Bstring& subset, int flag);
+double		project_align_particle_frames(Bproject* project, int ref_img, long window, long step,
 				Bimage* pgr, Bimage* pmask, Vector3<double> origin, double hi_res, double lo_res,
 				double shift_limit, double edge_width, double gauss_width,
 				long bin, Bstring& subset, int flag);

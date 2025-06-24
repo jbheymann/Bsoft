@@ -167,9 +167,9 @@ Bmodel*		model_components_to_shells(Bmodel* model, double distance, string nutyp
 			if ( numod_list ) numod_list->add(numod);
 			else numod_list = numod;
 			numod->identifier() = mp->identifier() + "_" + comp->identifier();
-			model_set_type(numod, nutype);
-			model_set_component_radius(numod, distance/2);
-			model_shift(numod, comp->location());
+			models_set_type(numod, nutype);
+			models_set_component_radius(numod, distance/2);
+			models_shift(numod, comp->location());
 			numod->mapfile() = mp->mapfile();
 			numod->image_number(mp->image_number());
 			model_color_uniformly(numod, comp->color());
@@ -200,7 +200,7 @@ double		model_sphericity(Bmodel* model)
 	int				ncomp;
 	double			d, sph = 0, da = 0, ds = 0;	
 
-	Vector3<double>	com = model_center_of_mass(model);
+	Vector3<double>	com = model->center_of_coordinates();
 	
 	Bcomponent*		comp;
 	
@@ -244,7 +244,7 @@ double		model_ellipsoidicity(Bmodel* model)
 	
 	for ( i=0; i<3; i++ ) axis[i].normalize();
 
-	Vector3<double>	com = model_center_of_mass(model);
+	Vector3<double>	com = model->center_of_coordinates();
 	
 	Bcomponent*		comp;
 	

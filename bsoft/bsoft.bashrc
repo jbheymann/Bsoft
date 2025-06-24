@@ -1,6 +1,6 @@
-# Environmental variables for Bsoft on Darwin (x86_64)
+# Environmental variables for Bsoft on Darwin (arm64)
  
-BSOFT=.
+BSOFT=/usr/local/bsoft
 export BSOFT
 BPARAM=$BSOFT/parameters/
 export BPARAM

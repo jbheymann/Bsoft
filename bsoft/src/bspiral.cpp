@@ -141,9 +141,9 @@ int 		main(int argc, char **argv)
 	Vector3<double>	origin;
 	model_scale(model, scale, origin);
 
-	models_process(model, 0.1*linklength, model_set_component_radius);
+	models_set_component_radius(model, 0.1*linklength);
 
-	models_process(model, 0.1*linklength, model_set_link_radius);
+	models_set_link_radius(model, 0.1*linklength);
 	
 	if ( analyze ) model_poly_analyze(model);
 
@@ -153,7 +153,7 @@ int 		main(int argc, char **argv)
 		write_model(filename.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

@@ -261,8 +261,7 @@ Bmarker*	img_find_gold_particles(Bimage* p, int img_select, double radius, long 
 	long			imgsize(p->sizeX()*p->sizeY()*p->sizeZ());
 	long			fomsize(imgsize);
 	if ( img_select < 0 ) fomsize *= p->images();
-	float*			fom = new float[fomsize];
-	for ( i=0; i<fomsize; i++ ) fom[i] = 0;
+	vector<float>	fom(fomsize,0);
 	
 //	if ( verbose & VERB_PROCESS )
 //		cout << "Image\tx\ty\tz" << endl;
@@ -341,8 +340,6 @@ Bmarker*	img_find_gold_particles(Bimage* p, int img_select, double radius, long 
 	
 	delete pgold;
 
-	delete[] fom;
-	
 	if ( verbose & VERB_LABEL )
 		cout << "Number of particles found:      " << j << endl << endl;
 	

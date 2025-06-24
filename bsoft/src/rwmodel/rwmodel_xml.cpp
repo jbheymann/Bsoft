@@ -3,7 +3,7 @@
 @brief	Library routines to read and write XML model parameters
 @author 	Bernard Heymann
 @date	Created: 20081029
-@date	Modified: 20230429
+@date	Modified: 20250416
 **/
 
 #ifdef HAVE_XML
@@ -182,8 +182,7 @@ Bmodel*		read_model_xml(vector<string> file_list)
 		xmlCleanupParser();
 	}
 	
-//	model_list_setup_links(model);
-	models_process(model, model_setup_links);
+	models_setup_links(model);
 	
 	return model;
 }
@@ -200,13 +199,16 @@ Bmodel*		read_model_xml(vector<string> file_list)
 @brief 	Writes XML model parameters.
 @param 	&filename	model parameter file name.
 @param 	*model		model parameters.
+@param 	splt		flag to split into data blocks.
 @return int			0, <0 on error.
 **/
 #if defined(HAVE_XML)
-int			write_model_xml(string& filename, Bmodel* model)	
+int			write_model_xml(string& filename, Bmodel* model, int splt)	
 {
-	int				i, err = 0;
+	int				i, err(0);
 
+	xmlDocPtr		doc;
+	xmlNodePtr		root_node;
 	xmlNodePtr		comment_node;
     xmlNodePtr		model_node;
     xmlNodePtr		type_node;
@@ -217,26 +219,39 @@ int			write_model_xml(string& filename, Bmodel* model)
 	Bcomptype*		comptype = NULL;
 	Bcomponent*		comp = NULL;
 	Blink*			link = NULL;
+	string			name;
 	
 	if ( verbose & VERB_PROCESS )
 		cout << "# Writing file:                 " << filename << endl;
-		
-	xmlDocPtr		doc = xmlNewDoc(BAD_CAST XML_DEFAULT_VERSION);
-	if ( doc == NULL ) {
-		cerr << "Error: The XML document tree was not created!" << endl;
-		return  -1;
-	}
-
-	xmlNodePtr		root_node = xmlNewDocPI(doc, BAD_CAST "xml-stylesheet", 
+	
+	if ( !splt ) {
+		doc = xmlNewDoc(BAD_CAST XML_DEFAULT_VERSION);
+		if ( doc == NULL ) {
+			cerr << "Error: The XML document tree was not created!" << endl;
+			return  -1;
+		}
+		root_node = xmlNewDocPI(doc, BAD_CAST "xml-stylesheet", 
 						BAD_CAST "href=\"Bsoft_model.xsl\" type=\"text/xsl\"");
-
-	root_node = xmlNewNode(NULL, BAD_CAST "model_file");
-    xmlDocSetRootElement(doc, root_node);
-
-	comment_node = xmlNewChild(root_node, NULL, BAD_CAST COMMENT, NULL);
-	xmlNodeSetContent(comment_node, BAD_CAST model->comment().c_str());
+		root_node = xmlNewNode(NULL, BAD_CAST "model_file");
+    	xmlDocSetRootElement(doc, root_node);
+		comment_node = xmlNewChild(root_node, NULL, BAD_CAST COMMENT, NULL);
+		xmlNodeSetContent(comment_node, BAD_CAST model->comment().c_str());
+	}
 	
 	for ( i=1, mp = model; mp; mp = mp->next, i++ ) {
+		if ( splt ) {
+			doc = xmlNewDoc(BAD_CAST XML_DEFAULT_VERSION);
+			if ( doc == NULL ) {
+				cerr << "Error: The XML document tree was not created!" << endl;
+				return  -1;
+			}
+			root_node = xmlNewDocPI(doc, BAD_CAST "xml-stylesheet", 
+						BAD_CAST "href=\"Bsoft_model.xsl\" type=\"text/xsl\"");
+			root_node = xmlNewNode(NULL, BAD_CAST "model_file");
+    		xmlDocSetRootElement(doc, root_node);
+			comment_node = xmlNewChild(root_node, NULL, BAD_CAST COMMENT, NULL);
+			xmlNodeSetContent(comment_node, BAD_CAST mp->comment().c_str());
+		}
 		model_node = xmlNewChild(root_node, NULL, BAD_CAST MODEL, NULL);
 		if ( mp->identifier().length() < 1 ) mp->identifier(to_string(i));
 		xmlNewProp(model_node, BAD_CAST ID, BAD_CAST mp->identifier().c_str());
@@ -295,16 +310,22 @@ int			write_model_xml(string& filename, Bmodel* model)
 			xml_set_real(link_node, COMPLINK_FOM, link->FOM(), "%8.3f");
 			xml_set_integer(link_node, COMPLINK_SELECT, link->select(), "%4d");
 		}
+		if ( splt ) {
+			name = insert(filename, i, splt);
+			err = xmlSaveFormatFile(name.c_str(), doc, 1);
+			xmlFreeDoc(doc);
+		}
 	}
 	
-	if ( err == 0 ) err = xmlSaveFormatFile(filename.c_str(), doc, 1);
-	
-	xmlFreeDoc(doc);
+	if ( !splt ) {
+		err = xmlSaveFormatFile(filename.c_str(), doc, 1);
+		xmlFreeDoc(doc);
+	}
 
 	return err;
 }
 #else
-int			write_model_xml(string& filename, Bmodel* model)	
+int			write_model_xml(string& filename, Bmodel* model, int splt)	
 {
 	cerr << "Error: XML files are not supported!" << endl << endl;
 	

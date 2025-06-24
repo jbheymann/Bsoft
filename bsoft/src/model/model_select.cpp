@@ -3,7 +3,7 @@
 @brief	Library routines used for model and component selection
 @author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20240324
+@date	Modified: 20250623
 **/
 
 #include "rwmodel.h"
@@ -26,16 +26,17 @@ extern int 	verbose;		// Level of output to the screen
 	The FOM is assumed to be a value from 0 to 1.
 
 **/
-long		model_selection_stats(Bmodel* model)
+long		models_selection_stats(Bmodel* model)
 {
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_selection_stats: " << model->identifier() << endl;
+		cout << "DEBUG models_selection_stats: " << model->identifier() << endl;
 	
 	long			i, h;
 	long			nmod(0), ncomp(0), nlink(0), npoly(0);
 	long			nmods(0), ncomps(0), nlinks(0), npolys(0);
-	long			n, nmt(0), nct(0), nv[1000];
-	int				val[MAXLINK];
+	long			n, nmt(0), nct(0);
+	map<long,long>	nv;
+	vector<long>	val(MAXLINK,0);
 	double			fomavg(0), fomstd(0), fmin(1e30), fmax(-1e30);
 	Vector3<double>	cmin(1e10, 1e10, 1e10), cmax(-1e10, -1e10, -1e10), com;
 	Bmodel*			mp = NULL;
@@ -51,9 +52,6 @@ long		model_selection_stats(Bmodel* model)
 	Bstring*		typefilelist = NULL;
 	Bstring*		typefile = NULL;
 	
-	for ( i=0; i<MAXLINK; i++ ) val[i] = 0;
-	for ( i=0; i<1000; i++ ) nv[i] = 0;
-
 	for ( mp = model; mp; mp = mp->next, nmod++ ) {
 		for ( comp = mp->comp; comp; comp = comp->next ) ncomp++;
 		for ( link = mp->link; link; link = link->next ) nlink++;
@@ -61,7 +59,7 @@ long		model_selection_stats(Bmodel* model)
 	}
 		
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_selection_stats: nmod=" << nmod << " ncomp=" << ncomp
+		cout << "DEBUG models_selection_stats: nmod=" << nmod << " ncomp=" << ncomp
 			<< " nlink=" << nlink << " npoly=" << npoly << endl;
 	
 	// Compile temporary lists of model and component types
@@ -87,7 +85,7 @@ long		model_selection_stats(Bmodel* model)
 	}
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_selection_stats: nmods=" << nmods << " nmt=" << nmt << " nct=" << nct << endl;
+		cout << "DEBUG models_selection_stats: nmods=" << nmods << " nmt=" << nmt << " nct=" << nct << endl;
 	
 	if ( nmods < 1 ) {
 		cerr << "No models selected!" << endl << endl;
@@ -117,9 +115,10 @@ long		model_selection_stats(Bmodel* model)
 	
 	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
 		if ( verbose & VERB_DEBUG )
-			cout << "DEBUG model_selection_stats: model id=" << mp->identifier() << endl;
+			cout << "DEBUG models_selection_stats: model id=" << mp->identifier() << endl;
 		for ( n=0, comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) n++;
-		if ( n < 1000 ) nv[n]++;
+		if ( nv.find(n) == nv.end() ) nv[n] = 1;
+		else nv[n]++;
 		for ( i=0, temptype = modtypelist; temptype && *temptype != mp->model_type(); temptype = temptype->next, i+=3 ) ;
 		i += mp->handedness() + 1;
 		if ( i < nmt ) {
@@ -129,7 +128,7 @@ long		model_selection_stats(Bmodel* model)
 		}
 		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
 			if ( verbose & VERB_DEBUG )
-				cout << "DEBUG model_selection_stats: component id=" << comp->identifier() << " ncomps=" << ncomps << endl;
+				cout << "DEBUG models_selection_stats: component id=" << comp->identifier() << " ncomps=" << ncomps << endl;
 			for ( i=0, temptype = comptypelist; temptype && *temptype != comp->type()->identifier(); temptype = temptype->next, i++ ) ;
 			if ( i < nct ) {
 				ncomptype[i]++;
@@ -169,13 +168,14 @@ long		model_selection_stats(Bmodel* model)
 			cout << "Center-of-mass:                 " << com << endl;
 			cout << "Coordinate minima:              " << cmin << endl;
 			cout << "Coordinate maxima:              " << cmax << endl;
+			cout << "Coordinate extent:              " << cmax - cmin << endl;
 			cout << "Selected FOM minimum & maximum: " << fmin << " " << fmax << endl;
 			cout << "Selected FOM average & stdev:   " << fomavg << " " << fomstd << endl << endl;
 		}
 		cout << "Model sizes:\nVert\tCount" << endl;
-		for ( i=n=0; i<1000; i++ ) if ( nv[i] ) {
-			cout << i << tab << nv[i] << endl;
-			n += nv[i];
+		for ( auto nv1: nv ) {
+			cout << nv1.first << tab << nv1.second << endl;
+			n += nv1.second;
 		}
 		cout << "Total\t" << n << endl << endl;
 		cout << "Model types:\nType\tVert\tHand\tCount\tFOM" << endl;
@@ -184,11 +184,106 @@ long		model_selection_stats(Bmodel* model)
 				if ( nmodtype[h] ) cout << *modtype << tab << nvert[h] << tab
 					<< h%3 - 1 << tab << nmodtype[h] << tab << modfom[h]/nmodtype[h] << endl;
 		cout << endl;
+		if ( verbose & VERB_FULL ) {
+			cout << "Component types:\nType\tHand\tCount\tFOM\tFile" << endl;
+			for ( i=0, comptype = comptypelist, typefile = typefilelist;
+				 i<nct && comptype && typefile; comptype = comptype->next, typefile = 	typefile->next, i++ ) {
+				if ( ncomptype[i] ) compfom[i] /= ncomptype[i];
+				cout << *comptype << tab << component_hand(comptype->str()) << tab <<
+				ncomptype[i] << tab << compfom[i] << tab << *typefile << endl;
+			}
+			cout << endl;
+			cout << "Valence\tCount" << endl;
+			for ( i=0; i<MAXLINK; i++ ) if ( val[i] ) cout << i << tab << val[i] << endl;
+			cout << endl;
+		}
+	}
+	
+	string_kill(modtypelist);
+	string_kill(comptypelist);
+	string_kill(typefilelist);
+	
+	return ncomps;
+}
+
+long		models_show_component_types(Bmodel* model)
+{
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG models_show_component_types: " << model->identifier() << endl;
+	
+	long			i;
+	long			nmods(0), ncomps(0);
+	long			nmt(0), nct(0);
+	map<long,long>	nv;
+	vector<long>	val(MAXLINK,0);
+	Bmodel*			mp = NULL;
+	Bcomponent*		comp = NULL;
+	Bcomptype*		type = NULL;
+	Bstring*		comptypelist = NULL;
+	Bstring*		comptype = NULL;
+	Bstring*		temptype = NULL;
+	Bstring*		typefilelist = NULL;
+	Bstring*		typefile = NULL;
+		
+	// Compile temporary lists of model and component types
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		nmods++;
+		for ( type = mp->type; type; type = type->next ) {
+			for ( temptype = comptypelist; temptype && *temptype != type->identifier(); temptype = temptype->next ) ;
+			if ( !temptype ) {
+				comptype = string_add(&comptype, type->identifier().c_str());
+				if ( !comptypelist ) comptypelist = comptype;
+				typefile = string_add(&typefile, type->file_name().c_str());
+				if ( !typefilelist ) typefilelist = typefile;
+				nct++;
+			}
+		}
+	}
+	
+	if ( nmods < 1 ) {
+		cerr << "No models selected!" << endl << endl;
+		return 0;
+	}
+	
+	if ( nmt < 3 ) nmt = 3;
+	if ( nct < 1 ) nct = 1;
+	
+	// Sort the temporary list
+	if ( comptypelist ) string_sort(comptypelist, 0, 1);
+	
+	// Rearrange associated file names
+	for ( temptype = comptypelist, typefile = typefilelist; temptype && typefile; temptype = temptype->next, typefile = typefile->next ) {
+		for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+			for ( type = mp->type; type && *temptype != type->identifier(); type = type->next ) ;
+			if ( type ) *typefile = type->file_name() ;
+		}
+	}
+	
+	vector<int>		nvert(nmt, 0);
+	vector<int>		nmodtype(nmt, 0);
+	vector<double>	modfom(nmt, 0);
+	vector<int>		ncomptype(nct, 0);
+	vector<double>	compfom(nct, 0);
+	
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
+			if ( verbose & VERB_DEBUG )
+				cout << "DEBUG models_show_component_types: component id=" << comp->identifier() << " ncomps=" << ncomps << endl;
+			for ( i=0, temptype = comptypelist; temptype && *temptype != comp->type()->identifier(); temptype = temptype->next, i++ ) ;
+			if ( i < nct ) {
+				ncomptype[i]++;
+				compfom[i] += comp->FOM();
+			}
+			ncomps++;
+		}
+	}
+	
+	if ( verbose ) {
 		cout << "Component types:\nType\tHand\tCount\tFOM\tFile" << endl;
 		for ( i=0, comptype = comptypelist, typefile = typefilelist;
 				i<nct && comptype && typefile; comptype = comptype->next, typefile = typefile->next, i++ ) {
 			if ( ncomptype[i] ) compfom[i] /= ncomptype[i];
-			cout << *comptype << tab << component_hand(*comptype) << tab <<
+			cout << *comptype << tab << component_hand(comptype->str()) << tab <<
 				ncomptype[i] << tab << compfom[i] << tab << *typefile << endl;
 		}
 		cout << endl;
@@ -197,7 +292,6 @@ long		model_selection_stats(Bmodel* model)
 		cout << endl;
 	}
 	
-	string_kill(modtypelist);
 	string_kill(comptypelist);
 	string_kill(typefilelist);
 	
@@ -228,7 +322,7 @@ long		models_count_selected(Bmodel* model)
 
 
 **/
-long 		model_show_selection(Bmodel* model)
+long 		models_show_selection(Bmodel* model)
 {
 	long			i;
 	vector<long>	lev;
@@ -254,7 +348,7 @@ long 		model_show_selection(Bmodel* model)
 @brief 	Selects models, components and component types.
 @param 	*model		model parameters.
 @param 	&selstr		selection string.
-@return long		number of selections made.
+@return long			number of selections made.
 
 	The selection string can have one of the following formats:
 		#model@component
@@ -264,7 +358,7 @@ long 		model_show_selection(Bmodel* model)
 	Only elements originally selected is considered, except where the "." is used.
 
 **/
-long 		model_select(Bmodel* model, Bstring& selstr)
+long 		models_select(Bmodel* model, Bstring& selstr)
 {
 	long			n(0);
 	Bmodel*			mp;
@@ -279,7 +373,7 @@ long 		model_select(Bmodel* model, Bstring& selstr)
 	Bstring*		list, *one;
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_select: selstr=" << selstr << endl;
+		cout << "DEBUG models_select: selstr=" << selstr << endl;
 
 	if ( selstr[0] == '#' ) {
 		if ( selstr.contains("@") ) {
@@ -386,12 +480,128 @@ long 		model_select(Bmodel* model, Bstring& selstr)
 }
 
 /**
-@brief 	Resets the selection to all models.
+@brief 	Selects models, components and component types.
+@param 	*model		model parameters.
+@param 	&selstr		selection string.
+@return long			number of selections made.
+
+	The selection string can have one of the following formats:
+		#model@component
+		#model%comp_type
+		^model_type@component
+		^model_type%comp_type
+	Only elements originally selected is considered, except where the "." is used.
+
+**/
+long 		models_select(Bmodel* model, string& selstr)
+{
+	long			n(0);
+	Bmodel*			mp;
+	Bcomponent*		comp;
+	Bcomptype*		type;
+	Blink*			link;
+	
+	vector<string>	vs;
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG models_select: selstr=" << selstr << endl;
+
+	map<char,string>	ms = split_on_delimeters(selstr, "#^@%");
+//	for ( auto it: ms )
+//		cout << it.first << tab << it.second << endl;
+
+	string			mod_id;
+	string			mod_type_id;
+	string			comp_id;
+	string			comp_type_id;
+
+	if ( ms.find('#') != ms.end() ) mod_id = ms['#'];
+	if ( ms.find('^') != ms.end() ) mod_type_id = ms['^'];
+	if ( ms.find('@') != ms.end() ) comp_id = ms['@'];
+	if ( ms.find('%') != ms.end() ) comp_type_id = ms['%'];
+
+	if ( verbose ) {
+		cout << "Selection identifiers:" << endl;
+		if ( mod_id.length() )
+			cout << "Model:                          " << mod_id << endl;
+		if ( mod_type_id.length() )
+			cout << "Model type:                     " << mod_type_id << endl;
+		if ( comp_id.length() )
+			cout << "Component:                      " << comp_id << endl;
+		if ( comp_type_id.length() )
+			cout << "Component type:                 " << comp_type_id << endl;
+		cout << endl;
+	}
+
+	if ( mod_id == "." || mod_type_id == "." ) {
+		for ( mp = model; mp; mp = mp->next ) mp->select(1);
+	} else {
+		if ( mod_id.length() ) {
+			vs = split(mod_id, ',');
+			for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+				auto it = vs.begin();
+				for ( ; it != vs.end() && *it != mp->identifier(); ++it ) ;
+				if ( it == vs.end() ) mp->select(0);
+			}
+		}
+		if ( mod_type_id.length() ) {
+			vs = split(mod_type_id, ',');
+			for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+				auto it = vs.begin();
+				for ( ; it != vs.end() && *it != mp->model_type(); ++it ) ;
+				if ( it == vs.end() ) mp->select(0);
+			}
+		}
+	}
+	
+	if ( comp_type_id == "." ) {
+		for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+			for ( type = mp->type; type; type = type->next ) type->select(1);
+			for ( comp = mp->comp; comp; comp = comp->next ) comp->select(1);
+		}
+	} else if ( comp_type_id.length() ) {
+		vs = split(comp_type_id, ',');
+		for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+			for ( type = mp->type; type; type = type->next ) if ( type->select() ) {
+				auto it = vs.begin();
+				for ( ; it != vs.end() && *it != type->identifier(); ++it ) ;
+				if ( it == vs.end() ) type->select(0);
+			}
+			for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 )
+				comp->select(comp->type()->select());
+		}
+	}
+
+	if ( comp_id == "." ) {
+		for ( mp = model; mp; mp = mp->next ) if ( mp->select() )
+			for ( comp = mp->comp; comp; comp = comp->next ) comp->select(1);
+	} else if ( comp_id.length() ) {
+		vs = split(comp_id, ',');
+		for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+			for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
+				auto it = vs.begin();
+				for ( ; it != vs.end() && *it != comp->identifier(); ++it ) ;
+				if ( it == vs.end() ) comp->select(0);
+			}
+		}
+	}
+
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) n++;
+		for ( link = mp->link; link; link = link->next )
+			if ( link->comp[0]->select() && link->comp[1]->select() ) link->select(1);
+	}
+
+	return n;
+}
+
+/**
+@brief 	Resets the selection to components with the given selection number.
 @param 	*model		model parameters.
 @param	number		selection number to select.
 @return long			number of components selected.
 **/
-long		model_select(Bmodel* model, long number)
+long		models_select(Bmodel* model, long number)
 {
 	long			nsel(0), ntot(0);
 	Bmodel*			mp = NULL;
@@ -417,16 +627,21 @@ long		model_select(Bmodel* model, long number)
 }
 
 /**
-@brief 	Resets the selection to all models.
+@brief 	Resets the selection to all models and their contents.
 @param 	*model		model parameters.
-@return long		number of models selected.
+@return long			number of components selected.
 **/
-long		model_select_all(Bmodel* model)
+long		models_select_all(Bmodel* model)
 {
 	long			nsel(0);
-	Bmodel*			mp = NULL;
-
-	for ( nsel=0, mp = model; mp; mp = mp->next, nsel++ ) mp->select(1);
+	Bmodel*			mp;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		if ( verbose & VERB_FULL )
+			cout << "Model " << model->identifier() << ": reset selection" << endl;
+		mp->select_all();
+		nsel += mp->component_count();
+	}
 	
 	return nsel;
 }
@@ -434,9 +649,9 @@ long		model_select_all(Bmodel* model)
 /**
 @brief 	Resets the selection to all unknown models.
 @param 	*model		model parameters.
-@return long		number of models selected.
+@return long			number of models selected.
 **/
-long		model_select_unknowns(Bmodel* model)
+long		models_select_unknowns(Bmodel* model)
 {
 	long			nsel(0);
 	Bmodel*			mp;
@@ -453,58 +668,21 @@ long		model_select_unknowns(Bmodel* model)
 }
 
 /**
-@brief 	Resets the selection to all components.
-@param 	*model		model parameters.
-@return long		number of components selected.
-
-	Only one model is modified.
-
-**/
-long		model_reset_selection(Bmodel* model)
-{
-	long			nsel(0);
-	Bcomptype*		type;
-	Bcomponent*		comp;
-	Blink*			link;
-	Bpolygon*		poly;
-
-	if ( verbose & VERB_FULL )
-		cout << "Model " << model->identifier() << ": reset selection" << endl;
-	
-	model->select(1);
-	for ( type = model->type; type; type = type->next )
-		type->select(1);
-	for ( comp = model->comp; comp; comp = comp->next, nsel++ )
-		comp->select(1);
-	for ( link = model->link; link; link = link->next )
-		link->select(1);
-	for ( poly = model->poly; poly; poly = poly->next )
-		poly->select(1);
-	
-	return nsel;
-}
-
-/**
 @brief 	Unsets the selection to all components but not models.
 @param 	*model		model parameters.
-@return long		number of components deselected.
+@return long			number of components deselected.
 **/
-long		model_unset_selection(Bmodel* model)
+long		models_unset_selection(Bmodel* model)
 {
 	int				nsel(0);
-	Bcomptype*		type;
-	Bcomponent*		comp;
-	Blink*			link;
-	Bpolygon*		poly;
+	Bmodel*			mp;
 
-	for ( type = model->type; type; type = type->next )
-		type->select(0);
-	for ( comp = model->comp; comp; comp = comp->next, nsel++ )
-		comp->select(0);
-	for ( link = model->link; link; link = link->next )
-		link->select(0);
-	for ( poly = model->poly; poly; poly = poly->next )
-		poly->select(0);
+	for ( mp = model; mp; mp = mp->next ) {
+		if ( verbose & VERB_FULL )
+			cout << "Model " << model->identifier() << ": unset selection" << endl;
+		mp->deselect_all();
+		nsel += mp->component_count();
+	}
 	
 	return nsel;
 }
@@ -512,19 +690,42 @@ long		model_unset_selection(Bmodel* model)
 /**
 @brief 	Inverts the selection of all components.
 @param 	*model		model parameters.
-@return long		number of components selected.
+@param	type		flag to invert model (1) or component (2) selection.
+@return long			number of components selected.
 **/
-long		model_invert_selection(Bmodel* model)
+long		models_invert_selection(Bmodel* model, int type)
 {
 	int				nsel(0);
-	Bcomponent*		comp;
-
-	for ( comp = model->comp; comp; comp = comp->next, nsel++ )
-		if ( comp->select() ) comp->select(0);
-		else {
-			comp->select(1);
-			nsel++;
+	Bmodel*			mp;
+	
+	if ( verbose ) {
+		if ( type < 2 )
+			cout << "Invert model selection" << endl;
+		else
+			cout << "Invert component selection" << endl;
+	}
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		if ( type == 2 ) {
+			if ( verbose & VERB_FULL )
+				cout << "Model " << mp->identifier() << ": invert component selection" << endl;
+			nsel += mp->invert_selection();
+		} else {
+			if ( verbose & VERB_FULL )
+				cout << "Model " << mp->identifier() << ": invert model selection: " << mp->select() << endl;
+			if ( mp->select() ) {
+				mp->select(0);
+			} else {
+				mp->select(1);
+				nsel += mp->component_count_selected();
+			}
 		}
+	}
+	
+	if ( verbose ) {
+		cout << "Models selected:                " << model->count_selected() << endl;
+		cout << "Components selected:            " << nsel << endl << endl;
+	}
 	
 	return nsel;
 }
@@ -534,13 +735,13 @@ long		model_invert_selection(Bmodel* model)
 @param 	*model		parameter structure with all parameters.
 @param 	size		number of components in each set.
 @param 	flag		flag to not count across model boundaries.
-@return long		number of components selected.
+@return long			number of components selected.
 
 	Sets up sets of components, each set identified as a number in the
 	selection array.
 
 **/
-long		model_select_sets(Bmodel* model, int size, int flag)
+long		models_select_sets(Bmodel* model, int size, int flag)
 {
 	if ( !model || size <= 0 ) return 0;
 	
@@ -610,9 +811,9 @@ long		models_select_within_bounds(Bmodel* model, Vector3<double>& start, Vector3
 @param 	*model		model parameters.
 @param 	ncomp_min	minimum number of components.
 @param 	ncomp_max	maximum number of components.
-@return long		number of models selected.
+@return long			number of models selected.
 **/
-long		model_select_number_of_components(Bmodel* model, int ncomp_min, int ncomp_max)
+long		models_select_number_of_components(Bmodel* model, long ncomp_min, long ncomp_max)
 {
 	if ( ncomp_min < 1 ) return 0;
 	if ( ncomp_min > ncomp_max ) ncomp_max = ncomp_min;
@@ -640,6 +841,9 @@ long		model_select_number_of_components(Bmodel* model, int ncomp_min, int ncomp_
 @param 	*model		model parameters.
 @param 	number		number of components.
 @return int			0.
+
+	Only the first model is processed.
+	
 **/
 int			model_select_random(Bmodel* model, long number)
 {
@@ -686,7 +890,7 @@ int			model_select_random(Bmodel* model, long number)
 @param 	*model			model parameters.
 @param 	closure_rule	1=valency, 2=order.
 @param 	val_order		magnitude of valency or order.
-@return long			number of models selected.
+@return long				number of models selected.
 
 	Polyhedron closure is arbitrarily decided by a rule:
 	1.	Fixed valency.
@@ -696,7 +900,7 @@ int			model_select_random(Bmodel* model, long number)
 	the first component or polygon.
 
 **/
-long		model_select_closed(Bmodel* model, int closure_rule, int val_order)
+long		models_select_closed(Bmodel* model, int closure_rule, int val_order)
 {
 	long			n(0), i;
 	Bmodel*			mp;
@@ -747,7 +951,7 @@ long		model_select_closed(Bmodel* model, int closure_rule, int val_order)
 	only of five or six.
 
 **/
-long		model_select_fullerene(Bmodel* model)
+long		models_select_fullerene(Bmodel* model)
 {
 	long			n(0);
 	Bmodel*			mp;
@@ -776,7 +980,7 @@ long		model_select_fullerene(Bmodel* model)
 	different from five or six.
 
 **/
-long		model_select_non_fullerene(Bmodel* model)
+long		models_select_non_fullerene(Bmodel* model)
 {
 	long			n(0);
 	Bmodel*			mp;
@@ -807,7 +1011,7 @@ long		model_select_non_fullerene(Bmodel* model)
 	only of five or six.
 
 **/
-long		model_select_valence(Bmodel* model, int valence)
+long		models_select_valence(Bmodel* model, int valence)
 {
 	long			n(0), v;
 	Bmodel*			mp;
@@ -834,7 +1038,7 @@ long		model_select_valence(Bmodel* model, int valence)
 @param 	order		polygon order.
 @return long		0.
 **/
-long		model_select_polygons(Bmodel* model, int order)
+long		models_select_polygons(Bmodel* model, int order)
 {
 	if ( order < 1 ) return 0;
 	
@@ -865,7 +1069,7 @@ long		model_select_polygons(Bmodel* model, int order)
 @param 	first		first number of components to select.
 @return long			number of components selected.
 **/
-long 		model_select_first(Bmodel* model, int first)
+long 		models_select_first(Bmodel* model, int first)
 {
 	long			n, nsel(0);
 	Bmodel*			mp;
@@ -891,7 +1095,7 @@ long 		model_select_first(Bmodel* model, int first)
 @param 	maxrad		radius of the sphere.
 @return long			number of components selected.
 **/
-long 		model_select_within_shell(Bmodel* model, Vector3<double> center, double minrad, double maxrad)
+long 		models_select_within_shell(Bmodel* model, Vector3<double> center, double minrad, double maxrad)
 {
 	if ( maxrad < 1e-3 ) maxrad = 1e30;
 	
@@ -922,7 +1126,7 @@ long 		model_select_within_shell(Bmodel* model, Vector3<double> center, double m
 @param 	pmask		first number of components to select.
 @return long			number of components selected.
 **/
-long 		model_select_in_mask(Bmodel* model, Bimage* pmask)
+long 		models_select_in_mask(Bmodel* model, Bimage* pmask)
 {
 	long			nsel(0), ntot(0);
 	Bmodel*			mp;
@@ -958,7 +1162,7 @@ long 		model_select_in_mask(Bmodel* model, Bimage* pmask)
 	A model, component or link is tagged for deletion by a negative selection flag.
 
 **/
-long		model_select_slices(Bmodel* model, double bottom, double top, double thickness)
+long		models_select_slices(Bmodel* model, double bottom, double top, double thickness)
 {
 	long			i, n((top - bottom)/thickness);
 	vector<vector<Bcomponent*>>	comp_slice(n);
@@ -1008,7 +1212,7 @@ long		model_select_slices(Bmodel* model, double bottom, double top, double thick
 	A model, component or link is tagged for deletion by a negative selection flag.
 
 **/
-long 		model_delete(Bmodel** model)
+long 		models_delete(Bmodel** model)
 {
 	long			nmod(0), ncomp(0), nlink(0), nmdel(0), ncdel(0), nldel(0);
 	Bmodel*			mp_prev;
@@ -1028,12 +1232,12 @@ long 		model_delete(Bmodel** model)
 			if ( mp == *model ) {
 				mp_prev = *model = mp->next;
 				mp->next = NULL;
-				model_kill(mp);
+				delete mp;
 				mp = mp_prev;
 			} else {
 				mp_prev->next = mp->next;
 				mp->next = NULL;
-				model_kill(mp);
+				delete mp;
 				mp = mp_prev->next;
 			}
 			nmdel++;
@@ -1113,7 +1317,7 @@ long 		model_delete(Bmodel** model)
 @param 	comptype	component type.
 @return long			number of components remaining.
 **/
-long 		model_delete_comp_type(Bmodel* model, string comptype)
+long 		models_delete_comp_type(Bmodel* model, string comptype)
 {
 	long			n(0);
 	Bmodel*			mp;
@@ -1158,7 +1362,7 @@ long 		model_delete_comp_type(Bmodel* model, string comptype)
 		}
 		for ( ct = ctp = mp->type; ct;  ) {
 			if ( verbose & VERB_DEBUG )
-				cout << "DEBUG model_delete_comp_type: type=" << ct->identifier() << endl;
+				cout << "DEBUG models_delete_comp_type: type=" << ct->identifier() << endl;
 			if ( ct->identifier() == comptype ) {
 				if ( ct == mp->type ) {
 					ctp = mp->type = ct->next;
@@ -1184,7 +1388,7 @@ long 		model_delete_comp_type(Bmodel* model, string comptype)
 @param 	**model		pointer to model parameters.
 @return long		remaining number of components.
 **/
-long 		model_delete_non_selected(Bmodel** model)
+long 		models_delete_non_selected(Bmodel** model)
 {
 	long			nmod(0), ncomp(0), nlink(0), nmdel(0), ncdel(0), nldel(0);
 	Bmodel*			mp_prev;
@@ -1204,18 +1408,24 @@ long 		model_delete_non_selected(Bmodel** model)
 			if ( mp == *model ) {
 				mp_prev = *model = mp->next;
 				mp->next = NULL;
-				model_kill(mp);
+				if ( verbose & VERB_DEBUG )
+					cout << "DEBUG models_delete_non_selected: Deleting first " << mp->identifier() << endl;
+				delete mp;
 				mp = mp_prev;
 			} else {
 				mp_prev->next = mp->next;
 				mp->next = NULL;
-				model_kill(mp);
+				if ( verbose & VERB_DEBUG )
+					cout << "DEBUG models_delete_non_selected: Deleting " << mp->identifier() << endl;
+				delete mp;
 				mp = mp_prev->next;
 			}
 			nmdel++;
+			if ( verbose & VERB_DEBUG )
+				cout << "DEBUG models_delete_non_selected: Deleted = " << nmdel << endl;
 		} else {
 			if ( verbose & VERB_DEBUG )
-				cout << "DEBUG model_delete_non_selected: deleting links" << endl;
+				cout << "DEBUG models_delete_non_selected: deleting links" << endl;
 			for ( link = link_prev = mp->link; link;  ) {
 				if ( link->select() < 1 ||
 						( link->comp[0] && link->comp[0]->select() < 1 ) ||
@@ -1237,7 +1447,7 @@ long 		model_delete_non_selected(Bmodel** model)
 				}
 			}
 			if ( verbose & VERB_DEBUG )
-				cout << "DEBUG model_delete_non_selected: deleting components" << endl;
+				cout << "DEBUG models_delete_non_selected: deleting components" << endl;
 			for ( comp = comp_prev = mp->comp; comp; ) {
 				if ( comp->select() < 1 ) {
 					if ( comp == mp->comp ) {
@@ -1262,8 +1472,7 @@ long 		model_delete_non_selected(Bmodel** model)
 		}
 	}
 	
-//	model_count_component_types(*model);
-	(*model)->update_type_counts();
+	if ( *model ) (*model)->update_type_counts();
 	
 	nmod += nmdel;
 	ncomp += ncdel;
@@ -1314,8 +1523,9 @@ long		model_type_from_selection(Bmodel* model, Bstring* comp_type, string filena
 	if ( ntype != nselnum ) {
 		if ( nname == nselnum ) {
 			for ( mp = model; mp; mp = mp->next ) {
-				comp_type_list_kill(mp->type);
-				mp->type = NULL;
+//				comp_type_list_kill(mp->type);
+//				mp->type = NULL;
+				mp->clear_types();
 				if ( verbose & VERB_FULL )
 					cout << "Model: " << mp->identifier() << endl;
 				for ( i=0, ct_name = comp_type; i<nselnum && ct_name; i++, ct_name = ct_name->next ) {
@@ -1330,8 +1540,9 @@ long		model_type_from_selection(Bmodel* model, Bstring* comp_type, string filena
 		} else  {
 			if ( comp_type && comp_type->length() ) base = comp_type->str();
 			for ( mp = model; mp; mp = mp->next ) {
-				comp_type_list_kill(mp->type);
-				mp->type = NULL;
+//				comp_type_list_kill(mp->type);
+//				mp->type = NULL;
+				mp->clear_types();
 				if ( verbose & VERB_FULL )
 					cout << "Model: " << mp->identifier() << endl;
 				for ( i=0; i<nselnum; i++ ) {
@@ -1618,7 +1829,7 @@ long		model_fom_ranking(Bmodel* model, int nrank)
 	in the list is deleted.
 
 **/
-long		model_delete_overlapped_components(Bmodel** model, double distance)
+long		models_delete_overlapped_components(Bmodel** model, double distance)
 {
 	Bmodel*			mp;
 	Bcomponent		*comp1, *comp2;
@@ -1632,7 +1843,7 @@ long		model_delete_overlapped_components(Bmodel** model, double distance)
 		}
 	}
 	
-	model_delete_non_selected(model);
+	models_delete_non_selected(model);
 	
 	return 0;
 }
@@ -1679,7 +1890,7 @@ long		model_average_overlapped_components(Bmodel* model, double distance)
 		}
 	}
 	
-	return model_delete_non_selected(&model);
+	return models_delete_non_selected(&model);
 }
 
 
@@ -1722,7 +1933,7 @@ long		model_prune_simple(Bmodel* model, double mindist)
 	if ( verbose & VERB_FULL )
 		cout << "Number of components deleted:   " << ndel << " (" << ndel*100.0/n << " %)" << endl;
 	
-	model_delete(&model);
+	models_delete(&model);
 
 	return n - ndel;
 }
@@ -1818,7 +2029,7 @@ long		model_prune_fom_old(Bmodel* model, double distance)
 	delete[] a;
 	delete[] f;
 
-	model_delete(&model);
+	models_delete(&model);
 
 	return nsel;
 }
@@ -1853,7 +2064,7 @@ long		model_prune_fom(Bmodel* model, double distance)
 		}
 	}
 	
-	return model_delete(&model);
+	return models_delete(&model);
 }
 
 /**
@@ -1928,7 +2139,7 @@ long		model_prune_similar(Bmodel* model)
 		}
 	}
 
-	model_delete(&model);
+	models_delete(&model);
 
 	return ns;
 }
@@ -2299,7 +2510,7 @@ long		model_prune_large(Bmodel* model, double sampling)
 	delete[] grid;
 	delete[] peak;
 
-	model_delete(&model);
+	models_delete(&model);
 
 	return nsel;
 }
@@ -2342,7 +2553,7 @@ long		model_find_overlap(Bmodel* model, string reffile, double distance)
 		}
 	}
 
-	model_kill(modref);
+	delete modref;
 	
 	if ( verbose )
 		cout << "Number of components retained:  " << nsel << endl << endl;
@@ -2350,3 +2561,18 @@ long		model_find_overlap(Bmodel* model, string reffile, double distance)
 	return nsel;
 }
 
+long		models_prune(Bmodel* model, int prune_type, double distance)
+{
+	long		nsel(0);
+	Bmodel*		mp;
+	
+	for ( mp = model; mp; mp = mp->next ) {
+		if ( prune_type > 4 ) nsel += model_prune_large(mp, distance);
+		else if ( prune_type == 4 ) nsel += model_prune_similar(mp);
+		else if ( prune_type == 3 ) nsel += model_prune_fit(mp, distance);
+		else if ( prune_type == 2 ) nsel += model_prune_fom(mp, distance);
+		else if ( prune_type == 1 ) nsel += model_prune_simple(mp, distance);
+	}
+	
+	return nsel;
+}

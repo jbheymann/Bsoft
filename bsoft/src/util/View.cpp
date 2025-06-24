@@ -32,16 +32,18 @@ ostream& operator<<(ostream& output, View2<double> v) {
 **/
 int			show_views(vector<View2<float>>& views)
 {
+	long	i(0);
 	for ( auto& v: views )
-		cout << v << endl;
+		cout << ++i << tab << v << endl;
 	
 	return views.size();
 }
 
 int			show_views(vector<View2<double>>& views)
 {
+	long	i(0);
 	for ( auto& v: views )
-		cout << v << endl;
+		cout << ++i << tab << v << endl;
 	
 	return views.size();
 }

@@ -117,6 +117,7 @@ Bimage*		img_ctf_focal_series(CTFparam& cp, vector<double>& dfocus,
 	bool			env(flag&2);
 	bool			sine(flag&1);
 	bool			comb(flag&4);
+	bool			conj(flag&8);
 	
 	long			nimg(dfocus.size());
 	if ( size[2] > 1 ) {
@@ -137,7 +138,7 @@ Bimage*		img_ctf_focal_series(CTFparam& cp, vector<double>& dfocus,
 	double			sx, sy, s, s2, a, dphi, w;
 	Complex<double>	cv(1,0);
 	Vector3<double>	freq_scale(1.0L/p->real_size());
-	Vector3<double>	h((p->size() - 1)/2);
+	Vector3<long>	h((p->size() - 1)/2);
 	
 	double			def(cp.defocus_average());
 	double			fac(0.5*cp.lambda()*fabs(dfocus.back()-dfocus[0]));
@@ -146,6 +147,8 @@ Bimage*		img_ctf_focal_series(CTFparam& cp, vector<double>& dfocus,
 		cout << "Calculating a CTF focal series:" << endl;
 	}
 	if ( verbose & VERB_PROCESS ) {
+		cout << "Images:                         " << p->images() << endl;
+		cout << "Slices:                         " << p->sizeZ() << endl;
 		cp.show();
 		cout << "Defocus start, end, increment:  " << def+dfocus[0] << " - " << def+dfocus.back() << " ∆ " << dfocus[1] - dfocus[0] << endl;
 		cout << "First sinc node:                " << sqrt(fabs(dfocus.back()-dfocus[0])*cp.lambda()/2) << " A" << endl;
@@ -199,6 +202,7 @@ Bimage*		img_ctf_focal_series(CTFparam& cp, vector<double>& dfocus,
 							if ( w > 0 ) cv += cv.conj() * w;
 						} else {
 							cv = cp.calculate_complex(s, a);	// Note: the phase is shifted by pi/2 to make the even terms real
+							if ( conj ) cv = cv.conj();
 						}
 						if ( env ) cv *= cp.coherence_envelope(s);
 						p->set(i, cv);
@@ -1919,7 +1923,6 @@ Bimage*		img_ctf_focal_fit(Bimage* p, CTFparam& cp, double hires, double lores,
 @return Bimage*			Image with data from the sphere.
 	
 **/
-//Bimage*		img_fspace_weigh_sphere(Bimage* p, double volt)
 int			img_fspace_weigh_sphere(Bimage* p, double volt)
 {
 	if ( p->compound_type() != TComplex )
@@ -1932,11 +1935,6 @@ int			img_fspace_weigh_sphere(Bimage* p, double volt)
 	if ( verbose )
 		cout << "Weighing with a focal coherent sphere for a wavelength of " << wl << " A" << endl << endl;
 	
-/*	Bimage*			ps = new Bimage(Float, TSimple, p->size(), p->images());
-	ps->sampling(p->image->sampling());
-	ps->origin(p->image->origin());
-	ps->fourier_type(Standard);
-*/
 	for ( nn=i=0; nn<p->images(); ++nn ) {
 		for ( zz=0; zz<p->sizeZ(); ++zz ) {
 			w = ( zz < zh )? zz/p->real_size()[2]: (zz-p->sizeZ())/p->real_size()[2];
@@ -1945,7 +1943,7 @@ int			img_fspace_weigh_sphere(Bimage* p, double volt)
 				for ( xx=0; xx<p->sizeX(); ++xx, ++i ) {
 					u = ( xx < xh )? xx/p->real_size()[0]: (xx-p->sizeX())/p->real_size()[0];
 					s2 = u*u + v*v;
-					ws = (wl/2)*s2;
+					ws = 0.5*wl*s2;
 					f = 0.5*(sinc((w-ws)*t) + sinc((w+ws)*t));
 					p->set(i, p->complex(i) * f);
 				}
@@ -1953,7 +1951,6 @@ int			img_fspace_weigh_sphere(Bimage* p, double volt)
 		}
 	}
 	
-//	return ps;
 	return 0;
 }
 

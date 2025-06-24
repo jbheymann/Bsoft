@@ -3,7 +3,7 @@
 @brief	Library routines to read and write molecule file, including sequences and coordinates
 @author Bernard Heymann
 @date	Created: 19980822
-@date	Modified: 20220427
+@date	Modified: 20250509
 **/
 
 #include "rwmolecule.h"
@@ -16,14 +16,14 @@
 
 #include "rwmol_star.h"
 #include "rwmol_text.h"
-#include "rwClustal.h"
-#include "rwEMBL.h"
-#include "rwFASTA.h"
-#include "rwGenBank.h"
+//#include "rwClustal.h"
+//#include "rwEMBL.h"
+//#include "rwFASTA.h"
+//#include "rwGenBank.h"
 #include "rwGROMACS.h"
 #include "rwPDB.h"
-#include "rwPhylip.h"
-#include "rwPIR.h"
+//#include "rwPhylip.h"
+//#include "rwPIR.h"
 #include "rwWAH.h"
 
 // Declaration of global variables
@@ -891,22 +891,22 @@ Bmolgroup*  read_molecule(Bstring& filename, Bstring& atom_select, Bstring& para
     	n = read_mol_star(thefile, molgroup);
 	else if ( ext.contains("txt") )
 		n = read_mol_text(thefile, molgroup);
-	else if ( ext.contains("aln") )
-		n = readClustal(thefile, molgroup);
-	else if ( ext.contains("embl") )
-		n = readEMBL(thefile, molgroup);
-	else if ( ext.contains("fasta") )
-		n = readFASTA(thefile, molgroup);
-	else if ( ext.contains("gb") || ext.contains("gp") || ext.contains("gen") )
-		n = readGenBank(thefile, molgroup);
+//	else if ( ext.contains("aln") )
+//		n = readClustal(thefile, molgroup);
+//	else if ( ext.contains("embl") )
+//		n = readEMBL(thefile, molgroup);
+//	else if ( ext.contains("fasta") )
+//		n = readFASTA(thefile, molgroup);
+//	else if ( ext.contains("gb") || ext.contains("gp") || ext.contains("gen") )
+//		n = readGenBank(thefile, molgroup);
     else if ( ext.contains("gro") )
     	n = readGROMACS(thefile, molgroup);
     else if ( ext.contains("pdb") || ext.contains("ent") )
     	n = readPDB(thefile, molgroup);
-	else if ( ext.contains("phy") )
-		n = readPhylip(thefile, molgroup);
-	else if ( ext.contains("pir") )
-		n = readPIR(thefile, molgroup);
+//	else if ( ext.contains("phy") )
+//		n = readPhylip(thefile, molgroup);
+//	else if ( ext.contains("pir") )
+//		n = readPIR(thefile, molgroup);
 	else if ( ext.contains("wh") || ext.contains("wah") )
 		n = readWAH(thefile, molgroup);
 	else {
@@ -1035,22 +1035,22 @@ int 		write_molecule(Bstring& filename, Bmolgroup *molgroup)
     	n = write_mol_star(thefile, molgroup);
 	else if ( ext.contains("txt") )
 		n = write_mol_text(thefile, molgroup);
-	else if ( ext.contains("aln") )
-		n = writeClustal(thefile, molgroup);
-	else if ( ext.contains("embl") )
-		n = writeEMBL(thefile, molgroup);
-	else if ( ext.contains("fasta") )
-		n = writeFASTA(thefile, molgroup);
-	else if ( ext.contains("gb") || ext.contains("gp") || ext.contains("gen") )
-		n = writeGenBank(thefile, molgroup);
+//	else if ( ext.contains("aln") )
+//		n = writeClustal(thefile, molgroup);
+//	else if ( ext.contains("embl") )
+//		n = writeEMBL(thefile, molgroup);
+//	else if ( ext.contains("fasta") )
+//		n = writeFASTA(thefile, molgroup);
+//	else if ( ext.contains("gb") || ext.contains("gp") || ext.contains("gen") )
+//		n = writeGenBank(thefile, molgroup);
     else if ( ext.contains("gro") )
     	n = writeGROMACS(thefile, molgroup);
     else if ( ext.contains("pdb") || ext.contains("ent") )
     	n = writePDB(thefile, molgroup);
-	else if ( ext.contains("phy") )
-		n = writePhylip(thefile, molgroup);
-	else if ( ext.contains("pir") )
-		n = writePIR(thefile, molgroup);
+//	else if ( ext.contains("phy") )
+//		n = writePhylip(thefile, molgroup);
+//	else if ( ext.contains("pir") )
+//		n = writePIR(thefile, molgroup);
 	else if ( ext.contains("wh") || ext.contains("wah") )
 		n = writeWAH(thefile, molgroup);
 	else {

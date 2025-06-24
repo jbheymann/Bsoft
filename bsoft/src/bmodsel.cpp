@@ -3,13 +3,14 @@
 @brief	Manipulates selections from sets of components as solutions of fits
 @author Bernard Heymann
 @date	Created: 20060908
-@date 	Modified: 20221115
+@date 	Modified: 20250623
 **/
 
-#include "rwmolecule.h"
 #include "rwmodel.h"
+#include "rwsequence.h"
 #include "rwimg.h"
 #include "model_select.h"
+#include "model_mol.h"
 #include "model_util.h"
 #include "ps_model.h"
 #include "utilities.h"
@@ -40,11 +41,12 @@ const char* use[] = {
 "Actions for preparation:",
 "-all                     Reset selection to all components before other selections.",
 "-merge                   Merge models in different files rather than concatenate.",
-"-invert                  Inverts selection.",
+"-invert mod              Inverts selection: models or components.",
 " ",
 "Selections:",
 "-select #Mod1@14         Select models and components.",
 "-group 3                 Select components with this selection flag number.",
+"-residues 23-56,200-345  Select residues.",
 "-number 24,36            Select models based on the number of components.",
 "-sets 20,1               Generate sets of this size of selected components, ",
 "                         with a flag not to select across model boundaries.",
@@ -61,6 +63,7 @@ const char* use[] = {
 " ",
 "Actions for finishing:",
 "-reset                   Reset selection to all components after other operations.",
+"-listsequences           List molecular sequences in table form.",
 " ",
 "Parameters:",
 "-verbose 7               Verbose output.",
@@ -73,6 +76,10 @@ const char* use[] = {
 " ",
 "Output:",
 "-output file.star        Output model parameter file.",
+"-split 3                 Split models into individual files:",
+"                         Argument: 1-6: number of digits inserted before extension",
+"                         Argument: \"id\": model ID's are used as file names.",
+"-sequences all.fasta     Output sequence file.",
 "-FOM histogram.ps        Postscript output with component FOM distributions.",
 " ",
 NULL
@@ -84,9 +91,10 @@ int 	main(int argc, char **argv)
 	int 			all(0);					 	// Keep selection as read from file
 	int 			reset(0);					// Keep selection as ouput
 	int				merge(0);					// Flag to merge models rather than concatenate
-	int 			invert(0);					// Flag to invert selection
+	int 			invert(0);					// Flag to invert selection: 1=models, 2=components
 	Bstring			mod_select;					// Model and component selection
 	long			group(0);					// Group selection
+	string			residue_select;				// Residue selection
 	long			ncomp_min(0), ncomp_max(0);	// Minimum and maximum number of components to select for
 	long			set_size(0);				// Size of sets
 	int				set_flag(0);				// Flag to keep set within model
@@ -103,12 +111,14 @@ int 	main(int argc, char **argv)
 	Bstring			prune_type_string("none");	// Prune type string
 	Vector3<double>	bounds_start, bounds_end;	// Bounding box
 	double			distance(10);				// Prune distance between components criterion
-	int				mod_comp_del(0);			// Flag to delete non-selected models and components
-	Bstring    		atom_select("all");
-	Bstring			paramfile;					// Input parameter file name
-	Bstring			ovlapfile;					// Reference file name for deselecting overlaps
-	Bstring			maskfile;					// Mask for selection
-	Bstring			outfile;					// Output parameter file name
+	bool			mod_comp_del(0);			// Flag to delete non-selected models and components
+	string			paramfile;					// Input parameter file name
+	string			ovlapfile;					// Reference file name for deselecting overlaps
+	string			maskfile;					// Mask for selection
+	bool			list_seq(0);				// List molecular sequences in table form
+	string			outfile;					// Output parameter file name
+	string			seqfile;					// Output sequence file name
+	int				splt(0);					// Sets output of multiple single-model files
 	Bstring			FOMps = NULL;				// Output postscript file name for FOM histogram
     
 	int				optind;
@@ -118,12 +128,18 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "merge" ) merge = 1;
 		if ( curropt->tag == "all" ) all = 1;
 		if ( curropt->tag == "reset" ) reset = 1;
-		if ( curropt->tag == "invert" ) invert = 1;
+		if ( curropt->tag == "invert" ) {
+			if ( curropt->value[0] == 'm' ) invert = 1;
+			if ( curropt->value[0] == 'c' ) invert = 2;
+		}
 		if ( curropt->tag == "select" )
 			mod_select = curropt->value;
+//			mod_select = curropt->value.str();
 		if ( curropt->tag == "group" )
 			if ( ( group = curropt->integer() ) < 1 )
 				cerr << "-group: A selection number must be specified!" << endl;
+		if ( curropt->tag == "residues" )
+			residue_select = curropt->value.str();
 		if ( curropt->tag == "number" )
 			if ( curropt->values(ncomp_min, ncomp_max) < 1 )
 				cerr << "-number: A number of components must be specified!" << endl;
@@ -182,15 +198,27 @@ int 	main(int argc, char **argv)
 			if ( ( maxrad = curropt->value.real() ) < 1 )
 				cerr << "-maxradius: The maximum allowed distance from the origin must be specified!" << endl;*/
 		if ( curropt->tag == "parameters" )
-			paramfile = curropt->filename();
+			paramfile = curropt->filename().str();
 		if ( curropt->tag == "overlap" )
-			ovlapfile = curropt->filename();
+			ovlapfile = curropt->filename().str();
 		if ( curropt->tag == "mask" )
-			maskfile = curropt->filename();
+			maskfile = curropt->filename().str();
+		if ( curropt->tag == "listsequences" ) list_seq = 1;
 		if ( curropt->tag == "output" )
-			outfile = curropt->filename();
+			outfile = curropt->filename().str();
+		if ( curropt->tag == "split" ) {
+			if ( curropt->value.contains("id") || curropt->value.contains("ID") ) splt = 9;
+			else if ( ( splt = curropt->value.integer() ) < 1 )
+				cerr << "-split: An integer must be specified!" << endl;
+			else
+				if ( splt > 6 ) splt = 6;
+		}
+		if ( curropt->tag == "sequences" ) {
+			seqfile = curropt->filename().str();
+			list_seq = 1;
+		}
 		if ( curropt->tag == "FOM" )
-			FOMps = curropt->filename();
+			FOMps = curropt->filename().str();
 	}
 	option_kill(option);
 	
@@ -204,33 +232,35 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list);		
+	Bmodel*		model = read_model(file_list, paramfile);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
 		bexit(-1);
 	}
 	
-	if ( all ) models_process(model, model_reset_selection);
+	if ( all ) models_select_all(model);
 	
 	if ( merge ) model_merge(model);
 
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 	
-	if ( group ) model_select(model, group);
+	if ( group ) models_select(model, group);
 	
-	if ( ncomp_min ) model_select_number_of_components(model, ncomp_min, ncomp_max);
+	if ( residue_select.length() ) models_select_residues(model, residue_select);
+	
+	if ( ncomp_min ) models_select_number_of_components(model, ncomp_min, ncomp_max);
 
 	if ( minrad > 0 || maxrad > 0 )
-		model_select_within_shell(model, shell_center, minrad, maxrad);
+		models_select_within_shell(model, shell_center, minrad, maxrad);
 	
-	if ( closure_rule ) model_select_closed(model, closure_rule, val_order);
+	if ( closure_rule ) models_select_closed(model, closure_rule, val_order);
 
-	if ( fullerene ) model_select_fullerene(model);
+	if ( fullerene ) models_select_fullerene(model);
 	
-	if ( nonfullerene ) model_select_non_fullerene(model);
+	if ( nonfullerene ) models_select_non_fullerene(model);
 	
-	if ( set_size ) model_select_sets(model, set_size, set_flag);
+	if ( set_size ) models_select_sets(model, set_size, set_flag);
 	
 	if ( fom_cutoff > 0 ) model_fom_deselect(model, fom_cutoff);
 
@@ -240,43 +270,46 @@ int 	main(int argc, char **argv)
 
 //	if ( minrad || maxrad ) models_radius_deselect(model, minrad, maxrad);
 
-	if ( prune_type > 4 ) models_process(model, distance, model_prune_large);
-	else if ( prune_type == 4 ) models_process(model, model_prune_similar);
-	else if ( prune_type == 3 ) models_process(model, distance, model_prune_fit);
-	else if ( prune_type == 2 ) models_process(model, distance, model_prune_fom);
-	else if ( prune_type == 1 ) models_process(model, distance, model_prune_simple);
-	
+	if ( prune_type > 0 )
+		models_prune(model, prune_type, distance);
+
 	if ( ovlapfile.length() )
-		model_find_overlap(model, ovlapfile.str(), distance);
+		model_find_overlap(model, ovlapfile, distance);
 
 	if ( (bounds_end-bounds_start).volume() > 0 )
 		models_select_within_bounds(model, bounds_start, bounds_end);
 
 	if ( maskfile.length() ) {
 		Bimage*		pmask = read_img(maskfile, 1, 0);
-		model_select_in_mask(model, pmask);
+		models_select_in_mask(model, pmask);
 		delete pmask;
 	}
 	
 	if ( invert )
-		models_process(model, model_invert_selection);
+		models_invert_selection(model, invert);
 	
 	if ( FOMps.length() )
 		ps_model_fom_histogram(FOMps, model);
 	
-	if ( mod_comp_del ) model_delete_non_selected(&model);
+	if ( mod_comp_del ) models_delete_non_selected(&model);
+
+	if ( list_seq ) {
+		vector<Bsequence>	seqs = models_sequence(model);
+		if ( seqfile.length() )
+			write_sequence(seqfile, seqs);
+	}
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 	
-	model_selection_stats(model);
-	model_show_selection(model);
+	models_selection_stats(model);
+	models_show_selection(model);
 	
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
-		write_model(outfile.str(), model);
+		write_model(outfile, model, splt);
 	}
 
-	model_kill(model);
+	delete model;
 		
 	
 		timer_report(ti);

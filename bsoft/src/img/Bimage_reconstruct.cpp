@@ -543,7 +543,7 @@ int 		Bimage::fspace_reconstruction_stats(double resolution, double sampling_rat
 	double			fsc_cut(0.3), snr_cut(0.5);
 
 	if ( verbose ) {
-		cout << "Radius\ts(1/A)\tRes(A)\t"
+		cout << "Radius\tSpatial Frequency (1/A)\tResolution (A)\t"
 			<< "Weight\tPower\tSignal\tNoise\tSNR\tFSC" << endl;
 		for ( i=1; i<maxrad; i++ ) {
 			s = i/rad_scale;

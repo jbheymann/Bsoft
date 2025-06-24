@@ -11,9 +11,6 @@
 #include "model_transform.h"
 #include "model_select.h"
 #include "model_compare.h"
-#include "mol_transform.h"
-#include "mol_compare.h"
-#include "mol_util.h"
 #include "symmetry.h"
 #include "Matrix3.h"
 #include "random_numbers.h"
@@ -175,9 +172,9 @@ double		model_add_path(Bmodel* model, Bcomponent** path)
 //	Bmodel*		modpath = model_copy(model);
 	Bmodel*		modpath = model->copy();
 	
-	model_link_list_kill(modpath);
-	modpath->link = NULL;
-	
+//	model_link_list_kill(modpath);
+//	modpath->link = NULL;
+	modpath->clear_links();	
 	for ( i=1; i<n; i++ ) {
 		link = model_link_add(modpath, path[i-1]->identifier(), path[i]->identifier());
 		len += link->length();

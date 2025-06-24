@@ -3,7 +3,7 @@
 @brief	Postscript output for views
 @author 	Bernard Heymann
 @date	Created: 20011127
-@date	Modified: 20230512
+@date	Modified: 20250528
 **/
 
 #include "ps_views.h"
@@ -15,92 +15,11 @@ extern int 	verbose;		// Level of output to the screen
 
 // Internal function prototypes
 
-/**
-@brief 	Generates postscript plot of views on the unit sphere.
-@param 	&filename			output postscript file name.
-@param 	symmetry_string 	symmetry string to print at the top of the page.
-@param 	views				list of views.
-@param 	flags				flags.
-@return int					0.
-
-	The plotting options are determined by the flags argument:
-		0 = plot views
-		1 = plot numbered views
-		2 = plot views with shading according to occurrence.
-			The gray level indicates an estimated increase in signal-to-noise ratio.
-
-**/
-int 		ps_views(string filename, string symmetry_string, vector<View2<double>>& views, int flags)
+int			ps_draw_point_group(ofstream* fps, string symmetry_string)
 {
-	if ( verbose & VERB_LABEL )
-		cout << "Writing postscript file: " << filename << endl << endl;
+	int			i, order(1);
 	
-	ofstream*	fps = ps_open_and_init(filename, symmetry_string, 1, 600, 800);
-	
-	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
-	*fps << "40 740 moveto (" << filename << ") show" << endl;
-	
-	ps_views(fps, symmetry_string, views, flags);
-
-	ps_close(fps);
-
-	return 0;
-}
-
-int 		ps_views(ofstream* fps, string symmetry_string, vector<View2<double>>& views, int flags)
-{
-	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG ps_views: symmetry=" << symmetry_string << " flags=" << flags << endl;
-		
-	int 		i, m, left(50), bottom(150), width(500), height(500), order(1);
-
-	int			h(100);
-	int			ix, iy, nx(2*h+1), ny(2*h+1), sx(h), sy(h);
-	double		isx(1.0L/sx), isy(1.0L/sy);
-	float		snr(0.1);
-	vector<float>	count(nx*ny,0);
-
-	long		n = views.size();
-	double		textscale(0.06), textoffset(0.02);
-	if ( n > 50 ) textscale = 3.0/n;
-	if ( textscale < 5 ) textscale = 5;
-	textoffset = textscale/3;
-	
-	if ( flags == 2 ) {
-		n = m = 0;
-		for ( auto v: views ) {
-			ix = (int) (v[0]*sx + sx);
-			iy = (int) (v[1]*sy + sy);
-			i = iy*nx+ix;
-			count[i]++;
-			if ( m < count[i] ) m = (int) count[i];
-			n++;
-		}
-		snr = 1/sqrt((double)m);
-		if ( snr < 0.1 ) snr = 0.1;
-	}
-	
-	*fps << "%%%%Page: Views 1" << endl;
-	*fps << "/Helvetica-Bold findfont 14 scalefont setfont" << endl;
-	*fps << "40 720 moveto (Symmetry:        " << symmetry_string << ") show" << endl;
-	*fps << "40 700 moveto (Number of views: " << n << ") show" << endl;
-	*fps << "/Left " << left << " def\n/Bottom " << bottom << " def\n/Height " << height << " def\n/Width " << width << " def" << endl;
-	*fps << "/Scale 200 def" << endl;
-	
-	*fps << "/View [" << endl;
-	if ( flags == 2 ) {
-		*fps << "%x y count weight" << endl;
-		for ( i=iy=0; iy<ny; iy++ )
-			for ( ix=0; ix<nx; ix++, i++ )
-				if ( count[i] ) *fps << ix*isx - 1 << " " << iy*isy - 1 << " " << count[i] << " " << 1/(1+1/(snr*sqrt(count[i]))) << endl;
-	} else {
-		*fps << "%x y z a" << endl;
-		for ( auto& v: views )
-			*fps << v[0] << " " << v[1] << " " << v[2] << " " << v[3] << endl;
-	}
-	*fps << "] def" << endl;
-		
-	*fps << "/Geom { newpath " << endl;
+	*fps << "/" << symmetry_string << " { newpath " << endl;
 	*fps << "	1 0 moveto 0 0 1 0 360 arc stroke" << endl;
 	if ( symmetry_string[0] == 'T' ) {
 		*fps << "	0 0 moveto 1 0 lineto" << endl;
@@ -167,18 +86,109 @@ int 		ps_views(ofstream* fps, string symmetry_string, vector<View2<double>>& vie
 			*fps << "0.526 0.851 lineto" << endl;
 		}
 	} else {
-		sscanf(&symmetry_string[1], "%d", &order);
+//		sscanf(&symmetry_string[1], "%d", &order);
+		order = to_integer(symmetry_string.substr(1));
 		*fps << "	0 0 moveto 1 0 lineto" << endl;
 		for ( i=0; i<order; i++ )
 			*fps << "	0 0 moveto " << cos((i+0.5)*M_PI*2.0/order) << " "
 				<< sin((i+0.5)*M_PI*2.0/order) << " lineto stroke" << endl;
 	}
 	*fps << "	closepath } def" << endl;
+	
+	return 0;
+}
+
+/**
+@brief 	Generates postscript plot of views on the unit sphere.
+@param 	&filename			output postscript file name.
+@param 	symmetry_string 	symmetry string to print at the top of the page.
+@param 	views				list of views.
+@param 	flags				flags.
+@return int					0.
+
+	The plotting options are determined by the flags argument:
+		0 = plot views
+		1 = plot numbered views
+		2 = plot views with shading according to occurrence.
+			The gray level indicates an estimated increase in signal-to-noise ratio.
+
+**/
+int 		ps_views(string filename, string symmetry_string, vector<View2<double>>& views, int flags)
+{
+	if ( verbose & VERB_LABEL )
+		cout << "Writing postscript file: " << filename << endl << endl;
+	
+	ofstream*	fps = ps_open_and_init(filename, symmetry_string, 1, 600, 800);
+	
+	*fps << "/Helvetica-Bold findfont 20 scalefont setfont" << endl;
+	*fps << "40 740 moveto (" << filename << ") show" << endl;
+	
+	ps_views(fps, symmetry_string, views, flags);
+
+	ps_close(fps);
+
+	return 0;
+}
+
+int 		ps_views(ofstream* fps, string symmetry_string, vector<View2<double>>& views, int flags)
+{
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG ps_views: symmetry=" << symmetry_string << " flags=" << flags << endl;
+		
+	int 		i, m, left(50), bottom(150), width(500), height(500);
+
+	int			h(100);
+	int			ix, iy, nx(2*h+1), ny(2*h+1), sx(h), sy(h);
+	double		isx(1.0L/sx), isy(1.0L/sy);
+	float		snr(0.1);
+	vector<float>	count(nx*ny,0);
+
+	long		n = views.size();
+	double		textscale(0.06), textoffset(0.02);
+	if ( n > 50 ) textscale = 3.0/n;
+	if ( textscale < 5 ) textscale = 5;
+	textoffset = textscale/3;
+	
+	if ( flags == 2 ) {
+		n = m = 0;
+		for ( auto v: views ) {
+			ix = (int) (v[0]*sx + sx);
+			iy = (int) (v[1]*sy + sy);
+			i = iy*nx+ix;
+			count[i]++;
+			if ( m < count[i] ) m = (int) count[i];
+			n++;
+		}
+		snr = 1/sqrt((double)m);
+		if ( snr < 0.1 ) snr = 0.1;
+	}
+	
+	*fps << "%%%%Page: Views 1" << endl;
+	*fps << "/Helvetica-Bold findfont 14 scalefont setfont" << endl;
+	*fps << "40 720 moveto (Symmetry:        " << symmetry_string << ") show" << endl;
+	*fps << "40 700 moveto (Number of views: " << n << ") show" << endl;
+	*fps << "/Left " << left << " def\n/Bottom " << bottom << " def\n/Height " << height << " def\n/Width " << width << " def" << endl;
+	*fps << "/Scale 200 def" << endl;
+	
+	*fps << "/View [" << endl;
+	if ( flags == 2 ) {
+		*fps << "%x y count weight" << endl;
+		for ( i=iy=0; iy<ny; iy++ )
+			for ( ix=0; ix<nx; ix++, i++ )
+				if ( count[i] ) *fps << ix*isx - 1 << " " << iy*isy - 1 << " " << count[i] << " " << 1/(1+1/(snr*sqrt(count[i]))) << endl;
+	} else {
+		*fps << "%x y z a" << endl;
+		for ( auto& v: views )
+			*fps << v[0] << " " << v[1] << " " << v[2] << " " << v[3] << endl;
+	}
+	*fps << "] def" << endl;
+		
+	ps_draw_point_group(fps, symmetry_string);
 
 	*fps << "gsave" << endl;
 	*fps << "	Width 2 div Left add Height 2 div Bottom add translate" << endl;
 	*fps << "	Scale Scale scale" << endl;
-	*fps << "	0.005 setlinewidth Geom stroke" << endl;
+	*fps << "	0.005 setlinewidth " << symmetry_string << " stroke" << endl;
 	*fps << "	/Helvetica findfont " << textscale << " scalefont setfont" << endl;
 	if ( flags == 2 ) {
 		*fps << "	0 0.1 1 {" << endl;

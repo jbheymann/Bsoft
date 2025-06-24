@@ -828,6 +828,40 @@ long		project_set_particle_defocus_from_tilt(Bproject* project, double axis, dou
 	return npart;
 }
 
+Bimage*		img_ctf_ewald_combine_two_ways(Bimage* psec, Bimage*pctf)
+{
+	long			i;
+	Complex<double>	fu, fl, cu, cl;
+	Bimage*			pcomb = psec->copy();
+	Bimage*			pcomb2 = pcomb->next = psec->next->copy();
+	Bimage*			psec2 = psec->next;
+	Bimage*			pctf2 = pctf->next;
+	
+	for ( i=0; i<pcomb->image_size(); ++ i ) {
+		fu = psec->complex(i);
+		fl = psec2->complex(i);
+		cu = pctf->complex(i);
+		cl = pctf2->complex(i);
+		pcomb->set(i, fu*cu + fl*cl);
+		pcomb2->set(i, fu*cl + fl*cu);
+	}
+	
+	return pcomb;
+}
+
+bool		img_ctf_ewald_test(Bimage* pcomb)
+{
+	bool		pos(0);
+	
+	pcomb->statistics();
+	pcomb->next->statistics();
+	
+	if ( pcomb->average() > pcomb->next->average() ) pos = 1;
+	
+	return pos;
+}
+
+
 Bimage*		particle_correlation_sum(Bparticle* part, Bimage* pref, double hires, FSI_Kernel* kernel, fft_plan planf)
 {
 	if ( !kernel ) {
@@ -840,17 +874,23 @@ Bimage*		particle_correlation_sum(Bparticle* part, Bimage* pref, double hires, F
 		pref->phase_shift_to_origin();
 	}
 
+	Bmicrograph*	mg = part->mg;
+
+	if ( !mg->ctf ) {
+		error_show("Error in project_correlation_sum: No CTF defined for projection!", __FILE__, __LINE__);
+		return NULL;
+	}
+	
 	bool			invert(1);
 	long			ndone(0);
-	double			wl(0);
+//	double			wl(0);
 	Matrix3			mat;
-	Bmicrograph*	mg = part->mg;
 	Bimage*			psec;
-	Bimage*			psec2;
+	Bimage*			pctf;
+	Bimage*			pcomb;
 	Bimage*			ppart;
-
-	//			if ( mg->ctf ) wl = mg->ctf->lambda();
-
+	CTFparam		cp = *mg->ctf;
+	
 	Bimage*			psum = new Bimage(Float, TComplex, pref->sizeX(), pref->sizeY(), 1, 1);
 	psum->sampling(part->pixel_size);
 	psum->origin(psum->size()/2);
@@ -859,6 +899,7 @@ Bimage*		particle_correlation_sum(Bparticle* part, Bimage* pref, double hires, F
 
 	for ( ; part; part = part->next ) if ( part->sel > 0 ) {
 		ppart = read_img(mg->fpart, 1, part->id-1);
+		if ( invert ) ppart->invert();
 		ppart->sampling(part->pixel_size);
 		ppart->origin(part->ori);
 		ppart->view(part->view);
@@ -867,20 +908,28 @@ Bimage*		particle_correlation_sum(Bparticle* part, Bimage* pref, double hires, F
 		mat = part->view.matrix();
 		part->ori[2] = 0;
 //		cout << mat << part->ori << endl;
-		psec = pref->central_section(mat, hires, kernel, wl);
-		if ( mg->ctf ) {
-//			cout << "particle_correlation_sum: Applying CTF" << endl;
-			if ( part->def > 0 ) mg->ctf->defocus_average(part->def);
-			img_ctf_apply(psec, *mg->ctf, 2, 0.1, 0, hires, invert);
+		cp = *mg->ctf;
+		if ( part->def > 0 ) cp.defocus_average(part->def);
+		psec = pref->central_section(mat, hires, kernel, cp.lambda());
+		psec->append_opposite_ewald();
+		pctf = img_ctf_ewald_calculate(cp, psec->size(), psec->sampling(0), 0, hires, 1);
+		pcomb = img_ctf_ewald_combine_two_ways(psec, pctf);
+		psec->complex_to_intensities();
+		psum->next->add(psec);
+		pcomb->complex_conjugate_product(ppart, 0);
+		pcomb->next->complex_conjugate_product(ppart, 0);
+		if ( img_ctf_ewald_test(pcomb) ) {
+			psum->add(pcomb);
+			part->sel = 1;
+		} else {
+			psum->add(pcomb->next);
+			part->view = part->view.opposite();
+			part->sel = 2;
 		}
-		psec2 = psec->copy();
-		psec2->complex_to_intensities();
-		psec->complex_conjugate_product(ppart, 0);
-		psum->add(psec);
-		psum->next->add(psec2);
 		delete ppart;
 		delete psec;
-		delete psec2;
+		delete pctf;
+		delete pcomb;
 		ndone++;
 	}
 	

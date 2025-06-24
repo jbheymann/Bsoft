@@ -3,7 +3,7 @@
 @brief	3D reconstruction from single particle images
 @author	Bernard Heymann
 @date	Created: 20010403
-@date	Modified: 20240323
+@date	Modified: 20250407
 **/
 
 #include "mg_processing.h"
@@ -33,7 +33,7 @@ const char* use[] = {
 "Actions:",
 "-mode 1                  Symmetry mode: 0=during reconstruction (default), 1=after reconstruction,",
 "                         2=pick a random symmetry view for each particle.",
-"-ewald                   Ewald sphere integration (default central section).",
+"-ewald up                Ewald sphere integration: 0=insertion, 1=upper/lower, -1=lower/upper.",
 "-TwoD                    Generate a 2D reconstruction (default 3D).",
 "-CTF flip                Apply CTF correction to images before reconstruction (default not).",
 "-complex                 Output a complex reconstruction (default real).",
@@ -73,7 +73,8 @@ int			main(int argc, char** argv)
 {
 	// Initializing variables
 	int 			sym_mode(0);				// 0=during, 1=after, 2=random
-	int 			flags(0);					// Flags: 1=rescale, 2=2D, 4=bootstrap, 8=ewald, 16=complex
+	int				ewald_flag(0);				// Ewald sphere reconstruction
+	int 			flags(0);					// Flags: 1=rescale, 2=2D, 4=bootstrap
 	double			nuavg, nustd(0); 			// Values for rescaling
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
 	Vector3<double>	sam;    					// Units for the three axes (A/pixel)
@@ -105,8 +106,14 @@ int			main(int argc, char** argv)
 			if ( sym_mode < 0 || sym_mode > 2 )
 				cerr << "-mode: A symmetry mode of 0, 1 or 2 must be specified!" << endl;
 		}
+/*		if ( curropt->tag == "ewald" ) {
+			ewald = curropt->value.integer();
+			if ( ewald == 0 ) ewald = 2;
+			else if ( ewald > 4 ) ewald = 1;
+			else if ( ewald < 0 ) ewald = -1;
+		}*/
 		if ( curropt->tag == "ewald" )
-			flags |= 8;
+			ewald_flag = curropt->ewald_flag();
 		if ( curropt->tag == "TwoD" )
 			flags |= 2;
 		if ( curropt->tag == "complex" )
@@ -220,13 +227,14 @@ int			main(int argc, char** argv)
 		nclasses = project_configure_for_reconstruction(project, classes, nmaps, thread_limit);
 	}
 
-	int					ntotal = nclasses*thread_limit;
+	int					ntotal(nclasses*thread_limit);
+	int					nmaptot(nclasses*nmaps);
 
 	if ( nmaps & 2 && thread_limit%2 ) thread_limit++;
 //	cout << " thread_limit = " << thread_limit << endl;
 
 	Bimage**			pacc = new Bimage*[ntotal];
-	Bimage**			prec = new Bimage*[nclasses*nmaps];
+	Bimage**			prec = new Bimage*[nmaptot];
 	View2<double>		ref_view;
 	Bstring				filename = reconsfile;
 	Bstring				id;
@@ -259,8 +267,10 @@ int			main(int argc, char** argv)
 		cout << "Scale:                          " << scale << endl;
 		cout << "Interpolation type:             " << interp_type << endl;
 		cout << "CTF application type:           " << ctf_action << endl;
-		if ( flags & 4 ) cout << "Bootstrapping on" << endl;
-		if ( flags & 8 ) cout << "Ewald sphere correction on" << endl;
+		if ( flags & 4 ) 
+			cout << "Bootstrapping on" << endl;
+		if ( ewald_flag ) 
+			cout << "Ewald sphere mode:              " << ewald_flag << endl;
 		cout << "Padding factor:                 " << pad_factor << endl;
 		cout << "Fourier transform size:         " << ft_size << " x " << ft_size << endl << endl;
 	}
@@ -275,7 +285,7 @@ int			main(int argc, char** argv)
 		Bparticle*	partlist = project_selected_partlist(project, i+1, flags & 4);
 		pacc[i] = particle_reconstruct(partlist, sym, sym_mode,
 				resolution, scale, sam, map_size, ft_size, plan,
-				interp_type, ctf_action, wiener, flags, (i==0));
+				interp_type, ctf_action, wiener, ewald_flag, flags, (i==0));
 		particle_kill(partlist);
 		if ( verbose & ( VERB_TIME | VERB_PROCESS | VERB_RESULT ) )
 			cout << "List " << i+1 << " done: " << timer_report(ti) << endl;
@@ -286,7 +296,7 @@ int			main(int argc, char** argv)
 		Bparticle*	partlist = project_selected_partlist(project, i+1, flags & 4);
 		pacc[i] = particle_reconstruct(partlist, sym, sym_mode,
 				resolution, scale, sam, map_size, ft_size, plan, 
-				interp_type, ctf_action, wiener, flags, (i==0));
+				interp_type, ctf_action, wiener, ewald_flag, flags, (i==0));
 		particle_kill(partlist);
 		if ( verbose & ( VERB_TIME | VERB_PROCESS | VERB_RESULT ) )
 			cout << "List " << i+1 << " done: " << timer_report(ti) << endl;
@@ -296,16 +306,19 @@ int			main(int argc, char** argv)
 	
 	fft_destroy_plan(plan);
 
-	if ( verbose )
-		cout << "Weighing " << nclasses*nmaps << " reconstructions" << endl;
+	if ( verbose ) {
+		cout << "Weighing " << nmaptot << " reconstruction";
+		if ( nmaptot == 1 ) cout << endl;
+		else cout << "s" << endl;
+	}
 	
 #ifdef HAVE_GCD
-	dispatch_apply(nclasses*nmaps, dispatch_get_global_queue(0, 0), ^(size_t i){
+	dispatch_apply(nmaptot, dispatch_get_global_queue(0, 0), ^(size_t i){
 		prec[i] = img_reconstruction_sum_weigh(pacc, i, nmaps, thread_limit, resolution);
 	});
 #else
 #pragma omp parallel for
-	for ( i=0; i<nclasses*nmaps; i++ )
+	for ( i=0; i<nmaptot; i++ )
 		prec[i] = img_reconstruction_sum_weigh(pacc, i, nmaps, thread_limit, resolution);
 #endif
 //	cout << "F0=" << prec[0]->complex(0).real() << endl;
@@ -316,7 +329,7 @@ int			main(int argc, char** argv)
 	vector<double> 	fsccut{0.143, 0.3, 0.5, 0.8};	// FSC cutoff values
 	vector<double>	dprcut;							// DPR cutoff values
 	if ( nmaps > 1 ) {
-		for ( i=nmaps-2; i<nclasses*nmaps; i+=nmaps ) {
+		for ( i=nmaps-2; i<nmaptot; i+=nmaps ) {
 //		for ( i=nmaps-2; i<nmaps; i+=nmaps ) {
 			Bplot*	plot = prec[i]->fsc(prec[i+1], resolution);
 			plot->resolution_display(fsccut, dprcut);
@@ -325,13 +338,16 @@ int			main(int argc, char** argv)
 		}
 	}
 	
-	if ( verbose )
-		cout << "Transforming " << nclasses*nmaps << " reconstructions to real space" << endl;
+	if ( verbose ) {
+		cout << "Transforming " << nmaptot << " reconstruction";
+		if ( nmaptot > 1 ) cout << "s";
+		cout << " to real space" << endl;
+	}
 
 	plan = fft_setup_plan(prec[0]->size(), FFTW_BACKWARD, 1);
 
 #ifdef HAVE_GCD
-	dispatch_apply(nclasses*nmaps, dispatch_get_global_queue(0, 0), ^(size_t i){
+	dispatch_apply(nmaptot, dispatch_get_global_queue(0, 0), ^(size_t i){
 		if ( flags & 16 ) prec[i]->fft(plan, 1, NoConversion);
 		else prec[i]->fft(plan, 1, Real);
 		prec[i]->statistics();
@@ -342,7 +358,7 @@ int			main(int argc, char** argv)
 	});
 #else
 #pragma omp parallel for
-	for ( i=0; i<nclasses*nmaps; i++ ) {
+	for ( i=0; i<nmaptot; i++ ) {
 		if ( flags & 16 ) prec[i]->fft(plan, 1, NoConversion);
 		else prec[i]->fft(plan, 1, Real);
 		prec[i]->statistics();
@@ -356,7 +372,7 @@ int			main(int argc, char** argv)
 	fft_destroy_plan(plan);
 
 	// Write an output reconstruction if an output filename is given
-	for ( i=0; i<nclasses*nmaps; i++ ) {
+	for ( i=0; i<nmaptot; i++ ) {
 		imap = 0;
 		if ( nmaps == 2 ) imap = i%2 + 1;
 		else if ( nmaps == 3 ) imap = i%3;
@@ -395,8 +411,7 @@ int			main(int argc, char** argv)
 	delete[] prec;
 	project_kill(project);
 
-	
-		timer_report(ti);
+	timer_report(ti);
 
 	bexit(0);
 }

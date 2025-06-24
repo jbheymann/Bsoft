@@ -97,7 +97,7 @@ int 		main(int argc, char **argv)
 	}
 	
 	// Get the output image file name
-	if ( optind < argc ) outfile = argv[optind];
+	if ( optind < argc ) outfile = argv[optind++];
 	
 	if ( nudatatype == Unknown_Type )
 		nudatatype = p->data_type();		// Preserve the old type
@@ -132,8 +132,7 @@ int 		main(int argc, char **argv)
 	delete p;
 	delete prad;
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

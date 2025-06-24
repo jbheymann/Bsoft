@@ -3,7 +3,7 @@
 @brief	Library functions for file checking 
 @author 	Bernard Heymann 
 @date	Created: 20070101
-@date	Modified: 20240829
+@date	Modified: 20250514
 **/
 
 #include "file_util.h"
@@ -366,17 +366,22 @@ FileType	file_type(Bstring& filename)
 		if ( type == Unknown_FileType ) type = Molecule;
 	} else if ( ext.contains("cmm") ) type = Model;
 	else if ( ext.contains("v3d") ) type = Model;
-    else if ( ext.contains("cif") ) type = Molecule;
+	else if ( ext.contains("ply") ) type = Model;
+//    else if ( ext.contains("cif") ) type = Molecule;
+    else if ( ext.contains("cif") ) type = Model;
 	else if ( ext.contains("txt") ) type = Molecule;
-	else if ( ext.contains("aln") ) type = Molecule;
-	else if ( ext.contains("embl") ) type = Molecule;
-	else if ( ext.contains("fasta") ) type = Molecule;
-	else if ( ext.contains("gb") || ext.contains("gen") ) type = Molecule;
-    else if ( ext.contains("gro") ) type = Molecule;
-	else if ( ext.contains("phylip") ) type = Molecule;
-	else if ( ext.contains("pir") ) type = Molecule;
-	else if ( ext.contains("wh") || ext.contains("wah") ) type = Molecule;
+	else if ( ext.contains("aln") ) type = Sequence;
+	else if ( ext.contains("embl") ) type = Sequence;
+	else if ( ext.contains("fasta") ) type = Sequence;
+	else if ( ext.contains("gb") || ext.contains("gen") ) type = Sequence;
+//    else if ( ext.contains("gro") ) type = Molecule;
+    else if ( ext.contains("gro") ) type = Model;
+	else if ( ext.contains("phylip") ) type = Sequence;
+	else if ( ext.contains("pir") ) type = Sequence;
+//	else if ( ext.contains("wh") || ext.contains("wah") ) type = Molecule;
+	else if ( ext.contains("wh") || ext.contains("wah") ) type = Model;
 	else if ( ext.contains("xyz") ) type = Model;
+	else if ( ext.contains("mol") ) type = Model;
 	else if ( ext.contains("raw") ) type = Image;
 	else if ( ext.contains("asc") || ext.contains( "txt") ) type = Image;
 	else if ( ext.contains("bcr") ) type = Image;
@@ -499,8 +504,8 @@ int			fread_large(unsigned char* aptr, size_t pagesize, size_t offset, ifstream&
 **/
 int			detect_and_fix_carriage_return(const char* filename)
 {
-	long		max_line_len = 10240;
-	char		aline[max_line_len];
+	long		max_line_len(10240);
+	char*		aline = new char(max_line_len);
 	
 	ifstream		fin(filename);
 	if ( fin.fail() ) {
@@ -543,6 +548,8 @@ int			detect_and_fix_carriage_return(const char* filename)
 	fout.close();
 	
 	rename("t.t", filename);
+	
+	delete aline;
 	
 	return 0;
 }

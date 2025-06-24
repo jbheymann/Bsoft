@@ -471,7 +471,7 @@ Bparticle*		reconstruction_project_extract_particles(Breconstruction* rec, Bimag
 @brief 	Extracts particle images from an image.
 @param 	*particles	particle parameters.
 @param 	*bad_areas	bad area parameters.
-@param 	*p			image.
+@param 	*p			micrograph image.
 @param 	size		size of box to extract.
 @param 	scale		scale to extract (usually 1).
 @param 	bad_radius	radius of bad area.
@@ -651,6 +651,62 @@ Bimage*		particle_extract(Bparticle* particles, Bbadarea* bad_areas, Bimage* p,
 	
 	delete partmask;	
 	
+	return ppart;
+}
+
+/**
+@brief 	Extracts particle images from the frames of a movie.
+@param 	*part		particle parameters.
+@param 	*p			micrograph frame images.
+@param 	size		size of box to extract.
+@param 	fill		value to fill in new regions.
+@param 	mask_width	filament mask width, if 0, don't apply.
+@return Bimage*		multi-frame image.
+
+**/
+Bimage*		particle_extract_frames(Bparticle* part, Bimage* p, 
+				Vector3<long> size, double fill, int mask_width)
+{
+	long				n;
+	Bmicrograph*		mg = part->mg;
+	Bframe*				frame = mg->frame;
+	Vector3<double>		pixel_size;
+	long				npart = frame->count();
+	
+	if ( part->mg ) pixel_size = part->mg->pixel_size;
+	else if ( part->rec ) pixel_size = part->rec->voxel_size;
+	if ( pixel_size[0] < 0.01 ) pixel_size = p->image->sampling();
+	
+	if ( pixel_size[0] < 0.01 ) {
+		cerr << "Error in particle_extract_frames: Pixel size is too small! " << pixel_size << endl;
+		return NULL;
+	}
+
+	if ( verbose & VERB_FULL )
+		cout << "Extracting particle " << part->id << " frames from " << p->file_name() << endl;
+	
+	Bimage*				ppart = new Bimage(p->data_type(), p->compound_type(), size, npart);
+	ppart->sampling(pixel_size);
+	ppart->origin(size/2);
+	
+	vector<Vector3<long>>	coor(npart);
+	
+	for ( n=0, frame = mg->frame; frame; frame = frame->next, ++n )
+		coor[n] = part->loc + frame->shift - size/2;
+	
+#ifdef HAVE_GCD
+	dispatch_apply(npart, dispatch_get_global_queue(0, 0), ^(size_t nn){
+		Bimage*		px = p->extract(nn, coor[nn], size, 0, fill);
+		ppart->replace(nn, px);
+	});
+#else
+#pragma omp parallel for
+	for ( long nn=0; nn<n; ++nn ) {
+		Bimage*		px = p->extract(nn, coor[nn], size, 0, fill);
+		ppart->replace(nn, px);
+	}
+#endif
+
 	return ppart;
 }
 

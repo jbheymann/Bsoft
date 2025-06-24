@@ -47,8 +47,8 @@ Bmodel*		read_model_vega(vector<string> file_list)
     			ss >> n >> x >> y >> z >> l1 >> l2 >> l3;
 				if ( n > 0 ) {
 					id = to_string(n);
-					if ( comp ) comp = comp->add(n);
-					else model->comp = comp = new Bcomponent(n);
+					if ( mp->comp ) comp = comp->add(n);
+					else mp->comp = comp = new Bcomponent(n);
 					comp->location(Vector3<float>(x, y, z));
 					comp->flag[0] = l1;	// The flags carry the indices of the linked components
 					comp->flag[1] = l2;
@@ -105,7 +105,6 @@ int			write_model_vega(string& filename, Bmodel* model, int splt)
 
 	for ( n=0, mp = model; mp; mp = mp->next, n++ ) {
 		if ( model->next )
-//			onename = filename.pre_rev('.') + string(n+1, format) + filename.post_rev('.');
 			onename = insert(filename, n+1, splt);
 		else
 			onename = filename;

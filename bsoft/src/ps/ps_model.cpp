@@ -3,7 +3,7 @@
 @brief	Postscript output for models
 @author 	Bernard Heymann
 @date	Created: 20090203
-@date	Modified: 20190201
+@date	Modified: 20250528
 **/
 
 #include "ps_model.h"
@@ -87,15 +87,18 @@ int			ps_model_views(Bstring& filename, Bmodel* model, int combined)
 @param 	&filename			output postscript file name.
 @param 	*model				model parameter structure.
 @param 	&symmetry_string 	symmetry.
-@param 	combined			flag to show all models combined.
+@param 	flags				1=numbers, 2=occurrence, 4=combined models.
 @return int 					0, error if <0.
 **/
-int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry_string, int combined)
+int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry_string, int flags)
 {
 	int 			i(1), nm(1);
+	bool			combined(flags&4);
 	Bmodel*			mp;
 	
 	if ( !model->comp ) return -1;
+	
+	if ( symmetry_string.length() < 1 ) symmetry_string = "C1";
 
 	if ( !combined )
 		for ( nm=0, mp = model; mp; mp = mp->next ) nm++;
@@ -112,7 +115,7 @@ int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry
 		*fps << "50 755 moveto (" << title << ": " << model->identifier() << ") show" << endl;
 		*fps << "/Data [" << endl << "%x y fom sel" << endl;
 		view = views_from_models(model);
-		ps_views(fps, symmetry_string, view, 2);
+		ps_views(fps, symmetry_string, view, flags);
 		*fps << "showpage" << endl;
 	} else {
 		for ( i=1, mp = model; mp; mp = mp->next, i++ ) {
@@ -121,7 +124,7 @@ int			ps_model_symmetry_views(Bstring& filename, Bmodel* model, string& symmetry
 			*fps << "50 755 moveto (" << title << ": " << mp->identifier() << ") show" << endl;
 			*fps << "/Data [" << endl << "%x y fom sel" << endl;
 			view = views_from_model(model);
-			ps_views(fps, symmetry_string, view, 2);
+			ps_views(fps, symmetry_string, view, flags);
 			*fps << "showpage" << endl;
 		}
 	}

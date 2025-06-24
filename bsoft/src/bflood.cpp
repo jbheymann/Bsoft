@@ -265,7 +265,7 @@ int 	main(int argc, char* argv[])
 	if ( p != pmask ) delete p;
 	delete pmask;
 	project_kill(project);
-	model_kill(model);
+	delete model;
 
 	
 		timer_report(ti);

@@ -242,9 +242,7 @@ Bplot*		Bimage::histogram_counts(int flags)
 
 	long			np(bins/imax+1), ninc(0), thr(datasize/1e4);
 	double			stot(0), inc(0), d;
-	double			amp[np], s[np], sv[np], sv2[np];
-	
-	for ( j=0; j<np; j++ ) s[j] = sv[j] = sv2[j] = amp[j] = 0;
+	vector<double>	amp(np,0), s(np,0), sv(np,0), sv2(np,0);
 	
 	for ( i=0, j=0; i<bins && j<np; i++ ) {
 		j = (i+imax/2)/imax;
@@ -798,7 +796,8 @@ vector<double>	Bimage::histogram_gauss_fit(long bins, long ngauss)
 	
 	long			i, j, nh(bins);
 	long			thresh((100*datasize)/bins);
-	double			hmax(0), havg[ngauss], hstd[ngauss], w[ngauss];
+	double			hmax(0);
+	vector<double>	havg(ngauss,0), hstd(ngauss,0), w(ngauss,0);
 
 	double			scale, offset;
 	vector<long>	histo = histogram(bins, scale, offset);
@@ -806,7 +805,6 @@ vector<double>	Bimage::histogram_gauss_fit(long bins, long ngauss)
 	// Attempting to find peaks by K-means clustering
 	vector<long>	sel = k_means(datasize, (float *)data_pointer(), ngauss);
 	
-	for ( j=0; j<ngauss; j++ ) havg[j] = hstd[j] = w[j] = 0;
 	for ( i=0; i<datasize; i++ ) {
 		havg[sel[i]] += (*this)[i];
 		hstd[sel[i]] += (*this)[i]*(*this)[i];

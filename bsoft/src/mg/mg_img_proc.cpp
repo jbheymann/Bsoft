@@ -1474,7 +1474,7 @@ int			project_trim_class_averages(Bproject* project, Bstring& list)
 	
 	Bstring			filename(project->class_avg->fpart);
 	Bimage*			pavg = read_img(filename, 1, -1);
-	pavg->delete_images(list);
+	pavg->delete_images(list.str());
 
 	filename = filename.pre_rev('.') + "_del." + filename.post_rev('.');
 	write_img(filename, pavg, 0);

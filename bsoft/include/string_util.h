@@ -2,7 +2,7 @@
 @file	string_util.h
 @author	Bernard Heymann
 @date	Created: 20160911
-@date	Modified: 20230706
+@date	Modified: 20250608
 
 **/
 
@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <complex>
+#include <map>
 
 using namespace std;
 
@@ -24,10 +25,11 @@ string		command_line(int argc, char** argv);
 string		base(string& filename);
 string		extension(string filename);
 string		replace_extension(string& filename, string ext);
+string 		to_lower(string s);
+string 		to_upper(string s);
 string		insert(string& filename, string ins);
 string		insert(string& filename, int i, int n);
-void		remove_spaces(string& s);
-string		remove_spaces2(string& s);
+string		remove_spaces(string& s);
 string		remove_quotes(string& s);
 string		parameter_file_path(string& filename);
 
@@ -48,6 +50,8 @@ vector<string> splitn(const string s, long n);
 @return	vector<string>	vector of strings.
 **/
 vector<string> split(const string s, char delim);
+
+map<char,string>	split_on_delimeters(string s, string t);
 
 string	 concatenate(const vector<string>& vs);
 string	 concatenate(const vector<long>& v);

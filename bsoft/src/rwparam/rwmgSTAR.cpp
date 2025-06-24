@@ -71,7 +71,7 @@ int			write_project_star(Bstring& filename, Bproject* project, int mg_select, in
 	
 	if ( err ) return err;
 	
-	return star.write(filename.str());
+	return star.write(filename.str(), project->split);
 }
 
 /**
@@ -464,6 +464,10 @@ CTFparam*		ctf_from_starblock(BstarBlock& block)
 	
 	if ( verbose & VERB_DEBUG )
 		cout << "DEBUG ctf_from_starblock: volt=" << block.real(CTF_VOLTAGE) << endl;
+
+	if ( verbose & VERB_DEBUG )
+		if ( block.exists(CTF_BASELINE) )
+			cout << "DEBUG ctf_from_starblock: baseline=" << block.real(CTF_BASELINE) << endl;
 
 	CTFparam*		ctf = new CTFparam;
 	vector<double>	v;

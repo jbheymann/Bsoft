@@ -113,18 +113,19 @@ public:
 	}
 	void	red_white_blue(double v, double red_min, double white_min,
 				double white_max, double blue_max) {
-		double		red, grn, blu;		
+		double		red, grn, blu, wneg(white_min), wpos(white_max);		
     	double		blue_scale(255.0/(blue_max - white_max));
     	double		red_scale(255.0/(white_min - red_min));
+    	if ( white_max < white_min ) wpos = wneg = 0.5*(white_max+white_min);
 		red = grn = blu = 255;						// White part
 		if ( v > blue_max ) {						// Blue part
 			red = grn = 0;
 		} else if ( v < red_min ) {					// Red part
 			blu = grn = 0;
-		} else if ( v > white_max ) {				// Blue gradient
+		} else if ( v > wpos ) {				// Blue gradient
       		red = (int) (blue_scale*(blue_max - v));
       		grn = (int) (blue_scale*(blue_max - v));
-		} else if ( v < white_min ) {				// Red gradient
+		} else if ( v < wneg ) {				// Red gradient
       		blu = (int) (red_scale*(v - red_min));
       		grn = (int) (red_scale*(v - red_min));
 		}
@@ -211,8 +212,11 @@ public:
 	RGBA	operator+(const RGBA& c) {
 		return RGBA(data[0] + c.data[0], data[1] + c.data[1], data[2] + c.data[2], data[3] + c.data[3]);
 	} 
+	RGBA	operator*(const double d) {
+		return RGBA(data[0]*d, data[1]*d, data[2]*d, data[3]*d);
+	} 
 	RGBA	operator/(const double d) {
-		return RGBA(data[0]/d, data[1] /d, data[2]/d, data[3]/d);
+		return RGBA(data[0]/d, data[1]/d, data[2]/d, data[3]/d);
 	} 
 	RGBA(RGB<Type>& c) { for ( int i=0; i<3; i++ ) data[i] = c[i]; data[3] = 0; }
 	RGBA(CMYK<Type>& cmyk) {

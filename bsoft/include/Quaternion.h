@@ -23,6 +23,7 @@ template <typename Type> class Vector3;
 	The internal variables are an array of 4 double precision floating point numbers.
 *************************************************************************/
 class Quaternion {
+private:
 	double			s;
 	Vector3<double>	v;
 	void	check() {

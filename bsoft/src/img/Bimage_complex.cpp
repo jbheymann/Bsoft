@@ -1979,24 +1979,24 @@ Bimage*		Bimage::polar_plot(double max_amp)
 		cout << "Maximum plotting amplitude:     " << max_amp << endl << endl;
 	}
 
-	long		i, j, nn, xyz(image_size());
-	long		max_rad(256), width(2*max_rad);
+	long		i, j, nn;
+	long		max_rad(256), width(2*max_rad), w2(width*width);
 	double		re, im, amp;
 	Bimage*		ppol = new Bimage(UCharacter, TSimple, width, width, 1, n);
 	ppol->origin(ppol->size()/2);
 	ppol->sampling(max_amp/max_rad, max_amp/max_rad, 1);
 	
 	for ( i=nn=0; nn<n; ++nn ) {
-		for ( j=0; j<xyz; ++i, ++j ) {
+		for ( j=0; j<image_size(); ++i, ++j ) {
 			amp = complex(i).amp();
 			if ( amp > max_amp ) amp = max_amp;
-			re = max_rad + complex(i).real()*max_rad/amp;
-			im = max_rad + complex(i).imag()*max_rad/amp;
+			re = (1 + complex(i).real()/amp)*max_rad;
+			im = (1 + complex(i).imag()/amp)*max_rad;
 			if ( re < 0 ) re = 0;
 			if ( im < 0 ) im = 0;
 			if ( re >= width ) re = width;
 			if ( im >= width ) im = width;
-			ppol->add(nn*xyz+im*width+re, 1);
+			ppol->add(nn*w2+im*width+re, 1);
 		}
 	}
 	

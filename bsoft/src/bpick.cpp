@@ -300,6 +300,7 @@ int			main(int argc, char* argv[])
 			else ptemp->origin(origin);
 		} else
 			origin = ptemp->image->origin();
+		pick_type = 1;
 	}
 	
 	if ( origin.length() < 1 ) origin = box_size/2;

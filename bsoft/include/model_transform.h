@@ -10,8 +10,7 @@
 #include "Transform.h"
 
 // Function prototypes
-long		model_center(Bmodel* model);
-long		model_shift(Bmodel* model, Vector3<double> shift);
+long		models_center(Bmodel* model);
 long		models_shift(Bmodel* model, Vector3<double> shift);
 long		models_trim(Bmodel* model, Vector3<double> trim);
 long		model_scale(Bmodel* model, Vector3<double> scale, Vector3<double> origin);

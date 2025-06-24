@@ -156,7 +156,7 @@ int			model_processing(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 		filename = Tcl_GetStringFromObj(objv[2], NULL);
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG model_processing: File name: " << filename << " (" << filename.length() << ")" << endl;
-		if ( model ) model_kill(model);
+		if ( model ) delete model;
 		model = read_model(filename.str());
 		Tcl_SetStringObj(returnObj, (char *)model->identifier() .c_str(), model->identifier() .length());
 	} else if ( action == "write" ) {
@@ -175,7 +175,7 @@ int			model_processing(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 		model->comment() += com + asctime(localtime(&ti)) + "\n";
 		write_model(filename.str(), model);
 	} else if ( action == "kill" ) {
-		model_kill(model);
+		delete model;
 	} else if ( action == "find" ) {
 		returnObj = do_find(model, objc, objv);
 	} else if ( action == "get" ) {
@@ -331,7 +331,7 @@ int			do_set(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 //	int					err(0);
 	int					i, rtn(0);
 	double				radius(1);
-	Bstring				calc_views;
+	string				calc_views;
 	Bmodel*				mp = model;
 	
 	Bstring				item = Tcl_GetStringFromObj(objv[2], NULL);
@@ -403,18 +403,20 @@ int			do_delete(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 {
 	if ( !model ) return 0;
 	
-	model_link_list_kill(model);
-	component_list_kill(model->comp);
+//	model_link_list_kill(model);
+//	component_list_kill(model->comp);
+	model->clear_links();
+	model->clear_components();
 	
-	model->comp = NULL;
-	model->link = NULL;
+//	model->comp = NULL;
+//	model->link = NULL;
 	
 	return 0;
 }
 
 int			do_delete_non_selected(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 {
-	model_delete_non_selected(&model);
+	models_delete_non_selected(&model);
 
 	return 0;
 }
@@ -535,7 +537,7 @@ int			do_create_shell(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 		} else {
 			for ( comp = numod->comp; comp; comp = comp->next )
 				model->add_component(comp);
-			model_kill(numod);
+			delete numod;
 		}
 	}	
 	
@@ -1153,27 +1155,27 @@ Tcl_Obj*	component_select(Bmodel* model, int objc, Tcl_Obj *CONST objv[])
 	if ( selection_string.length() < 1 ) {
 		return returnObj;
 	} else if ( selection_string == "none" ) {
-		model_unset_selection(model);
+		models_unset_selection(model);
 	} else if ( selection_string == "all" ) {
-		model_reset_selection(model);
+		models_select_all(model);
 	} else if ( selection_string == "types" ) {
 		if ( objc > 5 ) {
 			types = "%.";
-			model_select(model, types);
+			models_select(model, types);
 			types = "%";
 			types += Tcl_GetStringFromObj(objv[5], NULL);
 			types = types.replace(' ', ',');
 //			cout << "types = " << types << endl;
-			model_select(model, types);
+			models_select(model, types);
 		}
 	} else if ( selection_string == "id" ) {
 		if ( objc > 5 ) {
-			model_unset_selection(model);
+			models_unset_selection(model);
 			ids = "@";
 			ids += Tcl_GetStringFromObj(objv[5], NULL);
 			ids = ids.replace(' ', ',');
 //			cout << "ids = " << ids << endl;
-			model_select(model, ids);
+			models_select(model, ids);
 		}
 	} else {
 		if ( objc > 4 ) Tcl_GetDoubleFromObj(NULL, objv[4], &x);

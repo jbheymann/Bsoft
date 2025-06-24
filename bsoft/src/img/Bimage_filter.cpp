@@ -1375,7 +1375,7 @@ Bimage*		Bimage::aniso_average(long ksize, double w)
 }
 
 /**
-@brief 	Calculates an anisotropic average within a kernel based on the local gradient.
+@brief 	Filters by difference with another image.
 @param 	*p			image to compare with.
 @return int			0.
 **/

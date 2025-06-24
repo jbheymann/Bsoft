@@ -70,13 +70,12 @@ private:
 		sp = 0;
 		lbl = "C1";
 	}
-	string		clean_symstring(string& sym) {
+	string		clean_symstring(string& s) {
 		int					j(0);
 		lbl = "C1";
-		if ( sym.length() < 1 ) return lbl;
-		// Remove leading blanks and convert to upper case
-		lbl = sym;
-		remove_spaces(lbl);
+		if ( s.length() < 1 ) return lbl;
+		// Remove blanks and convert to upper case
+		lbl = remove_spaces(s);
 		// Alternate nomenclature for point groups
 		if ( isdigit(lbl[0]) ) {
 			j = to_integer(lbl);
@@ -100,7 +99,7 @@ private:
 	}
 public:
 	Bsymmetry() { initialize(); }
-	Bsymmetry(string sym);
+	Bsymmetry(string s);
 //	~Bsymmetry() { op.clear(); }
 	void		point(int i) { pnt = i; }
 	int			point() { return pnt; }
@@ -161,6 +160,7 @@ public:
 		long			i(order()*random()*0.99999L/get_rand_max());
 		return views[i];
 	}
+	int				show_views(View2<double> theview);
 	int				show_matrices();
 	int				show_operational_matrices();
 	int				show_pdb_matrices();

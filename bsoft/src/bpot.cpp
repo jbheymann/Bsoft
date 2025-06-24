@@ -123,7 +123,7 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	long			nimg(1);
 	string			imgfile;
@@ -165,11 +165,13 @@ int 	main(int argc, char **argv)
 		cout << "Components selected:            " << nsel << endl;
 	}
 
-	model_show_selection(model);
+	models_show_selection(model);
 
 //	img_potential_from_model(model, p, paramfile, hires, density, density_units);
 	double		mip = img_potential_from_model_structure_factors(model, -1, p, paramfile.str(), hires);
-	mip *= p->real_size().volume()*density/model_mass(model);
+	// Adjust for occupied volume
+//	mip *= p->real_size().volume()*density/model_mass(model);
+	mip *= density/model_mass(model);
 
 	if ( verbose ) {
 		cout << "Model mass:                     " << model_mass(model) << " Da" << endl;
@@ -178,20 +180,22 @@ int 	main(int argc, char **argv)
 	}
 
 	if ( rpsfile.length() ) {
-		double		sampling_ratio(1);
+		double		sampling_ratio(1), scale(1.0/p->size().volume());
 		Bimage*		prad = p->fspace_radial_power(hires, sampling_ratio);
-//		if ( ps_flags & 2 ) p->average_images();
+		prad->multiply(scale);
+		if ( ps_flags & 2 ) prad->average_images();
 		if ( ps_flags & 8 ) prad->logarithm();
 		Bplot*		plot = prad->plot_radial_powerspectrum(hires, ps_flags);
 		ps_plot(rpsfile, plot);
 		delete prad;
+		delete plot;
 	}
 
 	if ( set_backtransform ) {
 		if ( verbose )
 			cout << "Back transforming" << endl;
 		p->phase_shift(origin);
-		p->fft(FFTW_BACKWARD, 0, Real);
+		p->fft(FFTW_BACKWARD, 2, Real);
 	}
 
 	// Write output file

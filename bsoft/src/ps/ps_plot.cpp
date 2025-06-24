@@ -1,9 +1,9 @@
 /**
 @file	ps_plot.cpp
 @brief	Postscript output functions.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20010515
-@date	Modified: 20200312
+@date	Modified: 20241020
 **/
  
 #include "ps_plot.h" 
@@ -31,6 +31,13 @@ extern string	command;		// Command line
 
 **/
 ofstream*	ps_open_and_init(Bstring filename, Bstring title, int npages, 
+					int width, int height)
+{
+	return ps_open_and_init(filename.str(), title.str(), npages, 
+					width, height);
+}
+
+ofstream*	ps_open_and_init(string filename, string title, int npages, 
 					int width, int height)
 {
 	if ( verbose & VERB_DEBUG )
@@ -638,3 +645,26 @@ int			ps_define_arrowline(ofstream* fps)
 	
 	return 0;
 }
+
+int			ps_ewald_scheme(string filename)
+{
+	if ( verbose )
+		cout << "Plotting an Ewald scheme to " << filename << endl << endl;
+		
+	ofstream*	fps = ps_open_and_init(filename, filename, 1, 600, 800);
+	
+	*fps << "/Scale 200 def" << endl;
+	*fps << "/Sph { newpath " << endl;
+	*fps << "	1 0 moveto 0 0 1 0 360 arc stroke" << endl;
+	*fps << "	closepath } def" << endl;
+	*fps << "gsave" << endl;
+	*fps << "	Scale Scale scale" << endl;
+	*fps << "	0.005 setlinewidth Geom stroke" << endl;
+	*fps << "grestore" << endl;
+	*fps << "showpage" << endl;	
+
+	ps_close(fps);
+
+	return 0;
+}
+

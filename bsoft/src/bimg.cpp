@@ -3,7 +3,7 @@
 @brief	General image processing program
 @author Bernard Heymann
 @date	Created: 19990321
-@date	Modified: 20210624
+@date	Modified: 20250202
 **/
 
 #include "rwimg.h"
@@ -37,6 +37,7 @@ const char* use[] = {
 "-average                 Average images in a multi-image file.",
 "-reslice -z+xy           Reslice = switch axes (default xyz).",
 "-size 10,50,8            New image size (pixels/voxels).",
+"-expand 22               Expand in z, replicating values in xy.",
 "-translate -5,12,50      Translate (pixels, with wrapping if option -wrap is used).",
 "-Wrap 10,50,8            Shrinking and wrapping an image (pixels).",
 "-truncate -0.5,1.2       Truncate data to minimum and maximum.",
@@ -87,16 +88,17 @@ int 		main(int argc, char **argv)
 	int 			setshrinkwrap(0); 			// Shrinking and wrapping flag
 	int 			settranslate(0);			// Translation flag
 	int 			setwrap(0);					// Wrapping flag
-	Vector3<int> 	nusize;						// New image size
+	Vector3<long> 	nusize;						// New image size
+	long			z_expand(0);				// Z size for expansion
 	Vector3<double>	origin;						// New image origin
 	int				set_origin(0);				// Flag to set origin
-	Vector3<int> 	shift;						// Shift for integral translation
+	Vector3<long> 	shift;						// Shift for integral translation
 	double			fill(0);	 				// Fill value for resizing
 	int 			fill_type(FILL_AVERAGE);	// Fill type for resizing
 	int 			nlevels(0);
 	int 			setimg(-1);					// Select all images
-	Bstring			select_list;				// List of sub-images to select
-	Bstring			delete_list;				// List of sub-images to delete
+	string			select_list;				// List of sub-images to select
+	string			delete_list;				// List of sub-images to delete
 	int 			setbackground(0);			// Background
 	double	 		nubackground(-1);			// New background
 	int				znswitch(0);				// 0=not, 1=n2z, 2=z2n
@@ -111,12 +113,12 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "select" ) {
 			if ( curropt->value.contains(",") ||
 					curropt->value.contains("-") )
-				select_list = curropt->value;
+				select_list = curropt->value.str();
 			else
 				setimg = curropt->value.integer();
 		}
 		if ( curropt->tag == "delete" ) {
-			delete_list = curropt->value;
+			delete_list = curropt->value.str();
 			if ( delete_list.length() < 1 )
 				cerr << "-delete: Image numbers must be specified!" << endl;
 		}
@@ -182,6 +184,9 @@ int 		main(int argc, char **argv)
 		}
 		if ( curropt->tag == "size" )
 			nusize = curropt->size();
+		if ( curropt->tag == "expand" )
+			if ( ( z_expand = curropt->integer() ) < 2 )
+				cerr << "-expand: A z size greater than one must be specified!" << endl;
 		if ( curropt->tag == "origin" ) {
 			if ( curropt->value[0] == 'c' ) {
 				set_origin = 2;
@@ -266,6 +271,12 @@ int 		main(int argc, char **argv)
 	} else if ( settranslate ) {
 		if ( setwrap ) p->shift_wrap(shift);
 		else p->shift(shift, fill_type, fill);
+	}
+	
+	if ( z_expand ) {
+		Bimage* 	pex = p->expand(z_expand);
+		delete p;
+		p = pex;
 	}
 	
 	if ( setinvert ) p->invert();

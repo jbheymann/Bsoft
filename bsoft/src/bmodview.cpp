@@ -3,7 +3,7 @@
 @brief	Manipulates models.
 @author Bernard Heymann
 @date	Created: 20081120
-@date 	Modified: 20141029
+@date 	Modified: 20250528
 **/
 
 #include "rwmodel.h"
@@ -46,7 +46,6 @@ const char* use[] = {
 "-verbose 7               Verbose output.",
 "-componentradius 8.4     Set display radius for all components.",
 "-linkradius 5.1          Set display radius for all links.",
-"-combined                The views for all models are combined (-Postscript option).",
 "-separate                Each model is defined as a separate molecule group (-coordinates option).",
 " ",
 "Input:",
@@ -60,6 +59,9 @@ const char* use[] = {
 "                         Argument: \"id\": model ID's are used as file names.",
 "-coordinates all.pdb     Output coordinate files.",
 "-Postscript plot.ps      Output postscript file with a plot of views.",
+"-numbered                The views for all models are numbered (-Postscript option).",
+"-occurrence              The views for all models with occurrence (-Postscript option).",
+"-combined                The views for all models are combined (-Postscript option).",
 " ",
 NULL
 };
@@ -72,7 +74,7 @@ int 	main(int argc, char **argv)
 	int				merge(0);					// Flag to merge models rather than concatenate
 	Bstring			calc_views;					// Mode to calculate component views
 	int				inv_views(0);				// Flag to invert views for selected components
-	string			asu_sym;					// Point group string
+	Bsymmetry		sym;						// Symmetry for various options
 	int				view_dir_bins(0);			// Flag and histogram bin width to assess view directions
 	int				view_dir_flag(0);			// Flag to set the reference for view directions
 	double			setfom(-1);					// Value to set FOM to
@@ -83,7 +85,7 @@ int 	main(int argc, char **argv)
 	Bstring			outfile;					// Output parameter file name
 	Bstring			coorfile;					// Output coordinates file name
 	int				split(0);					// Output one big STAR file
-	int				combined(0);				// Flag to combine models for Postscript output
+	int				flags(0);					// Flags: 1=numbered, 2=occurrence, 4=combined models for Postscript output
 	Bstring			ps_file;					// Postscript output
     
 	int				optind;
@@ -95,7 +97,8 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "merge" ) merge = 1;
 		if ( curropt->tag == "views" ) calc_views = curropt->value.lower();
 		if ( curropt->tag == "invert" ) inv_views = 1;
-		if ( curropt->tag == "setasu" ) asu_sym = curropt->value.upper().str();
+		if ( curropt->tag == "setasu" )
+			sym = curropt->symmetry();
 		if ( curropt->tag == "directions" )
 			if ( curropt->values(view_dir_bins, view_dir_flag) < 1 )
 				cerr << "-directions: A histogram bin width in degrees must be specified!" << endl;
@@ -108,7 +111,9 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "linkradius" )
 			if ( ( linkrad = curropt->value.real() ) <= 0 )
 				cerr << "-linkradius: A radius must be specified!" << endl;
-		if ( curropt->tag == "combined" ) combined = 1;
+		if ( curropt->tag == "combined" ) flags |= 4;
+		if ( curropt->tag == "numbered" ) flags |= 1;
+		if ( curropt->tag == "occurrence" ) flags |= 2;
 		if ( curropt->tag == "parameters" )
 			paramfile = curropt->filename();
 		if ( curropt->tag == "output" )
@@ -144,15 +149,15 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 	
 	if ( merge ) model_merge(model);
 	
-	if ( comprad > 0 ) models_process(model, comprad, model_set_component_radius);
+	if ( comprad > 0 ) models_set_component_radius(model, comprad);
 
-	if ( linkrad > 0 ) models_process(model, linkrad, model_set_link_radius);
+	if ( linkrad > 0 ) models_set_link_radius(model, linkrad);
 
 	if ( setfom >= 0 ) model->set_component_fom(setfom);
 	
@@ -161,23 +166,22 @@ int 	main(int argc, char **argv)
 	if ( inv_views ) model_invert_views(model);
 	
 //	cout << "Symmetry " << asu_sym << endl;
-	if ( asu_sym.size() ) models_process(model, asu_sym, model_find_asymmetric_unit);
+	if ( sym.point() > 101 ) models_find_asymmetric_unit(model, sym);
 	
 	if ( view_dir_bins ) model_view_directions(model, view_dir_bins, view_dir_flag);
 	
 	if ( ps_file.length() )
-		ps_model_symmetry_views(ps_file, model, asu_sym, combined);
+		ps_model_symmetry_views(ps_file, model, sym.label(), flags);
 	
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	// Write an output parameter format file if a name is given
     if ( model && ( outfile.length() || split == 9 ) )
 		write_model(outfile.str(), model, split);
 
-	model_kill(model);
+	delete model;
 		
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

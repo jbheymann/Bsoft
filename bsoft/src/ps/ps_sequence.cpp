@@ -1,13 +1,14 @@
 /**
 @file	ps_sequence.cpp
 @brief	Postscript output for sequence analysis functions.
-@author Bernard Heymann 
+@author 	Bernard Heymann 
 @date	Created: 20010515
-@date	Modified: 20210426
+@date	Modified: 20250602
 **/
  
 #include "ps_plot.h" 
-#include "Complex.h"
+#include "ps_sequence.h" 
+//#include "Complex.h"
 #include "utilities.h" 
 
 // Declaration of global variables
@@ -412,3 +413,67 @@ int 		ps_seq_periodicity(ofstream* fps, vector<Complex<float>>& per)
 	return 0;
 }
 
+
+int			ps_plot_domains(string& filename, string& name, long bar_width, 
+				long bar_height, vector<Bgroup>& doms, bool numbers)
+{
+	int 		max(0), left(100), bottom(200), width(480), height(100);
+
+	for ( auto dom: doms ) if ( max < dom.end() ) max = dom.end();
+	
+	if ( bar_width <= 0 ) bar_width = max;
+
+	double		scale = width*1.0/bar_width;
+	
+	if ( verbose )
+		cout << "Generating a domain diagram for " << name << endl;
+	
+	Bstring		title(name);
+	
+	ofstream*	fps = ps_open_and_init(filename, title, 1, 600, 800);
+
+	*fps << "%%%%Page: Domains" << endl;
+	*fps << "/Helvetica findfont 14 scalefont setfont" << endl;
+	*fps << 10 << " " << bottom+5 << " moveto (" << name << ") show" << endl;
+	*fps << "/Left " << left << " def" << endl << "/Bottom " << bottom << " def" << endl;
+	*fps << "/Height " << height << " def" << endl << "/Width " << width << " def" << endl;
+	*fps << "/Hscale " << scale << " def" << endl;
+	*fps << "/BarHeight " << bar_height << " def" << endl;
+	*fps << "/MaxLength " << max << " def" << endl;
+	*fps << "/Frame { newpath 0 0 moveto Width 0 lineto Width Height lineto 0 Height lineto closepath } def" << endl;
+	*fps << "/Data [\n%%start end r g b a" << endl;
+	for ( auto dom: doms )
+		*fps << dom.start() << " " << dom.end() << " " <<
+			dom.color()[0] << " " << dom.color()[1] << " " <<
+			dom.color()[2] << " " << dom.color()[3] << endl; 
+	*fps << "] def" << endl;
+	*fps << "gsave" << endl;
+	*fps << "	" << left << " " << bottom << " translate" << endl;
+//	*fps << "	Frame stroke" << endl;
+	*fps << "	/Helvetica findfont 12 scalefont setfont" << endl;
+	*fps << "	Hscale 1 scale" << endl;
+	*fps << "	0 0 moveto MaxLength 0 rlineto 0 BarHeight rlineto MaxLength neg 0 rlineto 0 BarHeight neg rlineto stroke" << endl;
+	*fps << "	0 6 Data length 6 sub { " << endl;
+	*fps << "		/Index exch def" << endl;
+	*fps << "		/s Data Index get def" << endl;
+	*fps << "		/e Data Index 1 add get def" << endl;
+	*fps << "		/r Data Index 2 add get def" << endl;
+	*fps << "		/g Data Index 3 add get def" << endl;
+	*fps << "		/b Data Index 4 add get def" << endl;
+	*fps << "		/a Data Index 5 add get def" << endl;
+	*fps << "		r g b setrgbcolor" << endl;
+	*fps << "		newpath s 0 moveto s BarHeight lineto e BarHeight lineto e 0 lineto closepath fill" << endl;
+	if ( numbers ) {
+		*fps << "		0 0 0 setrgbcolor" << endl;
+		*fps << "		s 5 sub BarHeight 5 add moveto s cvi (xxxx) cvs show stroke" << endl;
+		*fps << "		e 5 sub -15 moveto e cvi (xxxx) cvs show stroke" << endl;
+	}
+	*fps << "	} for stroke" << endl;
+	*fps << "grestore" << endl;
+	*fps << "showpage" << endl;
+		
+	ps_close(fps);
+	
+	return 0;
+}
+	

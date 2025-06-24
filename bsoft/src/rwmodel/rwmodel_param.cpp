@@ -208,8 +208,6 @@ int			model_param_generate(Bmodparam& md, Bmodel* model)
 	if ( verbose )
 		cout << "Angle references:               " << n << endl;
 
-//	cout << "model_param_generate done" << endl;
-	
 	return 0;
 }
 
@@ -599,7 +597,7 @@ map<string,Bmaterial> 	read_material_properties(vector<string> file_list, string
 		} else if ( ft == Model || ft == Molecule ) {
 			Bmodel*	model = read_model(filename, paramfile);
 			Bmaterial	m = material_from_model(model);
-			model_kill(model);
+			delete model;
 			if ( flags & 1 ) material_protein_add_hydrogens(m);
 			material[filename] = m;
 		} else {

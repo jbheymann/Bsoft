@@ -83,6 +83,7 @@ const char* use[] = {
 "Output:",
 "-output material.star    File with a list of materials.",
 "-curves outfile.txt      File for scattering curve output (use with -elements option).",
+"-potential outfile.txt   File for potential curve output (use with -elements option).",
 "-rps powerspec.ps        Posrtscript file for radial power spectrum.",
 " ",
 NULL
@@ -121,7 +122,8 @@ int		main(int argc, char** argv)
 	string			paramfile;
 	string			outfile;			// Output material file
 	string			curvefile;			// Output file for scattering curves
-	Bstring			rpsfile;			// Output file for scattering curves
+	string			potfile;			// Output file for potential curves
+	Bstring			rpsfile;			// Output file for radial power spectrum
 	Bstring			jsin;				// JSON file
 
 	double			v;
@@ -214,6 +216,8 @@ int		main(int argc, char** argv)
 			outfile = curropt->filename().str();
 		if ( curropt->tag == "curves" )
 			curvefile = curropt->filename().str();
+		if ( curropt->tag == "potential" )
+			potfile = curropt->filename().str();
 		if ( curropt->tag == "rps" )
 			rpsfile = curropt->filename();
     }
@@ -323,6 +327,9 @@ int		main(int argc, char** argv)
 
 	if ( curvefile.length() )
 		write_scattering_curves(curvefile, mcomb.composition(), hires);
+
+	if ( potfile.length() )
+		write_potential_curves(potfile, mcomb.composition(), radius);
 
 	if ( halfmax )
 		material_cross_section_half_maximal_frequencies(mcomb);

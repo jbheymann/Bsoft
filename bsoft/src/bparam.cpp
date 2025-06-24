@@ -107,7 +107,7 @@ int 		main(int argc, char **argv)
 		}
 		if ( length_cutoff ) {
 			model->clear_links();
-			model_link_list_generate(model, length_cutoff);
+			models_link_list_generate(model, length_cutoff);
 		}
 //		md = md_calculate_parameters(molgroup, elements, show_links, show_angles);
 		md = model_param_generate(model);

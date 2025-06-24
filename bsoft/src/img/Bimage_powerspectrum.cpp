@@ -784,7 +784,7 @@ Bplot*		Bimage::plot_radial_powerspectrum(double resolution, int ps_flags)
 	plot->page(0).title(title);
 	plot->page(0).columns(nc);
 	for ( i=0; i<nc; i++ ) plot->page(0).column(i).number(i);
-	plot->page(0).column(0).label("SpatialFrequency(1/A)");
+	plot->page(0).column(0).label("Spatial Frequency (1/A)");
 	plot->page(0).column(0).axis(1);
 	plot->page(0).axis(0).min(0);
 	plot->page(0).axis(0).max(1/resolution);
@@ -809,15 +809,25 @@ Bplot*		Bimage::plot_radial_powerspectrum(double resolution, int ps_flags)
 	for ( i=0; i<x; ++i ) (*plot)[i] = sampling(0)[0]*i;
 	for ( i=0, k=x; i<x*n; ++i, ++k ) (*plot)[k] = (*this)[i];
 	
+	double			w;
+	vector<double>	cs(n,0);
+	
 	if ( verbose & VERB_PROCESS ) {
 		cout << "Spatial Frequency (1/A)";
 		for ( k=1; k<=n; ++k ) cout << tab << k;
 		cout << scientific << endl;
 		for ( i=0; i<x; ++i ) {
+			w = TWOPI*sampling(0)[0]*sampling(0)[0]*i;
 			cout << (*plot)[i];
-			for ( j=x+i, k=0; k<n; ++k, j+=x ) cout << tab << (*plot)[j];
+			for ( j=x+i, k=0; k<n; ++k, j+=x ) {
+				if ( i ) cs[k] += w*(*plot)[j];
+				cout << tab << (*plot)[j];
+			}
 			cout << endl;
 		}
+		cout << "CS:";
+		for ( k=0; k<n; ++k ) cout << tab << cs[k];
+		cout << endl << endl;
 	}
 		
 	return plot;

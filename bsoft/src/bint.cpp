@@ -42,7 +42,7 @@ const char* use[] = {
 "-slices                  Interpret multiple 2D images as z-slices of a single 3D image",
 "-images                  Interpret slices of a single 3D image as 2D images",
 "-rescale -0.1,5.2        Rescale output data to average and standard deviation.",
-"-project                 Project a 3D image along the z-axis after transformation.",
+"-mirror                  Mirror an image through its origin.",
 "-Skew +                  + skews and - removes skewing (default off).",
 " ",
 "Parameters:",
@@ -71,7 +71,7 @@ int 		main(int argc, char **argv)
 	int				znswitch(0);					// 0=not, 1=n2z, 2=z2n
 	int 			setresize(0);
 	int 			settransform(0);
-	int 			setproject(0);
+	bool 			mirror(0);
 	int 			setrescale(0);
 	double			nuavg(0), nustd(0);				// Rescaling to average and stdev
 	int 			rotate(0); 						// Rotation flag
@@ -206,8 +206,8 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "median" )
 			if ( ( median_binning = curropt->value.integer() ) < 1 )
 				cerr << "-median: A binning size must be specified!" << endl;
-		if ( curropt->tag == "project" )
-			setproject = 1;
+		if ( curropt->tag == "mirror" )
+			mirror = 1;
 		if ( curropt->tag == "Skew" ) {
 			settransform = 1;
 			if ( curropt->value.contains("+" ) )
@@ -266,16 +266,13 @@ int 		main(int argc, char **argv)
 	if ( p->background(long(0)) < 1e-37 ) p->calculate_background();
 	if ( fill_type == FILL_AVERAGE ) fill = p->average();
 	if ( fill_type == FILL_BACKGROUND ) fill = p->background(long(0));
-	
-	if ( uc.check() ) p->unit_cell(uc);
-	else uc = p->unit_cell();
-	
+		
 	if ( set_origin ) {
 		if ( set_origin == 2 ) p->origin(p->size()/2);
 		else p->origin(origin);
 	}
 
-	if ( bin[0] )
+	if ( bin[0] > 1 )
 		p->bin(bin);
 	else if ( median_binning )
 		p->median_bin(median_binning);
@@ -289,7 +286,8 @@ int 		main(int argc, char **argv)
 	Bimage*		pnu = NULL;
 	
 	if ( settransform ) {
-	
+		if ( uc.check() ) p->unit_cell(uc);
+		else uc = p->unit_cell();	
 		if ( set_skew ) {
 			mat = uc.skew_rotation(set_skew==-1);
 		} else if ( rotate ) {
@@ -336,7 +334,7 @@ int 		main(int argc, char **argv)
 	
 	if ( setrescale ) p->rescale_to_avg_std(nuavg, nustd);
 
-	if ( setproject ) p->project('z', 1);
+	if ( mirror ) p->mirror();
 
 	if ( newsampling.volume() > 0 ) p->sampling(newsampling);
 
@@ -352,8 +350,7 @@ int 		main(int argc, char **argv)
 	
 	delete p;
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

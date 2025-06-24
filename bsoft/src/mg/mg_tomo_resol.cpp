@@ -593,7 +593,7 @@ Bplot*		project_tomo_particle_resolution(Bproject* project, double hi_res,
 		if ( verbose ) {
 			cout << endl;
 			cout << "3D resolution: " << endl;
-			cout << "s(1/A)\tRes(A)\tNLOO3D" << endl;
+			cout << "Spatial Frequency (1/A)\tRes(A)\tNLOO3D" << endl;
 			sp = 0;
 			FRCp = 1;
 			resolution = 1/rad_scale;

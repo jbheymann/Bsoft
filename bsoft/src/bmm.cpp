@@ -3,7 +3,7 @@
 @brief	A program to do model mechanics
 @author Bernard Heymann
 @date	Created: 20100223
-@date 	Modified: 20210224
+@date 	Modified: 20250618
 **/
 
 #include "rwmodel.h"
@@ -32,6 +32,7 @@ const char* use[] = {
 " ",
 "Actions:",
 "-center                  Center before all other operations.",
+"-rigid comp              Rigidity: all/whole (default), model, component (default).",
 "-minimize 150            Number of iterations for minimizing a model.",
 "-dynamics 500            Number of iterations for running dynamics on a model.",
 " ",
@@ -88,30 +89,45 @@ int 		main(int argc, char **argv)
 	int				center(0);				// Flag to center the structure
 	long 			max_iter(0);			// Number of iterations/cycles for minimization
 	int 			mm_type(0);				// Type of mechanics: 0=minimization, 1=dynamics
-	Bstring			map_name;				// Density map reference
+	string			map_name;				// Density map reference
 	long			img_num(0);				// Image number in density map file
-	Bstring			map_path;				// Density map path
+	string			map_path;				// Density map path
 	double			compradius(0);			// Component display radius
 	double			linkradius(0);			// Link display radius
 	double			max_shift(0);			// Maximum shift per iteration
-	double			velocitylimit(0.1);		// Limit on velocity per time step
 	long			neighbors(6);			// Number of neighbors to generate
 	double			neighbor_scale(0);		// Neighborhood scale
-	Bstring			mod_select;				// Model and component selection
-    Bstring    		atom_select("ALL");
-	Bstring			paramfile;				// Use default parameter file
-	Bstring			guidefile;				// Polyhedron guide file
-	Bstring			outfile;				// Output model file name
-	Bstring			mdfile;					// Distance matrix file
+	string			mod_select;				// Model and component selection
+    string    		atom_select("ALL");
+	string			paramfile;				// Use default parameter file
+	string			guidefile;				// Polyhedron guide file
+	string			outfile;				// Output model file name
+	string			mdfile;					// Distance matrix file
 
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 
 	Bmodparam		md;
+	for ( curropt = option; curropt; curropt = curropt->next ) {
+		if ( curropt->tag == "parameters" )
+			paramfile = curropt->filename().str();
+	}
+	
+	if ( paramfile.length() )
+		md = read_dynamics_parameters(paramfile);
+
+	md.rigid = 2;			// Component level mechanics
+	md.distancetype = 3;	// Lennard Jones
+
 
 	for ( curropt = option; curropt; curropt = curropt->next ) {
 		if ( curropt->tag == "center" ) center = 1;
+		if ( curropt->tag == "rigid" ) {
+			if ( curropt->value[0] == 'a' || curropt->value[0] == 'w' ) md.rigid = 0;
+			else if ( curropt->value[0] == 'm' ) md.rigid = 1;
+			else if ( curropt->value[0] == 'c' ) md.rigid = 2;
+		}
 		if ( curropt->tag == "minimize" ) {
 			if ( ( max_iter = curropt->value.integer() ) < 1 )
 				cerr << "-minimize: The number of iterations must be specified!" << endl;
@@ -124,7 +140,7 @@ int 		main(int argc, char **argv)
 		}
 		if ( curropt->tag == "all" ) reset = 1;
 		if ( curropt->tag == "select" )
-			mod_select = curropt->value;
+			mod_select = curropt->value.str();
 		if ( curropt->tag == "componentradius" )
 			if ( ( compradius = curropt->value.real() ) < 0.001 )
 				cerr << "-componentradius: The component display radius must be specified!" << endl;
@@ -132,13 +148,14 @@ int 		main(int argc, char **argv)
 			if ( ( linkradius = curropt->value.real() ) < 0.001 )
 				cerr << "-linkradius: The link display radius must be specified!" << endl;
 		if ( curropt->tag == "map" ) {
-			map_name = curropt->value;
-			img_num = (map_name.post(',')).integer();
-			map_name = map_name.pre(',');
+			vector<string>	vs = split(curropt->value.str(), ',');
+			map_name = vs[0];
+			if ( vs.size() > 1 )
+			img_num = to_integer(vs[1]);
 			if ( map_name.length() < 1 )
 				cerr << "-map: A file name must be specified!" << endl;
 		}
-		if ( curropt->tag == "path" ) map_path = curropt->value;
+		if ( curropt->tag == "path" ) map_path = curropt->value.str();
 		if ( curropt->tag == "shift" )
 			if ( ( max_shift = curropt->value.real() ) < 0.001 )
 				cerr << "-shift: The maximum shift distance must be specified!" << endl;
@@ -146,7 +163,7 @@ int 		main(int argc, char **argv)
 			if ( ( md.timestep = curropt->value.real() ) < 0.001 )
 				cerr << "-timestep: The time step must be specified!" << endl;
 		if ( curropt->tag == "velocitylimit" )
-			if ( ( velocitylimit = curropt->value.real() ) < 0.001 )
+			if ( ( md.velocitylimit = curropt->value.real() ) < 0.001 )
 				cerr << "-velocitylimit: The velocity limit must be specified!" << endl;
 		if ( curropt->tag == "friction" )
 			if ( ( md.Kfriction = curropt->value.real() ) < 1e-30 )
@@ -196,14 +213,12 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "sigma" )
 			if ( ( md.sigma = curropt->value.real() ) < 1e-30 )
 				cerr << "-sigma: The sigma value must be specified!" << endl;
-		if ( curropt->tag == "parameters" )
-			paramfile = curropt->filename();
 		if ( curropt->tag == "guide" )
-			guidefile = curropt->filename();
+			guidefile = curropt->filename().str();
 		if ( curropt->tag == "output" )
-			outfile = curropt->filename();
+			outfile = curropt->filename().str();
 		if ( curropt->tag == "writeparam" )
-			mdfile = curropt->filename();
+			mdfile = curropt->filename().str();
     }
 	option_kill(option);
 	
@@ -217,67 +232,66 @@ int 		main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	Bmodel*		model = read_model(file_list, paramfile.str());		
+	Bmodel*		model = read_model(file_list, paramfile);
 
 	if ( !model ) {
 		cerr << "Error: Input file not read!" << endl;
 		bexit(-1);
 	}
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
+
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
+	
 	if ( map_name.length() ) {
-		model->mapfile(map_name.str());
+		model->mapfile(map_name);
 		model->image_number(img_num);
-		model_check(model, map_path.str());
+		model_check(model, map_path);
 	} else if ( map_path.length() ) {
-		model_check(model, map_path.str());
+		model_check(model, map_path);
 	}
 
 	if ( paramfile.length() )
-		update_dynamics_parameters(md, paramfile.str());
+		update_dynamics_parameters(md, paramfile);
 	else
 		model_param_generate(md, model);
 
 	if ( md.Kguide > 0 && guidefile.length() )
-		md.guide = read_model(guidefile.str(), paramfile.str());
+		md.guide = read_model(guidefile, paramfile);
 	
 //	model_param_set_type_indices(model, md);
 	model->update_component_types(md.comptype);
 	
 //	model_param_display(md);
 	
-	if ( center ) models_process(model, model_center);
+	if ( center ) models_center(model);
 
 	if ( neighbor_scale ) model_set_neighbors(model, neighbors, neighbor_scale);
 	else model_set_neighbors(model, neighbors);
 
-	model_check(model, map_path.str());
+	model_check(model, map_path);
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	if ( max_iter )
-		model_mechanics(model, md, mm_type, max_iter, max_shift, velocitylimit);
+		model_mechanics(model, md, mm_type, max_iter, max_shift);
 
 	model_color_by_fom(model);
 
-	if ( compradius > 0 ) models_process(model, compradius, model_set_component_radius);
-
-	if ( linkradius > 0 ) models_process(model, linkradius, model_set_link_radius);
-	
 	if ( outfile.length() ) {
-		write_model(outfile.str(), model);
+		write_model(outfile, model);
 	}
 	
 	if ( mdfile.length() )
-		write_dynamics_parameters(mdfile.str(), md);
+		write_dynamics_parameters(mdfile, md);
 
-	model_kill(model);
+	delete model;
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

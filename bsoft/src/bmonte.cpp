@@ -1,17 +1,17 @@
 /**
 @file	bmonte.cpp
-@brief	Program to use a monte carlo metroplis algorithm to energy minimize molecular positions.
+@brief	Program to use a monte carlo metroplis algorithm to energy minimize models.
 @author Bernard Heymann
 @date	Created: 20041230
-@date 	Modified: 20071223
+@date 	Modified: 20250618
 **/
 
-#include "rwmolecule.h"
+#include "model_monte.h"
+#include "model_links.h"
+#include "model_util.h"
+#include "rwmodel.h"
 #include "rwimg.h"
 #include "rwmd.h"
-#include "mol_monte.h"
-#include "mol_bonds.h"
-#include "mol_transform.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -22,49 +22,46 @@ extern int 	verbose;		// Level of output to the screen
 /* Usage assistance */
 const char* use[] = {
 " ",
-"Usage: bmonte [options] input.pdb output.pdb",
-"--------------------------------------------",
-"Minimizes the energy of a set of molecular structures using a Monte Carlo Metropolis algorithm.",
-"The -grid and -orientation options only work with rigid bodies, not atoms,",
-"	and their output is to a model parameter file (.star).",
+"Usage: bmonte [options] in1.pdb [in2.cif ...]",
+"---------------------------------------------",
+"Minimizes the energy of a set of models using a Monte Carlo Metropolis algorithm.",
 " ",
 "Actions:",
-"-rigid mol               Rigidity: all/whole = single rigid body (default),",
-"                                   group = each file with a molecule group is a rigid body,",
-"                                   molecule = each molecule is a rigid body,",
-"                                   atom = each atom can move.",
-"-concurrent              Run all models simultaneously (default each model separately),",
-"-grid 3.5,5,4.2          Search on a grid with this sampling and within the bounding box (angstroms).",
-"-orientations 12.5       Search all orientations with the given angular step size (degrees).",
+"-rigid comp              Rigidity: all/whole (default), model, component.",
+"-iterations 60           Maximum number of iterations (default 0).",
+"-SS 2.05                 Add disulphides with this reference link length.",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
 "-sampling 1.5,1.5,1.5    Sampling (A/pixel; a single value can be given).",
+"-componentradius 0.5     Component display radius.",
+"-linkradius 0.5          Link display radius.",
+" ",
+"Parameters for mechanics:",
 "-bbox 0,82.5,50,50,80,50 Bounding box center and size (default from coordinates or map).",
 "-wrap                    Wrap around (periodic boundaries).",
-"-resolution 20           Resolution limit (angstrom).",
-"-iterations 60           Maximum number of iterations (default 1).",
-"-Kbond 150               Bond strength (default 0).",
+"-Klink 150               Bond strength (default 0).",
 "-Kangle 4                Angle strength (default 0).",
-"-Kvdw 0.1                Van der Waals strength (default 0).",
+"-Kdistance 0.1           Distance (Van der Waals) strength (default 0).",
 "-Kelectrostatic 0.4      Electrostatic strength (default 0).",
 "-Kseparation 0.02        Separation energy constant (default 0).",
 "-Kmap 1.5                Map energy constant (default 1 if -Map option is used).",
 "-separation 4.5          Separation distance for overlap calculation (default 4 A).",
-"-cutoff 7.8              Distance cutoff for non-bonded forces (default 5 A).",
+"-cutoff 7.8              Distance cutoff for non-linked forces (default 5 A).",
 "-beta 12                 Inverse of mean energy per atom and degree of freedom (default 10).",
 "-angle 1.5               Maximum angular increment per iteration (default 1 degree).",
 "-shift 3.1               Maximum shift per iteration (default 1 angstrom).",
-"-bondsteps 5             Number of steps along a bond for map fitting (default none).",
+"-linksteps 5             Number of steps along a link for map fitting (default none).",
 "-location 12,5.3,6       Location of harmonic force to apply to center-of-mass.",
 "-Klocation 16.8,0.2      Magnitude of harmonic force and decay constant.",
-"-SS 2.05                 Set disulphide reference bond length.",
 " ",
 "Input:",
 "-parameters md.star      Molecular dynamics parameter file.",
-"-Model locations.star    Model parameter file with initial rigid body locations.",
 "-Map file.map            Map to use as an additional restraint.",
-"-Mask mask.mrc           Mask to limit grid-searches (must be byte data type).",
+//"-Mask mask.mrc           Mask to limit grid-searches (must be byte data type).",
+" ",
+"Output:",
+"-output file.cif         Output model file.",
 " ",
 NULL
 };
@@ -72,94 +69,86 @@ NULL
 int 	main(int argc, char **argv)
 {
     // Initialize variables
-	Vector3<double>	sam;    			// Map sampling
-	Vector3<double>	grid_sampling;				// Grid sampling
-	Vector3<double>	bbox_center;				// Bounding box center
-	Vector3<double>	bbox_size;					// Bounding box size
-	double			angle_step(0);				// Angle step size for orientation search
-	int 			wrap(0);					// No wrapping as default
-	double	 			resolution(0); 				// Must be set > 0 to limit resolution
-	unsigned long	max_iter(1);				// Maximum number of iterations
-	double			Kbond(0);					// Bond strength
-	double			Kangle(0);					// Angle strength
-	double			Kelec(0);					// Electrostatic strength
-	double			Kvdw(0);					// Van der Waals strength
-	double			Ksep(0);					// Separation energy constant
-	double			Kmap(0);					// Map energy constant
-	double			separation(4);				// Separation distance for overlap calculation
-	double			cutoff(5);					// Distance cutoff for non-bonded forces
-	double			beta(10);					// Equivalent of 1/kT
-	double			max_angle(M_PI/180.0);		// Maximum angular deviation
-	double			max_shift(1);				// Maximum allowed shift
-	int				bond_steps(0);				// Number of steps along bond
-	double			Kpoint(0);					// Harmonic location force constant
-	double			pointdecay(0.1);			// Point force decay constant
-	Vector3<double>	location;					// Point for harmonic force
-	int				rigid(0);					// Flag to treat the whole ensemble as a rigid body
-	int				concurrent(0);				// Flag to run all models simultaneously
-	double			ss(0);						// SS bond length
-	Bstring			atom_select("all");			// Selection
-	Bstring			modelfile;					// Input model file
-	Bstring			mapfile;					// Input map file
-	Bstring			maskfile;					// Input map file
-	Bstring			paramfile;					// Parameter file
+	Vector3<double>	sam;    				// Map sampling
+	double			compradius(0);			// Component display radius
+	double			linkradius(0);			// Link display radius
+	Vector3<double>	bbox_center;			// Bounding box center
+	Vector3<double>	bbox_size;				// Bounding box size
+	long			max_iter(0);			// Maximum number of iterations
+	double			beta(10);				// Equivalent of 1/kT
+	double			max_angle(M_PI/180.0);	// Maximum angular deviation
+	double			max_shift(1);			// Maximum allowed shift
+	int				link_steps(0);			// Number of steps along link
+	Vector3<double>	location;				// Point for harmonic force
+	double			ss(0);					// SS link length
+	int				type_select(0);			// Selection
+	string			mapfile;				// Input map file
+	string			maskfile;				// Input map file
+	string			paramfile;				// Parameter file
+ 	string			outfile;				// Output model file
     
 	random_seed();
-	
+
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
+
+	Bmodparam	md;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "rigid" ) {
-			if ( curropt->value[0] == 'g' ) rigid = 1;
-			if ( curropt->value[0] == 'm' ) rigid = 2;
-			if ( curropt->value[0] == 'a' ) rigid = 3;
-		}
-		if ( curropt->tag == "concurrent" ) concurrent = 1;
- 		if ( curropt->tag == "grid" )
-        	grid_sampling = curropt->scale();
- 		if ( curropt->tag == "orientations" ) {
-			if ( ( angle_step = curropt->value.real() ) < 0.1 )
-				cerr << "-orientations: An angle step size must be specified!" << endl;
-			else
-				angle_step *= M_PI/180.0;
-		}
+		if ( curropt->tag == "parameters" )
+			paramfile = curropt->filename().str();
+	}
+	
+	if ( paramfile.length() )
+		md = read_dynamics_parameters(paramfile);
+
+	md.rigid = 0;			// All models rigid
+	md.distancetype = 2;	// Soft potential
+
+	for ( curropt = option; curropt; curropt = curropt->next ) {
  		if ( curropt->tag == "sampling" )
         	sam = curropt->scale();
+		if ( curropt->tag == "componentradius" )
+			if ( ( compradius = curropt->value.real() ) < 0.001 )
+				cerr << "-componentradius: The component display radius must be specified!" << endl;
+		if ( curropt->tag == "linkradius" )
+			if ( ( linkradius = curropt->value.real() ) < 0.001 )
+				cerr << "-linkradius: The link display radius must be specified!" << endl;
+		if ( curropt->tag == "rigid" ) {
+			if ( curropt->value[0] == 'm' ) md.rigid = 1;
+			if ( curropt->value[0] == 'c' ) md.rigid = 2;
+		}
 		if ( curropt->tag == "bbox" )
 			if ( curropt->box(bbox_center, bbox_size) < 6 )
 				cerr << "-bbox: All 6 values must be specified!" << endl;
 		if ( curropt->tag == "wrap" )
-			wrap = 1;
-		if ( curropt->tag == "resolution" )
-			if ( ( resolution = curropt->value.real() ) < 0.001 )
-				cerr << "-resolution: A resolution limit must be specified!" << endl;
+			md.wrap = 1;
 		if ( curropt->tag == "iterations" )
 			if ( ( max_iter = curropt->value.integer() ) < 1 )
 				cerr << "-iterations: A number must be specified!" << endl;
-		if ( curropt->tag == "Kbond" )
-			if ( ( Kbond = curropt->value.real() ) < 1e-30 )
-				cerr << "-Kbond: The bond strength must be specified!" << endl;
+		if ( curropt->tag == "Klink" )
+			if ( ( md.Klink = curropt->value.real() ) < 1e-30 )
+				cerr << "-Klink: The link strength must be specified!" << endl;
 		if ( curropt->tag == "Kangle" )
-			if ( ( Kangle = curropt->value.real() ) < 1e-30 )
+			if ( ( md.Kangle = curropt->value.real() ) < 1e-30 )
 				cerr << "-Kangle: The angle strength must be specified!" << endl;
 		if ( curropt->tag == "Kelectrostatic" )
-			if ( ( Kelec = curropt->value.real() ) < 1e-30 )
+			if ( ( md.Kelec = curropt->value.real() ) < 1e-30 )
 				cerr << "-Kelectrostatic: The electrostatic strength must be specified!" << endl;
-		if ( curropt->tag == "Kvdw" )
-			if ( ( Kvdw = curropt->value.real() ) < 1e-30 )
-				cerr << "-Kvdw: The Van der Waals strength must be specified!" << endl;
+		if ( curropt->tag == "Kdistance" )
+			if ( ( md.Kdistance = curropt->value.real() ) < 1e-30 )
+				cerr << "-Kdistance: The distance force constant must be specified!" << endl;
 		if ( curropt->tag == "Kseparation" )
-			if ( ( Ksep = curropt->value.real() ) < 1e-30 )
+			if ( ( md.Ksep = curropt->value.real() ) < 1e-30 )
 				cerr << "-Kseparation: The separation energy constant strength must be specified!" << endl;
 		if ( curropt->tag == "Kmap" )
-			if ( ( Kmap = curropt->value.real() ) < 1e-30 )
+			if ( ( md.Kmap = curropt->value.real() ) < 1e-30 )
 				cerr << "-Kmap: The map energy constant strength must be specified!" << endl;
 		if ( curropt->tag == "separation" )
-			if ( ( separation = curropt->value.real() ) < 1e-30 )
+			if ( ( md.sepdist = curropt->value.real() ) < 1e-30 )
 				cerr << "-separation: The separation distance must be specified!" << endl;
 		if ( curropt->tag == "cutoff" )
-			if ( ( cutoff = curropt->value.real() ) < 1e-30 )
+			if ( ( md.cutoff = curropt->value.real() ) < 1e-30 )
 				cerr << "-cutoff: The cutoff distance must be specified!" << endl;
 		if ( curropt->tag == "beta" )
 			if ( ( beta = curropt->value.real() ) < 1e-30 )
@@ -173,148 +162,113 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "shift" )
 			if ( ( max_shift = curropt->value.real() ) < 1e-30 )
 				cerr << "-shift: A distance must be specified!" << endl;
-		if ( curropt->tag == "bondsteps" )
-			if ( ( bond_steps = curropt->value.integer() ) < 1 )
-				cerr << "-bondsteps: The bond step length must be specified!" << endl;
+		if ( curropt->tag == "linksteps" )
+			if ( ( link_steps = curropt->value.integer() ) < 1 )
+				cerr << "-linksteps: The link step length must be specified!" << endl;
 		if ( curropt->tag == "location" )
-			location = curropt->vector3();
+			md.point = curropt->vector3();
 		if ( curropt->tag == "Klocation" )
-			if ( curropt->values(Kpoint, pointdecay) < 1 )
+			if ( curropt->values(md.Kpoint, md.pointdecay) < 1 )
 				cerr << "-Klocation: The location force constant must be specified!" << endl;
 		if ( curropt->tag == "SS" )
 			if ( ( ss = curropt->value.real() ) < 1e-30 )
-				cerr << "-SS: A bond length must be specified!" << endl;
-		if ( curropt->tag == "parameters" )
-			paramfile = curropt->filename();
-		if ( curropt->tag == "Model" )
-			modelfile = curropt->filename();
+				cerr << "-SS: A link length must be specified!" << endl;
 		if ( curropt->tag == "Map" )
-			mapfile = curropt->filename();
+			mapfile = curropt->filename().str();
 		if ( curropt->tag == "Mask" )
-			maskfile = curropt->filename();
+			maskfile = curropt->filename().str();
+		if ( curropt->tag == "output" )
+			outfile = curropt->filename().str();
     }
 	option_kill(option);
 
 	double		ti = timer_start();
 	
-	Bmd*		md = NULL;
-	if ( paramfile.length() ) {
-		md = read_md_parameters(paramfile);
-	} else {
-		md = md_init();
-	}
-	md->Kbond = Kbond;
-	md->Kangle = Kangle;
-	md->Kelec = Kelec;
-	md->Kvdw = Kvdw;
-	md->Ksep = Ksep;
-	md->Kpoint = Kpoint;
-	md->point = location;
-	md->pointdecay = pointdecay;
-	md->sepdist = separation;
-	md->bondsteps = bond_steps;
-	md->cutoff = cutoff;
-	md->wrap = wrap;
-	
-    // Read the molecule file
-	Bstring		filename(argv[optind++]);
-    Bmolgroup*	molgroup = read_molecule(filename, atom_select, paramfile);
-	if ( !molgroup ) {
-		cerr << "Error: No molecules read!" << endl;
+	// Read all the model files
+	vector<string>	file_list;
+	while ( optind < argc ) file_list.push_back(argv[optind++]);
+	if ( file_list.size() < 1 ) {
+		cerr << "Error: No model files specified!" << endl;
 		bexit(-1);
 	}
 
-	molecule_update_comment(molgroup, argc, argv);
-	
-	if ( rigid == 3 ) {
-		md_generate_bond_list(molgroup, md);
-		md_bond_list_set_parameters(molgroup->bond, md->bond);
-//		md_generate_angle_list(molgroup, md);
-//		md_angle_list_set_parameters(molgroup->angle, md->angle);
+	Bmodel*			model = read_model(file_list, paramfile, type_select);
+	if ( !model ) {
+		cerr << "Error: No models read!" << endl;
+		bexit(-1);
 	}
+
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
+
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 	
-	if ( ss ) {
-		Bbondtype*		bt = new Bbondtype;
-		strcpy(bt->type1, "S");
-		strcpy(bt->type2, "S");
-		bt->covlength = ss;
-		md_bond_list_set_parameters(molgroup->bond, bt);
-		delete bt;
+	if ( ss ) md.add_linktype("S", "S", ss);
+
+	if ( md.rigid > 1 )
+		models_link_list_generate(model, 2);
+	
+	model_update_reference_parameters(model, md);
+	
+	vector<Vector3<double>>	bounds = models_calculate_bounds(model);
+
+	cout << bbox_center << tab << bbox_size << endl;
+	if ( bbox_size.volume() < 1 ) {
+		md.min = bounds[0];
+		md.max = bounds[1];
+	} else {
+		md.min = bbox_center - (bbox_size * 0.5);
+		md.max = bbox_center + (bbox_size * 0.5);
 	}
+	cout << md.min << tab << md.max << endl;
 	
 	// Read the map file
 	long		natom_in(0);
 	Bimage*		map = NULL;
 	Bimage*		pmask = NULL;
-	Bmodel*		model = NULL;
-	
-	filename = 0;
-	if ( optind < argc )
-		filename = argv[optind];
 	
 	if ( mapfile.length() ) {
 		map = read_img(mapfile, 1, 0);
 		if ( sam.volume() ) map->sampling(sam);
-		molgroup_set_box_to_map_boundaries(molgroup, map);
-		natom_in = molgroup_test_if_within_box(molgroup, molgroup->min, molgroup->max);
-		if ( natom_in < 2 ) {
-			molgroup_place_at_coordinates(molgroup, ((molgroup->max + molgroup->min) * 0.5));
-			molgroup_set_box_to_map_boundaries(molgroup, map);
+		if ( bbox_size.volume() < 1 ) {
+			bbox_size = map->sampling(0)*map->size();
+			md.min = -map->image->origin()*map->sampling(0);
+			md.max = md.min + bbox_size;
 		}
-		md->Kmap = 1;
-		if ( Kmap ) md->Kmap = Kmap;
+		natom_in = model_test_if_within_box(model, md.min, md.max);
+		if ( natom_in < 2 ) {
+			cerr << "Error: Model not within map boundaries!" << endl;
+			bexit(-1);
+		}
+		if ( md.Kmap <= 0 ) md.Kmap = 1;
 	}
 
 	if ( maskfile.length() ) {
 		pmask = read_img(maskfile, 1, 0);
 		if ( sam.volume() ) pmask->sampling(sam);
 	}
-	
-	if ( bbox_size[0] > 0 && bbox_size[1] > 0 && bbox_size[2] > 0 ) {
-		molgroup->min = bbox_center - (bbox_size * 0.5);
-		molgroup->max = bbox_center + (bbox_size * 0.5);
-		molgroup->box = bbox_size;
-	}
-	
-	if ( modelfile.length() ) {
-		model = read_model(modelfile.str());
-	} else if ( grid_sampling[0] > 0 ) {
-		model = molgroup_generate_masked_grid_list(molgroup, grid_sampling, pmask);
-	} else if ( angle_step > 0 ) {
-		model = molgroup_generate_orientation_list(molgroup, angle_step);
-	}
-	
-	if ( model ) {
-		if ( concurrent ) 
-			mcm_molecule_groups(molgroup, model, md, map, beta, max_angle, max_shift, max_iter, rigid);
-		else
-			mcm_molecule_list(molgroup, model, md, map, beta, max_angle, max_shift, max_iter, rigid);
-		if ( filename.length() )
-			write_model(filename.str(), model);
-	} else {
-		if ( rigid < 3 ) {
-			molgroup = monte_carlo_metropolis(molgroup, md, map, beta, max_angle, max_shift, 
-				max_iter, rigid, monte_rigid_body_fit_energy, molgroup_rigid_body_transform);
+
+	if ( max_iter ) {
+		if ( md.rigid < 2 ) {
+			model = monte_carlo_metropolis(model, md, map, beta, max_angle, max_shift,
+					max_iter, monte_rigid_body_fit_energy, model_rigid_body_transform);
 		} else {
-			if ( bond_steps > 0 )
-				molgroup = monte_carlo_metropolis(molgroup, md, map, beta, max_angle, max_shift, 
-					max_iter, rigid, monte_bond_fit_energy, molgroup_move_atoms_down_energy);
+			if ( link_steps > 0 )
+				model = monte_carlo_metropolis(model, md, map, beta, max_angle, max_shift, 
+						max_iter, monte_link_fit_energy, model_move_components_down_energy);
 			else
-				molgroup = monte_carlo_metropolis(molgroup, md, map, beta, max_angle, max_shift, 
-					max_iter, rigid, monte_atom_fit_energy, molgroup_move_atoms_down_energy);
+				model = monte_carlo_metropolis(model, md, map, beta, max_angle, max_shift, 
+						max_iter, monte_component_fit_energy, model_move_components_down_energy);
 		}
-		if ( filename.length() )
-			write_molecule(filename, molgroup);
 	}
+
+	if ( outfile.length() )
+		write_model(outfile, model);
 	
 	delete map;
 	delete pmask;
-	molgroup_list_kill(molgroup);
-	model_kill(model);
-	md_kill(md);
-	
-	
-		timer_report(ti);
+	delete model;
+		
+	timer_report(ti);
 	
 	bexit(0);
 }

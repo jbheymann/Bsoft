@@ -3,12 +3,14 @@
 @brief	A program to analyze protein sequences for correlated mutations.
 @author Bernard Heymann
 @date	Created: 19990123
-@date	Modified: 20200916
+@date	Modified: 20250510
 **/
 
 #include "seq_analysis.h"
-#include "rwmolecule.h"
+#include "seq_util.h"
+#include "rwsequence.h"
 #include "rwimg.h"
+#include "rwresprop.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -52,15 +54,14 @@ int 	main(int argc, char **argv)
 {
     // Initialize variables
 	DataType 		nudatatype(Unknown_Type);	// Conversion to new type
-	Bstring 		refseq;  				// Reference sequence ID
+	string 			refseq;  				// Reference sequence ID
 	int				limit(0);				// Flag to limit to reference
 	double			cutoff(0.8);			// Cutoff for scoring functions
-	Bstring			atom_select("ALL");		// Selection/options
-    
+   
     // Initialize the file names and image structure
-    Bstring			matfile;
-    Bstring			imgfile;
-    Bstring			propfile;
+    string			matfile;
+    string			imgfile;
+    string			propfile;
 	
 	int				i, j, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -69,7 +70,7 @@ int 	main(int argc, char **argv)
 		if ( curropt->tag == "datatype" )
 			nudatatype = curropt->datatype();
 		if ( curropt->tag == "reference" ) {
-        	refseq = curropt->value;
+        	refseq = curropt->value.str();
         	if ( refseq.length() < 1 )
 				cerr << "-reference: A reference sequence ID must be specified!" << endl;
 		}
@@ -78,41 +79,44 @@ int 	main(int argc, char **argv)
         	if ( ( cutoff = curropt->value.real() ) < 1e-10 )
 				cerr << "-cutoff: A cutoff must be specified!" << endl;
 		if ( curropt->tag == "properties" )
-            propfile = curropt->filename();
+            propfile = curropt->filename().str();
 		if ( curropt->tag == "matrix" )
-			matfile = curropt->filename();
+			matfile = curropt->filename().str();
 		if ( curropt->tag == "image" )
-			imgfile = curropt->filename();
+			imgfile = curropt->filename().str();
     }
 	option_kill(option);
     
 	double		ti = timer_start();
 	
-    // Read the molecule file
-	Bstring		filename(argv[optind++]);
-    Bmolgroup*	molgroup = read_molecule(filename, atom_select, propfile);
-	if ( !molgroup )  {
-		cerr << "Error: No input file read!" << endl;
+    // Read the sequence file
+	string		filename(argv[optind++]);
+    vector<Bsequence>	seqs = read_sequence(filename);
+	if ( seqs.size() < 1 ) {
+		cerr << "Error: No sequences read!" << endl;
 		bexit(-1);
 	}
+		
+	long			maxlen = sequence_maximum_length(seqs);
+	vector<int>		seqflag(maxlen,1);
+	if ( limit ) seqflag = sequence_limit(seqs, refseq);
 	
-	if ( limit ) seq_limit(molgroup, refseq);
-	
-	for ( i=j=0; i<molgroup->maxlen; i++ )
-		j += molgroup->seqflag[i];
+	for ( i=j=0; i<maxlen; i++ )
+		j += seqflag[i];
 	
 	if ( verbose & VERB_PROCESS )
 		cout << "Alignment positions flagged:    " << j << endl;
 
-	Matrix	mat;
+	Bresidue_matrix		simat;
+	Matrix				mat;
+
+	simat = get_residue_matrix(propfile);
 	
-	mat = seq_correlated_mutation(molgroup, refseq, cutoff, propfile);
+	mat = sequence_correlated_mutation(seqs, seqflag, refseq, cutoff, simat);
 	
 	if ( optind < argc )
-		write_molecule(argv[optind], molgroup);
+		write_sequence(argv[optind], seqs);
 	
-	molgroup_kill(molgroup);
-
 	if ( matfile.length() && mat.rows() )
 		mat.write(matfile);
 
@@ -123,8 +127,7 @@ int 	main(int argc, char **argv)
 		delete pimg;
 	}
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

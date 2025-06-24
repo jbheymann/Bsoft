@@ -1,9 +1,9 @@
 /**
 @file	Bimage_fspace.cpp
 @brief	Library routines used for modifying reciprocal space amplitudes
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 19990321
-@date	Modified: 20220803
+@date	Modified: 20250305
 **/
 
 #include "Bimage.h"
@@ -144,6 +144,32 @@ Complex<double>	Bimage::fspace_interpolate(long img_num, Vector3<double> m, FSI_
 		cerr << "Warning: Interpolated complex value not finite! (" << value << ")" << endl;
 
     return value;
+}
+
+/**
+@brief 	Calculates the complex gradient at an image location by kernel-based interpolation.
+@param 	img_num				sub-image number.
+@param 	m					location in image.
+@param	kernel				interpolation kernel.
+@return vector<Complex<double>>	complex gradient 3-vector.
+	The kernel lookup table must be precalculated.
+**/
+vector<Complex<double>>	Bimage::fspace_interpolated_gradient(long img_num, Vector3<double> m, FSI_Kernel* kernel)
+{
+	long					i;
+	double					dk(0.1);		// Offset from location in k units
+	vector<Complex<double>>	grad(3);
+	Vector3<double> 		m1;
+
+	Complex<double>	cv = fspace_interpolate(img_num, m, kernel);
+	
+	for ( i=0; i<2; ++i ) {
+		m1 = m;
+		m1[i] += dk;
+		grad[i] = (fspace_interpolate(img_num, m1, kernel) - cv)/dk;
+	}
+	
+	return grad;
 }
 
 /**
@@ -923,7 +949,7 @@ Bimage* 	Bimage::fspace_radial_power(double resolution, double sampling_ratio)
 	
 	check_resolution(resolution);
 	
-	long			i, j, nn, xx, yy, zz, iradius;
+	long			i, j, k, nn, xx, yy, zz, iradius;
 	double			radius, f, f1, rx, ry, rz, v;
 	double			rad_scale(real_size()[0]/sampling_ratio);
 	Vector3<long>	h((size()-1)/2);
@@ -944,8 +970,8 @@ Bimage* 	Bimage::fspace_radial_power(double resolution, double sampling_ratio)
 		cout << "Number of values:               " << maxrad << endl << endl;
 	}
 	
-	for ( nn=0; nn<n; nn++ ) {
-		for ( i=0; i<maxrad; i++ ) num[i] = 0;
+	for ( i=nn=0; nn<n; nn++ ) {
+		for ( k=0; k<maxrad; ++k ) num[k] = 0;
 		for ( zz=0; zz<z; ++zz ) {
 			rz = zz;
 			if ( zz > h[2] ) rz -= z;
@@ -956,7 +982,7 @@ Bimage* 	Bimage::fspace_radial_power(double resolution, double sampling_ratio)
 				if ( yy > h[1] ) ry -= y;
 				ry *= freq_scale[1];
 				ry *= ry;
-				for ( xx=0; xx<x; ++xx ) {
+				for ( xx=0; xx<x; ++xx, ++i ) {
 					rx = xx;
 					if ( xx > h[0] ) rx -= x;
 					rx *= freq_scale[0];
@@ -966,7 +992,7 @@ Bimage* 	Bimage::fspace_radial_power(double resolution, double sampling_ratio)
 					if ( iradius < maxrad ) {
 						f = radius - iradius;
 						f1 = 1 - f;
-						i = index(xx, yy, zz, nn);
+//						i = index(xx, yy, zz, nn);
 						num[iradius] += f1;
 						j = nn*maxrad + iradius;
 						if ( cmplx ) v = complex(i).power();
@@ -984,11 +1010,11 @@ Bimage* 	Bimage::fspace_radial_power(double resolution, double sampling_ratio)
 				}
 			}
 		}
-		for ( i=0; i<maxrad; i++ ) {
-			if ( num[i] ) {
-				j = nn*maxrad + i;
-				prad->set(j, (*prad)[j]/num[i]);
-				radstd[j] = radstd[j]/num[i] - (*prad)[j]*(*prad)[j];
+		for ( k=0; k<maxrad; ++k ) {
+			if ( num[k] ) {
+				j = nn*maxrad + k;
+				prad->set(j, (*prad)[j]/num[k]);
+				radstd[j] = radstd[j]/num[k] - (*prad)[j]*(*prad)[j];
 				if ( radstd[j] > 0 )
 					radstd[j] = sqrt(radstd[j]);
 				else
@@ -1715,10 +1741,11 @@ int 		Bimage::fspace_weigh_gaussian(long nn, Vector3<double> sigma, int dir)
 @return int			0.
 
 	The image is Fourier transformed if needed.
+	The differential in real space is calculated in three directions in frequency space.
 	An anisotropic weight function is calculated at each voxel and applied to the transform.
 
 **/
-Bimage*		Bimage::fspace_gradient(Vector3<double> sigma)
+Bimage*		Bimage::fspace_rspace_gradient(Vector3<double> sigma)
 {
 	if ( fouriertype == NoTransform ) fft();
 
@@ -1727,7 +1754,7 @@ Bimage*		Bimage::fspace_gradient(Vector3<double> sigma)
 	Bimage*			pt;
 
 	if ( verbose & VERB_PROCESS )
-		cout << "Calculating a frequency space gradient" << endl << endl;
+		cout << "Calculating a real space gradient in frequency space" << endl << endl;
 
 	Bimage*			pg = new Bimage(Float, TVector3, size(), 1);
 	pg->sampling(sampling(0));
@@ -1739,6 +1766,97 @@ Bimage*		Bimage::fspace_gradient(Vector3<double> sigma)
 		pt->fft_back();
 		for ( j=0, k=i; j<image_size(); ++j, k+=3 )
 			pg->set(k, (*pt)[j]);
+		delete pt;
+	}
+
+	return pg;
+}
+
+/**
+@brief 	Generates a frequency space interpolated gradient image with orthogonal gradients.
+@param 	sigma		Gaussian sigma values.
+@return int			0.
+
+	The frequency space gradient is calculated by offsetting interpolation.
+	The resultant image is encoded in two times the dimension in values (4 for 2D and 6 for 3D).
+
+**/
+Bimage*		Bimage::fspace_gradient()
+{
+	if ( fouriertype == NoTransform ) fft();
+
+	long			i, j, k, xx, yy, zz, nn;
+	long			nd = ( z > 1 )? 3: 2;
+	long			nv(2*nd);
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating a frequency space gradient by interpolation" << endl << endl;
+
+	Bimage*			pg = new Bimage(Float, nv, size(), n);
+	pg->sampling(sampling(0));
+	pg->origin(image->origin());
+
+	FSI_Kernel*				kernel = new FSI_Kernel(8, 2);
+	
+	Vector3<double> 		m;
+	vector<Complex<double>>	vcv;
+
+	for ( i=nn=0; nn<n; ++nn ) {
+		for ( zz=0; zz<z; ++zz ) {
+			m[2] = zz;
+			for ( yy=0; yy<y; ++yy ) {
+				m[1] = yy;
+				for ( xx=0; xx<x; ++xx, ++i ) {
+					m[0] = xx;
+					vcv = fspace_interpolated_gradient(nn, m, kernel);
+					for ( j=0, k=nv*i; j<nd; ++j, k+=2 ) {
+						pg->set(k, vcv[j].real());
+						pg->set(k+1, vcv[j].imag());
+					}
+				}
+			}
+		}
+	}
+	
+	delete kernel;
+
+	return pg;
+}
+
+/**
+@brief 	Generates a frequency space differential gradient image with orthogonal gradients.
+@param 	sigma		Gaussian sigma values.
+@return int			0.
+
+	The frequency space gradient is calculated after smoothing by an anisotropic gaussian kernel 
+	of the differential in real space.
+	The resultant image is encoded in two times the dimension in values (4 for 2D and 6 for 3D).
+
+**/
+Bimage*		Bimage::fspace_gradient(Vector3<double> sigma)
+{
+	simple_to_complex();
+
+	long			i, j, k;
+	long			nd = ( z > 1 )? 3: 2;
+	long			nv(2*nd);
+	Bimage*			pt;
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Calculating a frequency space gradient by differentiation" << endl << endl;
+
+	Bimage*			pg = new Bimage(Float, nv, size(), 1);
+	pg->sampling(sampling(0));
+	pg->origin(image->origin());
+
+	for ( i=0; i<nd; ++i ) {
+		pt = copy();
+		pt->fspace_weigh_gaussian(0, sigma, i+1);
+		pt->fft();
+		for ( j=0, k=2*i; j<image_size(); ++j, k+=nv ) {
+			pg->set(k, (*pt)[2*j]);
+			pg->set(k+1, (*pt)[2*j+1]);
+		}
 		delete pt;
 	}
 

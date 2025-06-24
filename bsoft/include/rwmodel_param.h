@@ -3,10 +3,9 @@
 @brief	Header to read and write model dynamics parameters in STAR format
 @author 	Bernard Heymann
 @date	Created: 20100305
-@date	Modified: 20230717
+@date	Modified: 20250618
 **/
 
-//#include "Bmaterial.h"
 #include "rwmodel.h"
 
 #ifndef _Bmodparam_
@@ -37,6 +36,7 @@ class Bmodparam {
 public:
 	string		comment;
 	double		timestep;		// Integration time step for MD
+	double		velocitylimit;	// Maximum translation per time step
 	double		Kfriction;		// Friction coefficient
 	double		Kdistance;		// Distance/Van der Waals force constant
 	double		Kelec;			// Electrostatic force constant
@@ -45,6 +45,7 @@ public:
 	double		Kpolyangle;		// Angular force constant for polygons
 	double		Kpolygon;		// Polygon regularity force constant
 	double		Kpolyplane;		// Polygon planarity force constant
+	double		Ksep;			// Separation force constant
 	double		Kpoint;			// Point force constant
 	double		Kradial;		// Radial force constant
 	double		Kplane;			// Neighbor plane force constant
@@ -58,6 +59,7 @@ public:
 	Bmodel*		guide;			// Polyhedron guide model
 	int			distancetype;	// 1=harmonic, 2=soft, 3=lennard-jones, 4=morse
 	int			linksteps;		// Number of sampling intervals along a link
+	int			rigid;			// 0=all, 1=each model, 2=each component
 	Vector3<double>	min, max;	// Boundary of box
 	bool		wrap;			// Flag to turn periodic boundaries on
 	double		sigma;			// Gaussian decay for density fitting
@@ -68,6 +70,7 @@ public:
 	double		Epolyangle;		// Angle energy for polygons
 	double		Epolygon;		// Polygon regularity energy
 	double		Epolyplane;		// Polygon planarity energy
+	double		Esep;			// Separation force energy
 	double		Epoint;			// Point force energy
 	double		Eradial;		// Radial force energy
 	double		Eplane;			// Neighbor plane force energy
@@ -82,6 +85,7 @@ private:
 	void	initialize() {
 		comment = "?";
 		timestep = 1;
+		velocitylimit = 0.1;
 		Kfriction = 1;
 		Kdistance = 0;
 		Kelec = 0;
@@ -90,6 +94,7 @@ private:
 		Kpolyangle = 0;
 		Kpolygon = 0;
 		Kpolyplane = 0;
+		Ksep = 0;
 		Kpoint = 0;
 		Kradial = 0;
 		Kplane = 0;
@@ -101,6 +106,7 @@ private:
 		radius = 0;
 		distancetype = 1;
 		linksteps = 3;
+		rigid = 0;
 		wrap = 0;
 		sigma = 0;
 	}
@@ -111,6 +117,21 @@ public:
 	void			maximum(Vector3<double> v) { max = v; }
 	Vector3<double>	maximum() { return max; }
 	Vector3<double>	box() { return max - min; }
+	Blinktype		add_linktype(string c1, string c2, double len) {
+		long		i(-1), j(-1), m(0);
+		Blinktype	b(c1, c2, len);
+		if ( comptype.find(c1) != comptype.end() ) i = comptype[c1].index();
+		if ( comptype.find(c2) != comptype.end() ) j = comptype[c2].index();
+		if ( i >= 0 && j >= 0 ) {
+			if ( i > j && i > linktype.size() ) m = i+1;
+			if ( j > i && j > linktype.size() ) m = j+1;
+			if ( m > linktype.size() ) linktype.resize(m);
+			if ( m > linktype[i].size() ) linktype[i].resize(m);
+			if ( m > linktype[j].size() ) linktype[j].resize(m);
+			linktype[i][j] = linktype[j][i] = b;
+		}
+		return b;
+	}
 	void		show() {
 //		cout << "Kfriction:                      " << Kfriction << endl;
 		cout << "Kdistance:                      " << Kdistance << " (" << distancetype << ")" << endl;

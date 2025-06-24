@@ -151,7 +151,7 @@ int 		main(int argc, char **argv)
 	}
 	
 	project_kill(project);
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);
@@ -271,7 +271,7 @@ Bmodel*		project_model_generate(Bproject* project, Bmodel* temp, int flags)
 				if ( flags & 1 ) partmod->mapfile(newpartfile);
 //				partmod->comment = mp->comment;
 				write_model(modfile, partmod);
-				model_kill(partmod);
+				delete partmod;
 			}
 			if ( verbose )
 				cout << rec->id << tab << part->id << tab << comp->identifier() << endl;
@@ -314,7 +314,6 @@ int			project_model_consolidate(Bproject* project, Bmodel* model)
 //			if ( part->group < 10 ) part->group = part->id;
 //			mp->identifier() = rec->id + Bstring(part->id, "_%04d");
 			if ( part->fpart.length() ) mp->mapfile(part->fpart.str());
-//			model_shift(mp, (part->loc - rec->origin)*rec->voxel_size);
 			model_rotate(mp, part->view2(), origin, (part->ori - rec->box_size/2)*rec->voxel_size);
 		}
 	}

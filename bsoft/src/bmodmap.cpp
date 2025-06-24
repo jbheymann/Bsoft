@@ -106,14 +106,14 @@ int 		main(int argc, char **argv)
 		bexit(-1);
 	}
 
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 
 	if ( set_origin == 2 ) origin = {double(size[0]/2), double(size[1]/2), double(size[2]/2)};
 
 	Bimage*			map = NULL;
 	
 	if ( mapfile.length() && size.volume() ) {
-		model_set_map_filenames(model, mapfile.str());
+		models_set_map_filenames(model, mapfile.str());
 		map = img_from_model(model, origin, size, sam, sigma);
 		if ( nudatatype == Unknown_Type ) nudatatype = map->data_type();
 		map->change_type(nudatatype);
@@ -126,7 +126,7 @@ int 		main(int argc, char **argv)
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

@@ -152,7 +152,7 @@ int 	main(int argc, char **argv)
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	delete p;
 	delete pref;

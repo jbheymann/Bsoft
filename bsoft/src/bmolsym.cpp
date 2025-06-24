@@ -66,7 +66,7 @@ int 		main(int argc, char **argv)
 	double			distance(0);			// Distance allowed between overlapping atoms in angstrom
 	int				show(0);				// Flag to show operational matrices
 	Bstring			paramfile;				// Use default parameter file
-	Bstring			simfile;				// Use default similarity matrix file
+	string			simfile;				// Use default similarity matrix file
 	
 	int				optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
@@ -125,7 +125,7 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "parameters" )
 			paramfile = curropt->filename();
 		if ( curropt->tag == "similarity" )
-			simfile = curropt->filename();
+			simfile = curropt->filename().str();
     }
 	option_kill(option);
 	
@@ -152,12 +152,11 @@ int 		main(int argc, char **argv)
 
 	molgroup_stats(molgroup);
 	
-	Bresidue_matrix*	simat;
+	Bresidue_matrix	simat;
 	if ( sym_flag == 2 && sym.point() > 101 ) {
 //		molgroup_find_standard_view(molgroup, sym, ref_view);
 		simat = get_residue_matrix(simfile);
 		molgroup_orient_to_standard_view(molgroup, sym, ref_view, simat);
-		residue_matrix_kill(simat);
 	}
 	
 	if ( sym_flag == 1 && sym.point() > 101 ) {

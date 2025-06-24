@@ -132,13 +132,13 @@ int 		main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( all ) models_process(model, model_reset_selection);
+	if ( all ) models_select_all(model);
 	
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 	
-	if ( valence > 0 ) model_select_valence(model, valence);
+	if ( valence > 0 ) models_select_valence(model, valence);
 	
-	if ( poly_order > 0 ) model_select_polygons(model, poly_order);
+	if ( poly_order > 0 ) models_select_polygons(model, poly_order);
 	
 	if ( spectrum ) model_color_by_order(model);
 	else if ( curvature ) model_color_curvature(model);
@@ -149,18 +149,18 @@ int 		main(int argc, char **argv)
 	else if ( color[0] >= 0 && color[1] >= 0 && color[2] >= 0 )
 		model_color_selected(model, color);
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 	
-	if ( compradius ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

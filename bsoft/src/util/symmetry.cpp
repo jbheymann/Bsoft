@@ -3,7 +3,7 @@
 @brief	General symmetry functions
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20230524
+@date	Modified: 20250408
 **/
 
 #include "symmetry.h"
@@ -45,6 +45,9 @@ Bsymmetry::Bsymmetry(string sym)
 	Matrix3 		mat(0,-1,0,1,0,0,0,0,1); // 90 degree rotation for I90
 	
 	clean_symstring(sym);
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bsymmetry::Bsymmetry: sym=" << sym << endl;
 	
  	if ( verbose & VERB_FULL )
 		cout << endl << "Getting symmetry operators for " << lbl << endl;
@@ -149,31 +152,31 @@ View2<double>	Bsymmetry::reference_symmetry_view()
 {
 	View2<double>	ref;
  
-	if ( pnt < 200 ) {
+	if ( pnt < 200 ) {				// Cyclic
 		ref[0] = 1;
 		ref[2] = 0;
-	} else if ( pnt < 300 ) {
-		ref[0] = sin(M_PI/4);
-		ref[2] = cos(M_PI/4);
-	} else if ( pnt == 320 ) {
+	} else if ( pnt < 300 ) {		// Dihedral
 //		ref[0] = sin(M_PI/4);
 //		ref[2] = cos(M_PI/4);
-		ref[0] = ref[1] = cos(M_PI/8.0);
-		ref[2] = sin(M_PI/8.0);
-	} else if ( pnt == 432 ) {
-//		ref[0] = sin(M_PI/8);
-//		ref[2] = cos(M_PI/8);
-		ref[0] = cos(M_PI/3.0);
-		ref[2] = sin(M_PI/3.0);
+		ref[0] = 1;
+		ref[2] = 1;
+	} else if ( pnt == 320 ) {		// Tetrahedral
+//		ref[0] = ref[1] = cos(M_PI/8.0);
+//		ref[2] = sin(M_PI/8.0);
+		ref[0] = ref[1] = 1;
+		ref[2] = 2;
+	} else if ( pnt == 432 ) {		// Octahedral
+//		ref[0] = cos(M_PI/3.0);
+//		ref[2] = sin(M_PI/3.0);
+		ref[0] = 2;
+		ref[2] = 3;
 	} else if ( pnt == 532 ) {
-//		ref[0] = sin(M_PI/18);
-//		ref[2] = cos(M_PI/18);
-		if ( lbl.find("I90") ) {
+		if ( lbl.find("I90") != string::npos ) {
 			ref[1] = 1;
-			ref[2] = GOLDEN + 1;
+			ref[2] = GOLDEN + 4;
 		} else {
 			ref[0] = 1;
-			ref[2] = GOLDEN + 1;
+			ref[2] = GOLDEN + 4;
 		}
 	} else if ( pnt == 600 ) {	// What is it for helical symmetry?
 	}
@@ -224,7 +227,8 @@ Matrix3		Bsymmetry::rotate_to_axis(long axis, long axis_flag)
 		if ( axis == 3 ) mat = Matrix3(Vector3<double>(-1/sqrt2,1/sqrt2,0), atan(sqrt2));
 		if ( axis == 2 ) mat = Matrix3(Vector3<double>(0,1,0), M_PI/4);
 	} else {											// Icosahedral
-		if ( axis == 3 ) mat = Matrix3(Vector3<double>(0,1,0), atan(1/(GOLDEN*sqrt(3))));
+//		if ( axis == 3 ) mat = Matrix3(Vector3<double>(0,1,0), atan(1/(GOLDEN*sqrt(3))));
+		if ( axis == 3 ) mat = Matrix3(Vector3<double>(0,1,0), atan(1.0/(1+1.0/GOLDEN)));
 		if ( axis == 5 ) mat = Matrix3(Vector3<double>(1,0,0), atan(1/GOLDEN));
 	}
 		
@@ -593,20 +597,23 @@ vector<View2<double>>	Bsymmetry::side_views(double side_ang, double theta_step, 
 	link from the old view is returned.
 
 **/
-View2<double>	Bsymmetry::find_asymmetric_unit_view(View2<double> theview)
+/*View2<double>	Bsymmetry::find_asymmetric_unit_view(View2<double> theview)
 {
 	if ( pnt < 102 ) return theview;
 	if ( pnt >= 600 ) return theview;
 	
-	View2<double>	v, bv(theview), tv;
+//	cout << "pnt = " << pnt << endl;
+	
+	View2<double>			v, bv(theview), tv;
 	vector<View2<double>>	views = get_all_views(theview);
 	
-	int				found(0);
-	double			tol(1e-10);
-	double			lim = tan(M_PI*1.0L/op[0].order());
+	int						found(0);
+	double					tol(1e-10);
+	double					lim = tan(M_PI*1.0L/op[0].order());
 	
 	for ( auto& v: views ) {
-		if ( found ) break;
+//		cout << v << endl;
+//		if ( found ) break;
 		if ( ( v[0] - tol >= 0 ) || ( v[0] + tol >= 0 && v[1] >= 0 ) ) {
 			tv = View2<double>(0,0,0,0);
 			if ( pnt < 200 ) {
@@ -658,6 +665,28 @@ View2<double>	Bsymmetry::find_asymmetric_unit_view(View2<double> theview)
 
 	return bv;
 }
+*/
+View2<double>	Bsymmetry::find_asymmetric_unit_view(View2<double> theview)
+{
+	double					a, amin(M_PI);
+	View2<double>			asu_view(theview);
+	View2<double>			ref = reference_symmetry_view();
+	vector<View2<double>>	views = get_all_views(theview);
+	
+	for ( auto v: views ) {
+		a = v.angle(ref);
+		if ( amin > a ) {
+			amin = a;
+			asu_view = v;
+		}
+	}
+	
+//	cout << ref << endl;
+//	cout << asu_view << endl;
+	
+	return asu_view;
+}
+
 
 /**
 @brief 	Finds the closest symmetric match between two views.
@@ -692,6 +721,24 @@ View2<double>	Bsymmetry::find_closest_symmetric_view(View2<double> view_ref, Vie
 	}
 	
 	return bv;
+}
+
+/**
+@brief 	Show symmetry views.
+@param 	theview		view.
+@return int 			number of symmetry views.
+**/
+int			Bsymmetry::show_views(View2<double> theview)
+{
+	vector<View2<double>>	views = get_all_views(theview);
+	
+	cout << "\nSymmetry views (" << views.size() << "):" << endl;
+	for ( auto& v: views )
+		cout << v << endl;
+
+	cout << endl;
+	
+	return views.size();
 }
 
 /**

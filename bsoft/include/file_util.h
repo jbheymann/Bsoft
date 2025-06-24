@@ -3,7 +3,7 @@
 @brief	Header file for file checking functions 
 @author 	Bernard Heymann
 @date	Created: 20010601
-@date	Modified: 20230628
+@date	Modified: 20250331
 **/
 
 #include "Bstring.h"
@@ -24,6 +24,7 @@ enum FileType {
 	Molecule = 3,			// Molecular coordinate file 
 	Model = 4,				// Model parameter file
 	Material = 5,			// Material parameter file
+	Sequence = 6,			// Protein or nucleic acid sequence file
 	MgRelion = 11			// Relion micrograph
 } ;
 #define _filetype_ 

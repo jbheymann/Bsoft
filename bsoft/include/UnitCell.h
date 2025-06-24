@@ -66,6 +66,7 @@ public:
 		data[3] = M_PI_2; data[4] = M_PI_2; data[5] = M_PI_2;
 		uc_fix();
 	}
+//	UnitCell(UnitCell& uc) {
 //	UnitCell operator=(const UnitCell& uc) { for ( int i=0; i<6; i++ ) data[i] = uc.data[i]; return *this; }
 	double&	operator[](int i) { if ( i < 0 ) i = 0; if ( i > 5 ) i = 5; return data[i]; }
 	bool	check() { return uc_check(); }

@@ -219,21 +219,21 @@ int 		main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( reset ) models_process(model, model_reset_selection);
+	if ( reset ) models_select_all(model);
 	
 	if ( !model->poly ) model_poly_generate(model);
 	
-	if ( closure_rule ) model_select_closed(model, closure_rule, val_order);
+	if ( closure_rule ) models_select_closed(model, closure_rule, val_order);
 	
-	if ( mod_select.length() ) model_select(model, mod_select);
+	if ( mod_select.length() ) models_select(model, mod_select);
 	
-	if ( rename ) models_process(model, model_rename_components);
+	if ( rename ) models_rename_components(model);
 	
 	if ( coor ) model_poly_sphere_coor(model);		// Pointer to eigenvalue array not freed! Single model
 	
-	if ( linklength > 0 ) models_process(model, linklength, model_set_link_length);
+	if ( linklength > 0 ) models_set_link_length(model, linklength);
 	
-	if ( center ) models_process(model, model_center);
+	if ( center ) models_center(model);
 
 	if ( vertextypes == 1 ) model_vertex_types(model);
 	else if ( vertextypes == 2 ) model_extended_vertex_types(model);
@@ -278,14 +278,14 @@ int 		main(int argc, char **argv)
 	if ( dual || faces ) {
 		Bmodel*		new_model = model_poly_dual(model, faces);
 		if ( new_model ) {
-			model_kill(model);
+			delete model;
 			model = new_model;
 		}
 	}
 	
 	model_check(model, map_path.str());
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	if ( find ) {
 		if ( verbose )
@@ -303,15 +303,15 @@ int 		main(int argc, char **argv)
 		model_regularize(model, reg_iter, distance, Kdistance, 
 				Klink, Kpolyangle, Kpolygon, Kpolyplane, Kpoint, decay);
 
-	if ( compradius > 0 ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius > 0 ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 	
 	if ( outfile.length() ) {
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

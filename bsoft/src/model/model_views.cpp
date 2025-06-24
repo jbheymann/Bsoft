@@ -10,7 +10,6 @@
 #include "model_views.h"
 #include "model_util.h"
 #include "model_neighbors.h"
-#include "mol_compare.h"
 #include "Matrix3.h"
 #include "utilities.h"
 
@@ -45,25 +44,6 @@ vector<View2<double>>		views_from_model(Bmodel* model)
 	All models are processed.
 
 **/
-/*View*		views_from_models(Bmodel* model)
-{
-	Bmodel*			mp;
-	View*			view = NULL;
-	View*			v = NULL;
-	View*			v2 = NULL;
-
-	for ( mp = model; mp; mp = mp->next ) {
-		v = views_from_model(mp);
-		if ( !view ) view = v2 = v;
-		else {
-			while ( v2->next ) v2 = v2->next;
-			v2->next = v;
-		}
-	}
-
-	return view;
-}*/
-
 vector<View2<double>>	views_from_models(Bmodel* model)
 {
 	Bmodel*				mp;
@@ -132,49 +112,6 @@ long		model_invert_views(Bmodel* model)
 	return nsel;
 }
 
-/**
-@brief 	Finds the molecule views with respect to a reference.
-@param 	*model		model parameters.
-@param 	&reffile	reference molecule file name.
-@param 	&paramfile	atomic parameter file.
-@return long			number of molecules selected.
-
-	The positioning of each molecule is based on the center of mass of the reference.
-
-**/
-long		model_find_views(Bmodel* model, Bstring& reffile, Bstring& paramfile)
-{
-	Bcomponent*		comp = NULL;
-	Transform		t;
-    Bstring    		atom_select("all");
-	
-	if ( !model->type ) {
-		cerr << "Error: No component types found!" << endl;
-		return -1;
-	}
-	
-	long			nsel(0);
-	Bstring			fn;
-	Bmolgroup*		molgroup = NULL;
-	Bmolgroup*		ref_molgroup = read_molecule(reffile, atom_select, paramfile);
-	
-	if ( verbose )
-		cout << "Molecule\tDist\t\t\tAxis\t\t\tAngle" << endl;
-	for ( comp = model->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
-		nsel++;
-		fn = comp->type()->file_name();
-		molgroup = read_molecule(fn, atom_select, paramfile);
-		t = molgroup_find_transformation(molgroup, ref_molgroup);
-		comp->view(View2<float>(t.angle, t.axis));
-		molgroup_kill(molgroup);
-		if ( verbose )
-			cout << comp->type()->file_name()  << tab << comp->location() << tab << comp->view() << endl;
-	}
-	
-	molgroup_kill(ref_molgroup);
-	
-	return nsel;
-}
 
 /* The normal is defined as the average of all the rotation axes associated 
 with the angles between the links */
@@ -253,7 +190,7 @@ View2<float>	component_view(Bcomponent* comp)
 	or from the map.
 
 **/
-long		model_calculate_views(Bmodel* model, Bstring& mode)
+long		model_calculate_views(Bmodel* model, string& mode)
 {
 	if ( mode.length() < 1 ) {
 		cerr << "Error: The view calculation mode must be specified!" << endl << endl;
@@ -274,7 +211,7 @@ long		model_calculate_views(Bmodel* model, Bstring& mode)
 	
     for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
 		if ( mode[0] == 'c' )
-			origin = model_center_of_mass(model);
+			origin = model->center_of_coordinates();
 		if ( verbose & VERB_DEBUG )
 			cout << "DEBUG model_calculate_views: origin=" << origin << endl;
 		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
@@ -384,7 +321,6 @@ long		model_view_directions(Bmodel* model, int bin_width, int ref_flag)
 	if ( verbose )
 		cout << "Model\tComp\tDist\tAngle\tvx\tvy\tvz" << endl;
 	for ( mp = model; mp; mp = mp->next ) {
-//		com = model_center_of_mass(mp);
 		for ( comp = mp->comp; comp; comp = comp->next ) if ( comp->select() > 0 ) {
 //			vr = comp->location() - com;
 			d = comp->location().length();
@@ -456,7 +392,7 @@ long		model_view_directions(Bmodel* model, int bin_width, int ref_flag)
 	first and last 3 digits separately.
 
 **/
-int			component_hand(Bstring s)
+int			component_hand(string s)
 {
 	int			h(0), len = s.length();
 	Bstring		ss(s);

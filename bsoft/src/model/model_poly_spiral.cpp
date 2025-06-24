@@ -50,7 +50,6 @@ int			polygon_add(int n, int valence, Bmodel* model)
 	if ( verbose & VERB_PROCESS )
 		cout << "Adding polygon: " << n << ":" << endl;
 	Bpolygon*		poly;
-//	Bpolygon*		poly = (Bpolygon *) add_item((char **) &model->poly, sizeof(Bpolygon));
 	if ( model->poly ) poly = model->poly->add();
 	else poly = model->poly = new Bpolygon();
 	
@@ -317,7 +316,7 @@ Bmodel*		model_poly_spiral(string seq, int valence, int requirements)
 				cout << "\tcheck = " << i << endl;
 			cout << seq << endl;
 		}
-		model_kill(model);
+		delete model;
 		model = NULL;
 	}
 	
@@ -326,7 +325,7 @@ Bmodel*		model_poly_spiral(string seq, int valence, int requirements)
 
 int			model_poly_spiral_regularize(Bmodel* model)
 {
-	model_set_link_length(model, 1);
+	models_set_link_length(model, 1);
 	
 	return model_regularize(model, 10000, 0, 0, 0.2, 0.001, 0, 0, 0.1, 0.01);
 }
@@ -459,7 +458,7 @@ Bmodel*		model_poly_gen_sequence(string seq, int valence, int enantiomorph, int 
 	}
 	
 	if ( !d ) {
-		model_kill(model);
+		delete model;
 		if ( verbose )
 //			cout << "Model rejected because of redundancy" << endl;
 			cout << id << tab << seq << endl;
@@ -478,8 +477,8 @@ Bmodel*		model_poly_gen_sequence(string seq, int valence, int enantiomorph, int 
 	if ( verbose )
 		cout << model->identifier() << tab << seq << endl;
 	
-	model_set_component_radius(model, 0.1);
-	model_set_link_radius(model, 0.1);
+	models_set_component_radius(model, 0.1);
+	models_set_link_radius(model, 0.1);
 	
 	string			filename = "temp/" + model->identifier() + ".cmm";
 	write_model(filename, model);

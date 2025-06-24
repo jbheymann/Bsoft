@@ -3,14 +3,14 @@
 @brief	Header file for reading a genetic code from a file
 @author Bernard Heymann
 @date	Created: 20030316
-@date	Modified: 20060710
+@date	Modified: 20250601
 **/
 
-#include "Bstring.h"
+#include <map>
+#include "string_util.h"
 
 /* Function prototypes */
-Bstring		get_genetic_code(Bstring& filename);
-int 		write_genetic_code(Bstring& filename, Bstring& gc);
-int			index_from_codon(const char codon[3]);
+map<string,char>	get_genetic_code(string& filename);
+int 		write_genetic_code(string& filename, map<string,char>& gc);
 
 

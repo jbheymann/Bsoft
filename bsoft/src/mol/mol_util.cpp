@@ -93,8 +93,8 @@ int 		molgroup_print_sequence(Bmolgroup* molgroup)
 {
 	Bmolecule*	mol = molgroup->mol;
 
-	if ( mol->seq.length() < 1 )
-		seq_from_residues(molgroup);
+//	if ( mol->seq.length() < 1 )
+//		seq_from_residues(molgroup);
 
 	if ( verbose & VERB_LABEL )
 		cout << "Sequence:" << endl;
@@ -315,13 +315,15 @@ double 		molgroup_weight_from_sequence(Bmolgroup* molgroup)
 	if ( !molgroup->mol ) return 0;
 	if ( !molgroup->mol->seq.length() ) return 0;
 
-	Bstring			paramfile;
-	Bresidue_type*	respar = get_residue_properties(paramfile);
+//	Bstring			paramfile;
+//	Bresidue_type*	respar = get_residue_properties(paramfile);
+	string			paramfile;
+	map<char,Bresidue_type>	respar = get_residue_properties_code1(paramfile);
 	
 	long 			n;
 	double			summass(0), totmass(0);
 	Bmolecule*		mol;
-	Bresidue_type*	rt;
+//	Bresidue_type*	rt;
 
 	if ( verbose & VERB_PROCESS )
 		cout << "Molecule\tMW(Da)\tResidues" << endl;
@@ -329,8 +331,9 @@ double 		molgroup_weight_from_sequence(Bmolgroup* molgroup)
 		summass = 0;
 	    if ( mol->seq.length() ) {
 			for ( n=0; n<mol->nres; ++n ) {
-				for ( rt = respar; rt && rt->c != mol->seq[n]; rt = rt->next ) ;
-				if ( rt ) summass += rt->mass - 18;
+//				for ( rt = respar; rt && rt->c != mol->seq[n]; rt = rt->next ) ;
+//				if ( rt ) summass += rt->mass - 18;
+				summass += respar[mol->seq[n]].mass() - 18;
 			}
 	    }
 		if ( verbose & VERB_PROCESS )
@@ -751,7 +754,9 @@ double		molgroup_density(Bmolgroup* molgroup)
 double		molgroup_volume(Bmolgroup* molgroup, Bstring& paramfile, int wrap)
 {
 	Batomtype*		atompar = get_atom_properties(paramfile);
-	Bresidue_type*	respar = get_residue_properties(paramfile);
+//	Bresidue_type*	respar = get_residue_properties(paramfile);
+	string			respropfile;
+	map<string,Bresidue_type>	respar = get_residue_properties_code3(respropfile);
 	
 //	write_atom_properties("at.star", atompar);
 	
@@ -777,7 +782,7 @@ double		molgroup_volume(Bmolgroup* molgroup, Bstring& paramfile, int wrap)
 	Bresidue*		res;
 	Batom*  		atom;
 	Batomtype*  	at;
-	Bresidue_type*	rt;
+//	Bresidue_type*	rt;
 	
 	cout << "Calculating the Van der Waals volume:" << endl;
 	cout << "    in volume:                  " << gridsize << " = " << size << endl;
@@ -828,9 +833,12 @@ double		molgroup_volume(Bmolgroup* molgroup, Bstring& paramfile, int wrap)
 				}
 			}
 			mass += resmass;
-			for ( rt = respar; rt && strncmp(rt->cod, res->type, 3)!=0; rt = rt->next ) ;
-			if ( rt ) volume += rt->vol;
-			else volume += resmass/RHO;
+//			for ( rt = respar; rt && strncmp(rt->cod, res->type, 3)!=0; rt = rt->next ) ;
+//			if ( rt ) volume += rt->vol;
+			if ( respar.find(res->type) != respar.end() )
+				volume += respar[res->type].volume();
+			else
+				volume += resmass/RHO;
 		}
 	}
 	
@@ -850,7 +858,7 @@ double		molgroup_volume(Bmolgroup* molgroup, Bstring& paramfile, int wrap)
 	delete[] grid;
 	
 	kill_list((char *) atompar, sizeof(Batomtype));
-	kill_list((char *) respar, sizeof(Bresidue_type));
+//	kill_list((char *) respar, sizeof(Bresidue_type));
 	
 	return volume;
 }
@@ -967,9 +975,11 @@ JSvalue		molgroup_elements(Bmolgroup* molgroup, Bstring& paramfile)
 {
 	long			i, j, n(0);
 	Bmolecule*		mol;
-	Bresidue_type*	rt_list = get_residue_properties(paramfile);
-	Bresidue_type*	rt = NULL;
-	vector<double>	el(5,0), eltot(5,0);
+//	Bresidue_type*	rt_list = get_residue_properties(paramfile);
+//	Bresidue_type*	rt = NULL;
+	string			s(paramfile.str());
+	map<char,Bresidue_type>	rt_list = get_residue_properties_code1(s);
+	vector<double>	cmp, el(5,0), eltot(5,0);
 
 	if ( verbose & VERB_LABEL )
 		cout << "Calculating the elemental composition:" << endl << endl;
@@ -979,10 +989,13 @@ JSvalue		molgroup_elements(Bmolgroup* molgroup, Bstring& paramfile)
 	for ( mol = molgroup->mol; mol; mol = mol->next ) {
 //		cout << mol->seq << endl;
 		for ( i=0; i<mol->seq.length(); i++ ) {
-			for ( rt = rt_list; rt && rt->c != mol->seq[i]; rt = rt->next ) ;
-			if ( rt )
-				for ( j=0; j<5; ++j )
-					el[j] += rt->comp[j];
+//			for ( rt = rt_list; rt && rt->c != mol->seq[i]; rt = rt->next ) ;
+//			if ( rt )
+//				for ( j=0; j<5; ++j )
+//					el[j] += rt->comp[j];
+			cmp = rt_list[mol->seq[i]].composition();
+			for ( j=0; j<5; ++j )
+				el[j] += cmp[j];
 		}
 		if ( verbose )
 			cout << mol->id;
@@ -1007,7 +1020,7 @@ JSvalue		molgroup_elements(Bmolgroup* molgroup, Bstring& paramfile)
 	if ( verbose )
 		cout << tab << n << endl;
 
-	kill_list((char *) rt_list, sizeof(Bresidue_type));
+//	kill_list((char *) rt_list, sizeof(Bresidue_type));
 	
 	if ( verbose ) {
 		cout << "%";

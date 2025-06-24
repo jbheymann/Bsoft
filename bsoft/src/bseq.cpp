@@ -3,10 +3,10 @@
 @brief	A program to manipulate DNA and protein sequences
 @author Bernard Heymann
 @date	Created: 20000808
-@date	Modified: 20190613
+@date	Modified: 20250510
 **/
 
-#include "rwmolecule.h"
+#include "rwsequence.h"
 #include "rwgencode.h"
 #include "seq_util.h"
 #include "utilities.h"
@@ -35,7 +35,6 @@ const char* use[] = {
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
-"-nogaps                  Strip gaps from input sequences.",
 "-length 1100,1500        Sequence length range to select for.",
 "-number 10,14            Number of residues on either side to include in output.",
 "-threshold 50            Threshold percentage to report hits (default only best hit).",
@@ -60,20 +59,17 @@ int 	main(int argc, char **argv)
 	double			threshold(0);			// Only best match
 	int 			seqlenmin(0);			// Minimum sequence length
 	int 			seqlenmax(100000);		// Minimum sequence length
-	Bstring			atom_select("all");		// Selection
 	
 	// Genetic code parameter file and template sequence file
-	Bstring			gcfile;
-	Bstring			seqfile;				// Sequence to search for in a file
-	Bstring			rpfile;					// Residue properties file
-	Bstring			paramfile;
+	string			gcfile;
+	string			seqfile;				// Sequence to search for in a file
+	string			rpfile;					// Residue properties file
+	string			paramfile;
     
 	int				i, optind;
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "nogaps" )
-			atom_select = "nogap";
 		if ( curropt->tag == "show" )
 			setshow = 1;
 		if ( curropt->tag == "Mass" )
@@ -101,19 +97,19 @@ int 	main(int argc, char **argv)
 			}
 		}
 		if ( curropt->tag == "finddna" ) {
-			seqfile = curropt->filename();
+			seqfile = curropt->filename().str();
 			setfind = 1;
 		}
 		if ( curropt->tag == "findprotein" ) {
-			seqfile = curropt->filename();
+			seqfile = curropt->filename().str();
 			setfind = 2;
 		}
 		if ( curropt->tag == "findcoding" ) {
-			seqfile = curropt->filename();
+			seqfile = curropt->filename().str();
 			setfind = 3;
 		}
 		if ( curropt->tag == "Sequence" ) {
-        	seqfile = curropt->filename();
+        	seqfile = curropt->filename().str();
 			if ( seqfile.length() ) setfind = 3;
 		}
 		if ( curropt->tag == "number" )
@@ -123,28 +119,26 @@ int 	main(int argc, char **argv)
         	if ( ( threshold = curropt->value.real() ) < 1e-30 )
 				cerr << "-threshold: A threshold must be specified!" << endl;
 		if ( curropt->tag == "geneticcode" )
-            gcfile = curropt->filename();
+            gcfile = curropt->filename().str();
 		if ( curropt->tag == "elements" )
-            rpfile = curropt->filename();
+            rpfile = curropt->filename().str();
     }
 	option_kill(option);
     
 	double		ti = timer_start();
 	
 	// Read the sequence request file if given
-	Bmolgroup*		seq_request = NULL;
-	Bstring			seq;		// Sequence to search for
+	vector<Bsequence>	seqs;
+	string				seq;		// Sequence to search for
 	if ( seqfile.length() ) {
-		if ( seqfile.contains(".") ) {
-			seq_request = read_molecule(seqfile, atom_select, paramfile);
-			if ( seq_request->mol->naseq.length() ) {
-				seq = seq_request->mol->naseq;
-				seq_request->mol->naseq = NULL;
-			} else {
-				seq = seq_request->mol->seq;
-				seq_request->mol->seq = NULL;
+		if ( seqfile.find(".") != string::npos ) {
+			// Read the sequence file
+			seqs = read_sequence(seqfile);
+			if ( seqs.size() < 1 ) {
+				cerr << "Error: No sequences read!" << endl;
+				bexit(-1);
 			}
-			molgroup_kill(seq_request);
+			seq = seqs[0].sequence();
 		} else {
 			seq = seqfile;
 		}
@@ -161,43 +155,38 @@ int 	main(int argc, char **argv)
 	
     // Read the sequence file
 	seqfile = argv[optind++];
-	Bmolgroup*		molgroup = read_molecule(seqfile, atom_select, paramfile);
-	if ( !molgroup ) {
-		cerr << "Error: No input file given!" << endl;
+	seqs = read_sequence(seqfile);
+	if ( seqs.size() < 1 ) {
+		cerr << "Error: No sequences read!" << endl;
 		bexit(-1);
 	}
 	
 	if ( setcomplement )
-		seq_complement_all(molgroup);
+		sequence_complement_all(seqs);
 	
 	if ( settranslate )
-		seq_translate_all(molgroup, frame, gcfile);
-		
+		sequence_translate_all(seqs, frame, gcfile);
+/*		
 	switch ( setfind ) {
-		case 1: seq_find_dna(molgroup, seq); break;
-		case 2: seq_find_protein(molgroup, seq); break;
-		case 3: seq_find_protein_in_dna(molgroup, seq, seqlenmin, seqlenmax, side1, side2, threshold, gcfile); break;
+		case 1: sequence_find_dna(seqs, seq); break;
+		case 2: sequence_find_protein(seqs, seq); break;
+		case 3: sequence_find_protein_in_dna(seqs, seq, seqlenmin, seqlenmax, side1, side2, threshold, gcfile); break;
 		default: break;
 	}
-
+*/
 	if ( setshow )
-		seq_show(molgroup);
+		sequence_show(seqs);
 	
 	if ( setmass )
-		seq_mass(molgroup);
+		sequence_mass(seqs);
 	
 	if ( rpfile.length() )
-		seq_elements(molgroup, rpfile);
+		sequence_elements(seqs, rpfile);
 		
-	molecule_update_comment(molgroup, argc, argv);
-	
 	if ( optind < argc )
-		write_molecule(argv[optind], molgroup);
+		write_sequence(argv[optind], seqs);
 	
-	molgroup_kill(molgroup);
-
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

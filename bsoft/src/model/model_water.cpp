@@ -3,11 +3,10 @@
 @brief	Generating and managing water
 @author 	Bernard Heymann
 @date	Created: 20001014
-@date	Modified: 20230704
+@date	Modified: 20250428
 **/
 
 #include "Bmodel.h"
-//#include "mol_bonds.h"
 #include "model_util.h"
 #include "Matrix3.h"
 #include "random_numbers.h"
@@ -27,7 +26,7 @@ Bmodel*		model_generate_one_water(string& watername, Vector3<double> Ocoord)
 	double			rand_max = 1.0*get_rand_max();	
 	double			OHbond(0.9572);
 	double			HOHangle(109.47*M_PI/180.0);
-	string			restype("HOH");
+	string			restype("HOH"), chain("WAT");
 	Vector3<double>	H1vec, H2vec;
 	Matrix3			mat(1);
 	
@@ -44,6 +43,7 @@ Bmodel*		model_generate_one_water(string& watername, Vector3<double> Ocoord)
 	O->description("O");
 	O->add_description("O");
 	O->add_description(restype);
+	O->add_description(chain);
 	O->charge(-0.834);
 	O->location() = Ocoord;
 	
@@ -52,6 +52,7 @@ Bmodel*		model_generate_one_water(string& watername, Vector3<double> Ocoord)
 	H1->description("H");
 	H1->add_description("HO1");
 	H1->add_description(restype);
+	H1->add_description(chain);
 	H1->charge(0.417);
 	H1vec[0] = random()/rand_max - 0.5;
 	H1vec[1] = random()/rand_max - 0.5;
@@ -65,6 +66,7 @@ Bmodel*		model_generate_one_water(string& watername, Vector3<double> Ocoord)
 	H2->description("H");
 	H2->add_description("HO2");
 	H2->add_description(restype);
+	H2->add_description(chain);
 	H2->charge(0.417);
 	H2vec[0] = random()/rand_max - 0.5;
 	H2vec[1] = random()/rand_max - 0.5;
@@ -77,6 +79,8 @@ Bmodel*		model_generate_one_water(string& watername, Vector3<double> Ocoord)
 	H2->location() = (H2vec * OHbond) + Ocoord;
 	water->comp->find_and_add_links(O->identifier(), H2->identifier());
 
+	water->add_angle(O, H1, H2);
+	
 	return water;
 }
 
@@ -224,38 +228,6 @@ Bmodel*		model_generate_random_water(Vector3<double> size)
 	return waters;
 }
 
-
-/*
-@brief 	Generates a bond angle list for a block of waters.
-@param 	*molgroup	molecule group.
-@return Bangle*				new bond angle list.
-*/
-/*Bangle*		water_angle_list(Bmolgroup* molgroup)
-{
-	Bmolecule*		mol;
-	Bresidue*		res;
-	Batom*  		atom;
-	Bangle*			angle = NULL;
-	double			OHangle = 109.47*M_PI/180.0;
-	int				nangle = 0;
-
-	molgroup->angle = NULL;
-	
-    for ( nangle = 0, mol = molgroup->mol; mol; mol = mol->next ) {
-		res = mol->res;
-		atom = res->atom;
-		angle = angle_add(&angle, atom->next, atom, atom->next->next, OHangle, 1);
-		if ( !molgroup->angle ) molgroup->angle = angle;
-		nangle ++;
-	}
-	
-	if ( verbose & VERB_PROCESS )
-		cout << "Number of angles generated:     " << nangle << endl;
-	
-	return molgroup->angle;
-}
-*/
-
 /**
 @brief 	Calculates a radial distribution function for water molecules.
 @param 	*waters			list of water molecules.
@@ -276,7 +248,7 @@ int			model_calc_water_rdf(Bmodel* waters, double interval, double cutoff)
 	size = size.max(1);
 	for ( i=0; i<3; i++ ) sam[i] = box[i]/size[i] + 0.001;
 
-	vector<vector<Bcomponent*>>	grid = model_component_grid(waters, size, ori, sam);
+	vector<vector<Bcomponent*>>	grid = models_component_grid(waters, size, ori, sam);
 
 	double			mult(1.0/interval);
 	long			n(mult*cutoff);
@@ -327,7 +299,7 @@ int			model_calc_water_rdf(Bmodel* waters, double interval, double cutoff)
 	
 	grid.clear();
 
-	long		nwater = model_component_count(waters);
+	long		nwater = models_component_count(waters);
 			
 	cout << "Calculating the radial distribution function:" << endl;
 	

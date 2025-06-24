@@ -1,7 +1,7 @@
 /**
 @file	star.h
 @author	Bernard Heymann
-@date	20151106 - 20220103
+@date	20151106 - 20250404
 **/
 
 #include <iostream>
@@ -35,6 +35,7 @@ public:
 	BstarLoop() { }
 	BstarLoop(ifstream& fstar) {
 		string			s;
+		vector<string>	vs;
 		int				ntag(0);
 	
 		while ( !fstar.eof() ) {
@@ -47,9 +48,28 @@ public:
 				tg[s] = ntag;
 				ntag++;
 			} else {
-				vector<string>	v = splitn(s, ntag);
-				if ( v[ntag-1].size() < 1 ) break;
-				d.push_back(v);
+				if ( s[0] == ';' ) {	// multiline
+					string			v;
+					if ( s.length() > 1 ) v = s.substr(1);
+					while ( !fstar.eof() ) {
+						s = get_clean_line(fstar);
+						if ( s[0] == ';' ) break;
+						v += s;
+					};
+					vs.push_back(v);
+				} else {
+					vector<string>	v = splitn(s, ntag);
+					for ( auto v1: v )
+						vs.push_back(v1);
+				}
+				if ( vs.size() >= ntag ) {
+					d.push_back(vs);
+					vs.clear();
+				}
+//			} else {
+//				vector<string>	v = splitn(s, ntag);
+//				if ( v[ntag-1].size() < 1 ) break;
+//				d.push_back(v);
 			}
 		}
 	}
@@ -162,7 +182,7 @@ public:
 	BstarBlock(const string& s) {
 		if ( regex_search(s, regex("^data_")) ) tg = s.substr(5);
 		else tg = s;
-		//	cout << "block " << tag << endl;
+//		cout << "block " << tg << endl;
 	}
 	string			read(ifstream& fstar) {
 		string			s, t;
@@ -175,8 +195,10 @@ public:
 					if ( i != string::npos ) {
 						t = s.substr(1, i-1);	// Strip off the underscore
 						it[t] = quote_or_not(s.substr(i));
+//						cout << "=" << it[t] << "=" << endl;
 					} else {
 						t = s.substr(1);		// Strip off the underscore
+								// Next line should start with ;
 					}
 				} else if ( s[0] == ';' ) {	// multiline
 					string			v;
@@ -238,7 +260,7 @@ public:
 	}
 	int				write(string filename) {
 		int				err(0);
-		cout << "writing " << filename << endl;
+//		cout << "writing " << filename << endl;
 		string			comment = "# Written by Bsoft\n";
 		
 		fn = filename;
@@ -349,7 +371,7 @@ public:
 //		cout << "reading " << filename << endl;
    		ifstream		fstar(filename.c_str());
 		if ( fstar.fail() ) {
-//			error_show(thisfile->c_str(), __FILE__, __LINE__);
+			error_show(filename.c_str(), __FILE__, __LINE__);
 			return -1;
 		}
 		string			s;
@@ -408,6 +430,9 @@ public:
 	}
 	int			write(string filename, int split) {
 		if ( split == 0 ) return write(filename);
+		else if ( split != 9 ) {
+			if ( split > 6 ) split = 6;
+		}
 
 		int				err(0), i(0);
 		string			blockname;
@@ -415,17 +440,15 @@ public:
 		for ( auto ib: b ) {
 			if ( split == 9 ) {
 				if ( ib.tag().length() > 0 ) {
-					blockname = ib.tag();
-//					remove_spaces(blockname);
-//					int* pend = remove_if(blockname.begin(), blockname.end(), ::isspace);
-					remove_if(blockname.begin(), blockname.end(), ::isspace);
-					blockname += ".star";
+					blockname = "_" + ib.tag();
+					blockname = remove_spaces(blockname);
+					blockname = insert(filename, blockname);
 				} else {
 					blockname = ".star";
 					blockname = insert(blockname, ++i, 4);
 				}
 			} else {
-				blockname = insert(filename, ++i, 4);
+				blockname = insert(filename, ++i, split);
 		    }
 			err += ib.write(blockname);
 		}

@@ -127,9 +127,9 @@ int 		main(int argc, char **argv)
 		if ( !model ) model = guide;
 	}
 
-	if ( compradius ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 	
 	if ( mapfile.length() ) model->mapfile(mapfile.str());
 	
@@ -138,7 +138,7 @@ int 		main(int argc, char **argv)
 	if ( fit ) {
 		guide = model;
 		model = model_generate_from_plane_guide(guide, separation, sigma);
-		model_kill (guide);
+		delete guide;
 		if ( !model ) {
 			cerr << "Error: The model creation from a guide failed!" << endl;
 			bexit(-1);
@@ -150,7 +150,7 @@ int 		main(int argc, char **argv)
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

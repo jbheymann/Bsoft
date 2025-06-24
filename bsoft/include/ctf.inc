@@ -10,6 +10,7 @@
 				cerr << "-Amplitude: A fraction must be specified!" << endl;
 			else
 				jsctf["Amplitude_phase"] = asin(v);
+			cout << "amp = " << jsctf["Amplitude_phase"].real() << endl;
 		}
 		if ( curropt->tag == "Cs" ) {
 			v = curropt->real_units();

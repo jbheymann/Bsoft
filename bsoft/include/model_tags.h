@@ -17,6 +17,7 @@
 #define MODEL					"model"
 #define MODEL_ID				"model.id"
 #define MODEL_TYPE				"model.type_id"
+#define MODEL_DESCRIPTION		"model.description"
 #define MODEL_HAND				"model.hand"
 #define MODEL_SYM				"model.point_group"
 #define MODEL_MAP_FILENAME		"model.map_file_name"

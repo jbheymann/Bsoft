@@ -154,11 +154,12 @@ int 	main(int argc, char **argv)
 		bexit(-1);
 	}
 	
-	if ( center ) models_process(model, model_center);
+	if ( center ) models_center(model);
 
-	if ( comprad ) models_process(model, comprad, model_set_component_radius);
+	if ( comprad > 0 ) models_set_component_radius(model, comprad);
 
-	if ( linkrad ) models_process(model, linkrad, model_set_link_radius);
+	if ( linkrad > 0 ) models_set_link_radius(model, linkrad);
+
 
 	Bimage*			pmask = NULL;
 	if ( maskfile.length() && mask_size.volume() && mask_type.length() >= 0 ) {
@@ -195,7 +196,7 @@ int 	main(int argc, char **argv)
 		write_model(outfile.str(), model);
 	}
 
-    model_kill(model);
+    delete model;
 	
 	
 		timer_report(ti);

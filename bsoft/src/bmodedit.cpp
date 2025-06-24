@@ -3,7 +3,7 @@
 @brief	A tool to create and edit models.
 @author Bernard Heymann
 @date	Created: 20090714
-@date	Modified: 20220210
+@date	Modified: 20250606
 **/
 
 #include "rwmodel.h"
@@ -96,7 +96,7 @@ NULL
 int 		main(int argc, char **argv)
 {
     /* Initialize variables */
-	Bstring			create(0);					// ID of new model
+	string			create(0);					// ID of new model
 	string			symmetry_string;			// Point group for new model type
 	Vector3<double>	box;						// Size of box
 	double			shell_radius(-1);			// Radius of sphere
@@ -118,15 +118,15 @@ int 		main(int argc, char **argv)
 	double			random_shell_radius(0);		// Radius for a random shell model
 	int 			all(0);						// Keep selection as read from file
 	int				replace(0);					// Default action is to add models
-	Bstring			reduce;						// Reduce linked components and write sub-model
-	Bstring			model_id;					// Model identifier
-	Bstring			set_type;					// Component type to set
-	Bstring			change_type;				// Component type to change and new type name
-	Bstring			associate_type;				// Component type
-	Bstring			associate_file;				// Component type file name
+	string			reduce;						// Reduce linked components and write sub-model
+	string			model_id;					// Model identifier
+	string			set_type;					// Component type to set
+	string			change_type;				// Component type to change and new type name
+	string			associate_type;				// Component type
+	string			associate_file;				// Component type file name
 	Vector3<double>	shift;						// Translate
 	Vector3<double>	trim;						// New enclosing box
-	Bstring			peakmap;					// Map with peaks to generate a new model
+	string			peakmap;					// Map with peaks to generate a new model
 	vector<Vector3<double>>	newloc;				// New component locations
 	double			linklength(0);				// Link length for generating links
 	double			rdf_interval(0);			// Calculate RDF at this sampling (0=not)
@@ -151,7 +151,7 @@ int 		main(int argc, char **argv)
 	Boption*		option = get_option_list(use, argc, argv, optind);
 	Boption*		curropt;
 	for ( curropt = option; curropt; curropt = curropt->next ) {
-		if ( curropt->tag == "create" ) create = curropt->value;
+		if ( curropt->tag == "create" ) create = curropt->value.str();
 		if ( curropt->tag == "symmetry" )
 			symmetry_string = curropt->symmetry_string();
 		if ( curropt->tag == "box" )
@@ -199,24 +199,24 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "all" ) all = 1;
 		if ( curropt->tag == "replace" ) replace = 1;
 		if ( curropt->tag == "reduce" )
-			reduce = curropt->filename();
+			reduce = curropt->filename().str();
 		if ( curropt->tag == "id" ) {
-			model_id = curropt->value;
+			model_id = curropt->value.str();
 			if ( model_id.length() < 1 )
 				cerr << "-id: An identifier must be specified!" << endl;
 		}
 		if ( curropt->tag == "settype" )
-			set_type = curropt->value;
+			set_type = curropt->value.str();
 		if ( curropt->tag == "changetype" )
-			change_type = curropt->value;
+			change_type = curropt->value.str();
 		if ( curropt->tag == "associate" ) {
 			astr = curropt->value;
-			associate_type = astr.pre(',');
-			associate_file = astr.post(',');
+			associate_type = astr.pre(',').str();
+			associate_file = astr.post(',').str();
 			astr = 0;
 		}
 		if ( curropt->tag == "peaks" )
-			peakmap = curropt->filename();
+			peakmap = curropt->filename().str();
 		if ( curropt->tag == "add" )
 			newloc.push_back(curropt->vector3());
 		if ( curropt->tag == "translate" ) {
@@ -293,7 +293,7 @@ int 		main(int argc, char **argv)
 	if ( file_list.size() )
 		model = read_model(file_list, paramfile.str());
 	
-	if ( create.length() ) newmod = new Bmodel(create.str());
+	if ( create.length() ) newmod = new Bmodel(create);
 
 	if ( peakmap.length() ) {
 		Bimage*			map = read_img(peakmap, 1, 0);
@@ -345,20 +345,20 @@ int 		main(int argc, char **argv)
 		else newmod = model_create_cubic_lattice(lattice, separation);
 	}
 	
-	if ( model_id.length() ) newmod->identifier(model_id.str());
+	if ( model_id.length() ) newmod->identifier(model_id);
 	else model_id = "create";
 	
-	if ( set_type.length() ) model_set_type(newmod, set_type.str());
+	if ( set_type.length() ) models_set_type(newmod, set_type);
 	
 	if ( associate_file.length() )
-		model_associate(newmod, associate_type.str(), associate_file.str());
+		model_associate(newmod, associate_type, associate_file);
 	
-	if ( linklength > 0 ) model_link_list_generate(newmod, linklength);
+	if ( linklength > 0 ) models_link_list_generate(newmod, linklength);
 
 	if ( mapfile.length() ) newmod->mapfile(mapfile.str());
 
 	if ( replace && model && newmod ) {
-		model_kill(model);
+		delete model;
 		model = newmod;
 		newmod = NULL;
 	} else {
@@ -369,13 +369,13 @@ int 		main(int argc, char **argv)
 		mp = newmod;
 	}
 	
-	if ( all ) models_process(model, model_reset_selection);
+	if ( all ) models_select_all(model);
 	
-	if ( newloc.size() ) model_add_components(model, model_id.str(), set_type.str(), newloc);
+	if ( newloc.size() ) model_add_components(model, model_id, set_type, newloc);
 
-	if ( change_type.length() ) model_change_type(model, change_type.str());
+	if ( change_type.length() ) model_change_type(model, change_type);
 	
-	if ( reduce.length() ) model_reduce_linked(model, reduce.str(), 1);
+	if ( reduce.length() ) model_reduce_linked(model, reduce, 1);
 
 	if ( consolidate ) model_consolidate(model, consolidate);
 
@@ -383,9 +383,9 @@ int 		main(int argc, char **argv)
 	
 	if ( rdf_interval > 0 ) model_radial_distribution(model, rdf_interval);
 
-	if ( compradius ) models_process(model, compradius, model_set_component_radius);
+	if ( compradius > 0 ) models_set_component_radius(model, compradius);
 
-	if ( linkradius ) models_process(model, linkradius, model_set_link_radius);
+	if ( linkradius > 0 ) models_set_link_radius(model, linkradius);
 
 	if ( set_color ) model_color_uniformly(model, color);
 
@@ -395,14 +395,14 @@ int 		main(int argc, char **argv)
 
 	if ( trim.volume() ) models_trim(model, trim);
 
-	model_selection_stats(model);
+	models_selection_stats(model);
 
 	// Write an output parameter format file if a name is given
     if ( outfile.length() && model ) {
 		write_model(outfile.str(), model);
 	}
 
-	model_kill(model);
+	delete model;
 	
 	
 		timer_report(ti);

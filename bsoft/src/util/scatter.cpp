@@ -541,6 +541,7 @@ double		material_show_cross_section(Bmaterial& material, CTFparam& ctf)
 		if ( ctf.slit_width() )
 			cout << "Slit width:                     " << ctf.slit_width() << " eV" << endl;
 		cout << "Volume:                         " << material.volume() << " A3" << endl;
+		cout << "Mean inner potential:           " << material.mean_inner_potential() << " V" << endl;
 		cout << "Z\tElement\tCount\tMass(Da)\tcsel\tcsin\tcs" << endl;
 //	}
 

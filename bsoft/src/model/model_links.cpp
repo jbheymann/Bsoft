@@ -3,7 +3,7 @@
 @brief	Library routines used for model links processing
 @author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20230717
+@date	Modified: 20250426
 **/
 
 #include "model_links.h"
@@ -22,7 +22,7 @@ extern int 	verbose;		// Level of output to the screen
 @param	distance_type	1=harmonic, 2=soft, 3=lennard-jones, 4=morse.
 @return long				number of links generated.
 **/
-long		model_generate_links(Bmodel* model, int distance_type)
+long		models_generate_links(Bmodel* model, int distance_type)
 {
 	long			nlink(0);
 	Bmodel*			mp;
@@ -57,7 +57,7 @@ long		model_generate_links(Bmodel* model, int distance_type)
 @param 	*model			list of models.
 @return long				number of angles generated.
 **/
-long		model_generate_angles(Bmodel* model)
+long		models_generate_angles(Bmodel* model)
 {
 	long			nangle(0);
 	Bmodel*			mp;
@@ -89,44 +89,62 @@ long		model_generate_angles(Bmodel* model)
 @brief 	Set up the link list for each component.
 @param 	*model		model parameters.
 @return long			total number of links.
-
-	Only the first model is processed.
-
 **/
-long		model_setup_links(Bmodel* model)
+/*long		models_setup_links(Bmodel* model)
 {
 	if ( !model ) return 0;
 	
 	long			i, j, n(0);
+	Bmodel*			mp;
 	Blink*			link = NULL;
 	Bcomponent*		comp1;
 	Bcomponent*		comp2;
 	
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_setup_links: id=" << model->identifier() << endl;
+		cout << "DEBUG models_setup_links: id=" << model->identifier() << endl;
 	
-	for ( n=0, link = model->link; link; link = link->next, n++ ) {
-		comp1 = link->comp[0];
-		comp2 = link->comp[1];
-		for ( i=0; i<comp1->link.size() && comp1->link[i] != comp2; i++ ) ;
-		for ( j=0; j<comp2->link.size() && comp2->link[j] != comp1; j++ ) ;
-		if ( i < comp1->link.size() && j < comp2->link.size() ) {
-			if ( verbose & VERB_FULL )
-				cerr << "Error: " << comp1->identifier() << " already linked to " << comp2->identifier() << 
-					"! (" << i << " -" << j << ")" << endl;
-		} else {
-			comp1->link.push_back(comp2);
-			comp2->link.push_back(comp1);
-			comp1->flag.push_back(1);
-			comp2->flag.push_back(1);	// flag=1 indicates link
+	for ( n=0, mp = model; mp; mp = mp->next ) {
+		for ( link = mp->link; link; link = link->next, n++ ) {
+			comp1 = link->comp[0];
+			comp2 = link->comp[1];
+			for ( i=0; i<comp1->link.size() && comp1->link[i] != comp2; i++ ) ;
+			for ( j=0; j<comp2->link.size() && comp2->link[j] != comp1; j++ ) ;
+			if ( i < comp1->link.size() && j < comp2->link.size() ) {
+				if ( verbose & VERB_FULL )
+					cerr << "Error: " << comp1->identifier() << " already linked to " << 	comp2->identifier() << 
+						"! (" << i << " -" << j << ")" << endl;
+			} else {
+				comp1->link.push_back(comp2);
+				comp2->link.push_back(comp1);
+				comp1->flag.push_back(1);
+				comp2->flag.push_back(1);	// flag=1 indicates link
+			}
+			if ( link->length() < 1e-6 ) 	link->length(comp1->location().distance(comp2->location()));
 		}
-		if ( link->length() < 1e-6 ) link->length(comp1->location().distance(comp2->location()));
+		if ( mp->link ) mp->calculate_normals();
 	}
 
-	if ( model->link ) model->calculate_normals();
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG models_setup_links: n=" << n << endl;
+	
+	return n;
+}*/
+
+long		models_setup_links(Bmodel* model)
+{
+	if ( !model ) return 0;
+	
+	long			n(0);
+	Bmodel*			mp;
+	
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG models_setup_links: id=" << model->identifier() << endl;
+	
+	for ( mp = model; mp; mp = mp->next )
+		n += mp->setup_links();
 
 	if ( verbose & VERB_DEBUG )
-		cout << "DEBUG model_setup_links: n=" << n << endl;
+		cout << "DEBUG models_setup_links: n=" << n << endl;
 	
 	return n;
 }
@@ -140,7 +158,7 @@ long		model_setup_links(Bmodel* model)
 	Only the first model is processed.
 
 **/
-long		model_link_list_generate(Bmodel* model, double maxlength)
+long		models_link_list_generate(Bmodel* model, double maxlength)
 {
 	if ( !model ) return 0;
 	if ( !model->comp ) return 0;
@@ -148,7 +166,8 @@ long		model_link_list_generate(Bmodel* model, double maxlength)
 	long			n(0);
 	double			linkrad(0.1*maxlength);
 	double			d;
-	Bcomponent*		comp;
+	Bmodel*			mp;
+	Bcomponent*		comp1;
 	Bcomponent*		comp2;
 	Blink*			link = NULL;
 
@@ -157,13 +176,19 @@ long		model_link_list_generate(Bmodel* model, double maxlength)
 	
 	link = model->link;
 	if ( link ) linkrad = link->radius();
-	for ( comp = model->comp; comp && comp->next; comp = comp->next ) if ( comp->select() ) {
-		for ( comp2 = comp->next; comp2; comp2 = comp2->next ) if ( comp2->select() ) {
-			d = comp->location().distance(comp2->location());
-			if ( d <= maxlength ) {
-				link = link_add(&link, comp, comp2, d, linkrad);
-				if ( !model->link ) model->link = link;
-				n++;
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( comp1 = mp->comp; comp1 && comp1->next; comp1 = comp1->next ) if ( 	comp1->select() ) {
+			for ( comp2 = comp1->next; comp2; comp2 = comp2->next ) if ( comp2->select() ) {
+				d = comp1->location().distance(comp2->location());
+				if ( d <= maxlength ) {
+					link = mp->link->find(comp1, comp2);
+					if ( !link ) {
+						link = mp->add_link(comp1, comp2);
+						link->length(d);
+						link->radius(linkrad);
+						n++;
+					}
+				}
 			}
 		}
 	}
@@ -188,73 +213,78 @@ long		model_link_list_generate(Bmodel* model, double maxlength)
 	If the flag is set, a link is generated only for the closest second component to the first.
 
 **/
-long		model_link_list_generate(Bmodel* model, double maxlength,
+long		models_link_list_generate(Bmodel* model, double maxlength,
 				string type1, string type2, int flag)
 {
 	if ( !model ) return 0;
 	if ( !model->comp ) return 0;
-	if ( type1.length() < 1 ) return model_link_list_generate(model, maxlength);
+	if ( type1.length() < 1 ) return models_link_list_generate(model, maxlength);
 	if ( type2.length() < 1 ) type2 = type1;
-
-	Bcomptype*		ct1 = model->find_type(type1.c_str());
-	Bcomptype*		ct2 = model->find_type(type2.c_str());
-
-	if ( !ct1 || !ct2 ) {
-		if ( !ct1 ) cerr << "Error: No component type " << type1 << " found!" << endl;
-		if ( !ct2 ) cerr << "Error: No component type " << type2 << " found!" << endl;
-		bexit(-1);
-	}
 
 	int				closest(flag&1);	// Flag to find the closest second component to the first
 	long			n(0);
 	double			linkrad(0.1*maxlength);
 	double			d, dmin(maxlength), d_avg(0), d_std(0);
+	Bmodel*			mp;
 	Bcomponent*		comp;
 	Bcomponent*		comp2;
 	Bcomponent*		compsel = NULL;
+	Bcomptype*		ct1;
+	Bcomptype*		ct2;
 	Blink*			link = model->link;
 
 	if ( verbose ) {
 		cout << "Generating a model link list between component types:" << endl;
 		cout << "Maximum link length:            " << maxlength << endl;
-		cout << "Component type 1:               " << ct1->identifier() << endl;
-		cout << "Component type 2:               " << ct2->identifier() << endl;
+		cout << "Component type 1:               " << type1 << endl;
+		cout << "Component type 2:               " << type2 << endl;
 	}
 	
 	link = model->link;
 	if ( link ) linkrad = link->radius();
-	for ( comp = model->comp; comp && comp->next; comp = comp->next ) {
-		if ( comp->select() && comp->type() == ct1 ) {
-			if ( closest ) {
-				dmin = maxlength;
-				compsel = NULL;
-			}
-			for ( comp2 = model->comp; comp2; comp2 = comp2->next ) {
-				if ( comp != comp2 && comp2->select() && comp2->type() == ct2 ) {
-					if ( model->link->find(comp, comp2) == NULL ) {
-						d = comp->location().distance(comp2->location());
-						if ( closest ) {
-							if ( dmin > d ) {
-								dmin = d;
-								compsel = comp2;
+
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		ct1 = mp->find_type(type1.c_str());
+		ct2 = mp->find_type(type2.c_str());
+		if ( !ct1 || !ct2 ) {
+			if ( !ct1 ) cerr << "Error: No component type " << type1 << " found!" << endl;
+			if ( !ct2 ) cerr << "Error: No component type " << type2 << " found!" << endl;
+			bexit(-1);
+		}
+	
+		for ( comp = mp->comp; comp && comp->next; comp = comp->next ) {
+			if ( comp->select() && comp->type() == ct1 ) {
+				if ( closest ) {
+					dmin = maxlength;
+					compsel = NULL;
+				}
+				for ( comp2 = model->comp; comp2; comp2 = comp2->next ) {
+					if ( comp != comp2 && comp2->select() && comp2->type() == ct2 ) {
+						if ( mp->link->find(comp, comp2) == NULL ) {
+							d = comp->location().distance(comp2->location());
+							if ( closest ) {
+								if ( dmin > d ) {
+									dmin = d;
+									compsel = comp2;
+								}
+							} else if ( d <= maxlength ) {
+								link = link_add(&link, comp, comp2, d, linkrad);
+								if ( !mp->link ) mp->link = link;
+								n++;
+								d_avg += d;
+								d_std += d*d;
 							}
-						} else if ( d <= maxlength ) {
-							link = link_add(&link, comp, comp2, d, linkrad);
-							if ( !model->link ) model->link = link;
-							n++;
-							d_avg += d;
-							d_std += d*d;
 						}
 					}
 				}
-			}
-			if ( closest && compsel ) {
-				d = comp->location().distance(compsel->location());
-				link = link_add(&link, comp, compsel, d, linkrad);
-				if ( !model->link ) model->link = link;
-				n++;
-				d_avg += d;
-				d_std += d*d;
+				if ( closest && compsel ) {
+					d = comp->location().distance(compsel->location());
+					link = link_add(&link, comp, compsel, d, linkrad);
+					if ( !mp->link ) mp->link = link;
+					n++;
+					d_avg += d;
+					d_std += d*d;
+				}
 			}
 		}
 	}
@@ -283,19 +313,22 @@ long		model_link_list_generate(Bmodel* model, double maxlength,
 	Only the first model is processed.
 
 **/
-long		model_set_link_length(Bmodel* model, double linklength)
+long		models_set_link_length(Bmodel* model, double linklength)
 {
 	if ( !model ) return 0;
 	
 	long			nsel(0);
+	Bmodel*			mp;
 	Blink*			link;
 
 	if ( verbose & VERB_FULL )
 		cout << "Setting reference link lengths to " << linklength << endl << endl;
 	
-	for ( link = model->link; link; link = link->next ) if ( link->select() ) {
-		link->length(linklength);
-		nsel++;
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( link = mp->link; link; link = link->next ) if ( link->select() ) {
+			link->length(linklength);
+			nsel++;
+		}
 	}
 	
 	return  nsel;
@@ -310,16 +343,19 @@ long		model_set_link_length(Bmodel* model, double linklength)
 	Only the first model is processed.
 
 **/
-long		model_set_link_radius(Bmodel* model, double linkrad)
+long		models_set_link_radius(Bmodel* model, double linkrad)
 {
 	if ( !model ) return 0;
 	
 	long			nsel(0);
+	Bmodel*			mp;
 	Blink*			link = NULL;
 
-	for ( link = model->link; link; link = link->next ) if ( link->select() ) {
-		link->radius(linkrad);
-		nsel++;
+	for ( mp = model; mp; mp = mp->next ) if ( mp->select() ) {
+		for ( link = mp->link; link; link = link->next ) if ( link->select() ) {
+			link->radius(linkrad);
+			nsel++;
+		}
 	}
 	
 	return  nsel;
@@ -443,13 +479,15 @@ long		model_reduce_linked(Bmodel* model, string submodname, int flags)
 						cout << comp_sub->identifier() << tab << comp_temp->identifier() << tab << comp_sub->location().distance(comp_temp->location()) << endl;
 					}
 				}
-				model_kill(mpt);
+				delete mpt;
 			}
 		}
-		model_link_list_kill(mp);
-		mp->link = NULL;
-		component_list_kill(mp->comp);
-		mp->comp = comp_list;
+//		model_link_list_kill(mp);
+//		mp->link = NULL;
+//		component_list_kill(mp->comp);
+//		mp->comp = comp_list;
+		mp->clear_links();
+		mp->clear_components();
 		nn += i;
 	}
 
@@ -459,7 +497,7 @@ long		model_reduce_linked(Bmodel* model, string submodname, int flags)
 				comp_sub->location(comp_sub->velocity()/comp_sub->select());
 
 	write_model(submodname, model_sub);
-	model_kill(model_sub);
+	delete model_sub;
 	
 	return nn;
 }
@@ -476,7 +514,7 @@ long		model_reduce_linked(Bmodel* model, string submodname, int flags)
 	Only the first model in the linked list is used.
 
 **/
-long		model_links_minimum_valency(Bmodel* model, long valency)
+long		models_links_minimum_valency(Bmodel* model, long valency)
 {
 	if ( !model ) {
 		cerr << "Error: No model selected!" << endl << endl;
@@ -486,15 +524,13 @@ long		model_links_minimum_valency(Bmodel* model, long valency)
 	if ( verbose )
 		cout << "Generating links to ensure minimum valency of " << valency << endl;
 
+	double			dcut;
 	Matrix			m;
-	
-	m = model_distance_matrix(model, 0);
-	
-	double			dcut = matrix_find_cutoff_for_number(m, valency);
-	
-	long			nl = model_link_list_generate(model, dcut);
-	
-	return nl;
+
+		m = model_distance_matrix(model, 0);
+		dcut = matrix_find_cutoff_for_number(m, valency);
+
+	return models_link_list_generate(model, dcut);
 }
 
 

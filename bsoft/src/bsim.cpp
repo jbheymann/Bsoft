@@ -3,13 +3,13 @@
 @brief	A tool to generate a project with random orientations for a molecule and to simulate TEM images from given orientations.
 @author Bernard Heymann
 @date	Created: 20030805
-@date 	Modified: 20220322
+@date 	Modified: 20241217
 **/
 
 #include "mg_processing.h"
+#include "mg_simulate.h"
 #include "mg_multislice.h"
 #include "rwmg.h"
-#include "rwmolecule.h"
 #include "utilities.h"
 #include "options.h"
 #include "timer.h"
@@ -26,19 +26,22 @@ const char* use[] = {
 "The program has different entry and exit points:",
 "A new STAR file can be generated (use -generate or -symmetry option and no input STAR file)",
 "   or parameters can be read in from existing STAR files.",
-"The provision of a coordinate file leads to calculation of potential slices.",
-"Input of STAR file(s) without a coordinate file implies that the potentials",
-"   have already been calculated and will be used for multislice simulation.",
+"The provision of a coordinate file leads to calculation of simulated images.",
+"Image simulation types:",
+"   0: Ewald sphere projection.",
+"   1: Projection approximation.",
+"   2: Multislice simulation.",
 " ",
 "Actions:",
 "-generate 10,3,50        Generate a project, specifying number of fields, number of",
 "                         micrographs per field and number of particles per micrograph.",
 "-symmetry C5             Generates images based on a grid in the asymmetric unit.",
 "-coordinates file.pdb    Input coordinate file, generate simulated images in project.",
-"-image                   Generate a final image and parameter file (default not).",
-"-poisson                 Add poisson noise (default not).",
-"-gaussian 0.2            Add gaussian noise with the given signal-to-noise ratio.",
-"-MTF 17.5                Set the MTF decay constant (required to impose MTF).",
+"-map image.mrc           Input map file, generate simulated images in project.",
+//"-image                   Generate a final image and parameter file (default not).",
+//"-poisson                 Add poisson noise (default not).",
+//"-gaussian 0.2            Add gaussian noise with the given signal-to-noise ratio.",
+//"-MTF 17.5                Set the MTF decay constant (required to impose MTF).",
 " ",
 "Parameters:",
 "-verbose 7               Verbosity of output.",
@@ -49,8 +52,8 @@ const char* use[] = {
 "-angles 8,6              Step sizes for theta and phi in the asymmetric unit, one value sets both.",
 "                         Use with the -symmetry option (default 10,10).",
 "-Pixelsize 5.5           Set the particle pixel size (default 1 angstrom/pixel).",
-"-electrondose 35.5       Set the electron dose (default 20 electrons/angstrom).",
-"-Defocus 0.5,3.4         Defocus range (required to apply CTF).",
+"-electrondose 35.5       Set the electron dose (default 20 electrons/angstrom2).",
+"-Defocus 0.5u,3.4u       Defocus range (angstrom, required to apply CTF).",
 "-fieldbasename field     Field-of-view base name (default field).",
 "-fieldnumber 5           Field starting number (default 1).",
 "-mgbasename mg           Micrograph base name (default mg).",
@@ -64,7 +67,8 @@ const char* use[] = {
 "-fieldname field         Field-of-view name (for selecting a specific field).",
 "-mgname mg               Micrograph base name (for selecting a specific micrograph).",
 "-partselect 132          Particle selection for potential generation (default all).",
-"-type real               Type of potential calculation (default reciprocal, other gauss).",
+"-type multislice         Type of potential calculation: ewald (default), projection, multislice.",
+"-aberration 1            Flag to apply aberrations (-1 for conjugate).",
 "-size 100,80,120         Size of enclosing box (default based on input coordinates).",
 "-thickness 20            Slice thickness in angstrom (default 10 A).",
 "-resolution 8.5          Resolution limits (default Nyquest frequency).",
@@ -72,7 +76,7 @@ const char* use[] = {
 " ",
 "Input:",
 "-parameters param.star   Parameter file name for electron scattering curves (default atom_prop.star).",
-"-Water water.pdb         Block of water to embed the molecule into (default none).",
+"-water water.pdb         Block of water to embed the molecule into (default none).",
 " ",
 "Output:",
 "-output mg.star          Parameter file (use with generate option).",
@@ -92,13 +96,14 @@ int 		main(int argc, char **argv)
 	Vector3<double>	pixel_size;				// Take pixel size from input files
 	double			dose(20);				// Electron dose
 	double			def_min(0), def_max(0);	// Defocus range (angstrom) default none
-	int				pottype(0);				// Reciprocal space potential calculation
+	int				simtype(0);				// 0=ewald, 1=projection, 2=multislice
+	int				ab_flag(0);				// Flag to apply aberration weights, -1=conjugate
 	Vector3<long>	size;					// Simulated box size
 	double			thickness(10);			// Slice thickness in angstrom
 	double			resolution(0);			// High resolution limit
 	double			Bfactor(0);				// Overall temperature factor
-	int				image_flag(0);			// Flag to generate the final image and parameter file
-	int				poisson(0);				// No poisson noise added
+//	int				image_flag(0);			// Flag to generate the final image and parameter file
+//	int				poisson(0);				// No poisson noise added
 	double			gauss(1e10);			// Gaussian signal-to-noise ratio, > 1000 means no noise
 	double			kmtf(0);				// MTF decay constant
     Bstring    		atom_select("ALL");
@@ -113,6 +118,7 @@ int 		main(int argc, char **argv)
 	int				partselect(0);			// Selected particle ID
 	Bstring			coorfile;				// Input coordinate file
 	Bstring			waterfile;				// Input solvent coordinate file
+	Bstring			mapfile;				// Input map file
 	Bstring			paramfile;				// Use default parameter file for atomic properties
 	Bstring			outfile;				// Output parameter file
 	Bstring			jsin;					// JSON file
@@ -166,18 +172,20 @@ int 		main(int argc, char **argv)
 				cerr << "-electrondose: The electron dose must be specified!" << endl;
 #include "ctf.inc"
 		if ( curropt->tag == "Defocus" ) {
-			if ( curropt->values(def_min, def_max) < 1 )
+			if ( curropt->real_units(def_min, def_max) < 1 )
 				cerr << "-Defocus: Both defocus minimum and maximum must be specified!" << endl;
 			if ( def_max < def_min ) def_max = def_min;
-			if ( def_min < 100 && def_max < 100 ) {	// Assume um
-				def_min *= 1e4;
-				def_max *= 1e4;
-			}
 		}
 		if ( curropt->tag == "type" ) {
-			pottype = 0;
-			if ( curropt->value.contains("rea") ) pottype = 1;
-			if ( curropt->value.contains("gau") ) pottype = 2;
+			simtype = 0;	// Ewald
+			if ( curropt->value[0] == 'p' ) simtype = 1;	// Projection
+			if ( curropt->value[0] == 'm' ) simtype = 2;	// Multislice
+			if ( curropt->value[0] == 'c' ) simtype = 3;	// Conjugate aberration
+		}
+		if ( curropt->tag == "aberration" ) {
+			ab_flag = curropt->value.integer();
+			if ( ab_flag > 1 ) ab_flag = 1;
+			if ( ab_flag < -1 ) ab_flag = -1;
 		}
 		if ( curropt->tag == "size" )
 			size = curropt->size();
@@ -190,10 +198,10 @@ int 		main(int argc, char **argv)
 		if ( curropt->tag == "Bfactor" )
 			if ( ( Bfactor = curropt->value.real() ) < 0.001 )
 				cerr << "-Bfactor: A temperature factor must be specified!" << endl;
-		if ( curropt->tag == "image" )
-			image_flag = 1;
-		if ( curropt->tag == "poisson" )
-			poisson = 1;
+//		if ( curropt->tag == "image" )
+//			image_flag = 1;
+//		if ( curropt->tag == "poisson" )
+//			poisson = 1;
 		if ( curropt->tag == "MTF" )
 			if ( ( kmtf = curropt->value.real() ) < 1e-30 )
 				cerr << "-MTF: The MTF decay constant must be specified!" << endl;
@@ -234,9 +242,11 @@ int 		main(int argc, char **argv)
 				cerr << "-partselect: A particle number must be specified!" << endl;
 		if ( curropt->tag == "coordinates" )
 			coorfile = curropt->filename();
-		if ( curropt->tag == "Water" )
+		if ( curropt->tag == "water" )
 			waterfile = curropt->filename();
-		if ( curropt->tag == "Parameter" )
+		if ( curropt->tag == "map" )
+			mapfile = curropt->filename();
+		if ( curropt->tag == "parameters" )
 			paramfile = curropt->filename();
 		if ( curropt->tag == "output" )
 			outfile = curropt->filename();
@@ -244,6 +254,8 @@ int 		main(int argc, char **argv)
 	option_kill(option);
     
 	double			ti = timer_start();
+
+	if ( def_min && ab_flag == 0 ) ab_flag = 1;
 	
 	CTFparam		cp = ctf_from_json(jsctf);
 
@@ -277,7 +289,7 @@ int 		main(int argc, char **argv)
 	if ( outfile.c_str() ) {
 		write_project(outfile, project, 0, 0);
 	}
-	
+/*	
 	Bmolgroup*		molgroup = NULL;
 	Bmolgroup*		water = NULL;
 	if ( coorfile.length() ) {
@@ -294,10 +306,49 @@ int 		main(int argc, char **argv)
 				bexit(-1);
 			}
 		}
-		project_generate_potential(molgroup, water, project, fieldname, mgname, partselect,
-				size, thickness, resolution, Bfactor, pottype, paramfile);
+//		project_generate_potential(molgroup, water, project, fieldname, mgname, partselect,
+//				size, thickness, resolution, Bfactor, simtype, paramfile);
+		project_generate_projections(molgroup, water, project, fieldname, mgname, partselect,
+				size, thickness, resolution, Bfactor, simtype, paramfile);
 	}
+*/
+
 	
+	if ( coorfile.length() ) {
+		Bmodel*			model = NULL;
+		Bmodel*			water = NULL;
+		vector<string>		flist = split(coorfile.str(), ',');
+		model = read_model(flist, paramfile.str());
+		
+		if ( !model ) {
+			cerr << "Error: Problem with coordinate file " << coorfile << ", exiting!" << endl;
+			bexit(-1);
+		}
+		if ( waterfile.length() ) {
+			water = read_model(waterfile.str(), paramfile.str());
+			if ( !water ) {
+				error_show(waterfile.c_str(), __FILE__, __LINE__);
+				bexit(-1);
+			}
+		}
+
+		project_generate_projections(model, water, project, fieldname, mgname, partselect,
+				size, thickness, resolution, Bfactor, simtype, ab_flag, paramfile);
+				
+		delete model;
+		delete water;
+	}
+
+	if ( mapfile.length() ) {
+		Bimage*		map = read_img(mapfile, 1, 0);
+		
+		project_generate_projections(map, project, fieldname, mgname, partselect,
+				resolution, simtype, ab_flag);
+		
+		delete map;
+	}
+		
+/*	
 	Bstring		outfile2;
 	Bstring		insert("_tfn.");
 	if ( image_flag ) {
@@ -315,11 +366,10 @@ int 		main(int argc, char **argv)
 	}
 	
 	molgroup_kill(molgroup);
-	molgroup_kill(water);
+	molgroup_kill(water);*/
 	project_kill(project);
 	
-	
-		timer_report(ti);
+	timer_report(ti);
 	
 	bexit(0);
 }

@@ -3,13 +3,13 @@
 @brief	Header file for reading and writing FASTA sequence files
 @author Bernard Heymann
 @date	Created: 20001112 
-@date	Modified: 20001112
+@date	Modified: 20250509
 
 	Format: Protein sequence file format
 **/
 
-#include "rwmolecule.h"
+#include "Bsequence.h"
 
 // I/O prototypes
-int			readFASTA(Bstring& filename, Bmolgroup* molgroup);
-int			writeFASTA(Bstring& filename, Bmolgroup* molgroup);
+vector<Bsequence>	readFASTA(string& filename);
+int			writeFASTA(string& filename, vector<Bsequence> seqs);

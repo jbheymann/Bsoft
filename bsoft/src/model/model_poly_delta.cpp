@@ -63,7 +63,7 @@ Bmodel*		model_delta_create_tube_old(int radius, int height)
 		}
 	}
 
-	model_link_list_generate(model, 1.2);
+	models_link_list_generate(model, 1.2);
 	
 	return model;
 }
@@ -138,7 +138,7 @@ Bmodel*		model_delta_create_tube(int h, int k, int height)
 	if ( verbose )
 		cout << "Number of components generated: " << nv << endl << endl;
 
-	model_link_list_generate(model, 1.2);
+	models_link_list_generate(model, 1.2);
 	
 	return model;
 }
@@ -280,7 +280,7 @@ Bmodel*		model_delta_create_cylinder(int type, int radius, int height)
 		comp->location()[2] = height*sqrt(3.0)/4.0 + 0.5*radius;
 	}
 	
-	model_link_list_generate(model, 1.3);
+	models_link_list_generate(model, 1.3);
 	
 	return model;
 }

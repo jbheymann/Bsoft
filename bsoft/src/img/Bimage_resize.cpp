@@ -124,6 +124,9 @@ int			Bimage::resize(Vector3<long> nusize, Vector3<long> translate,
 Bimage*		Bimage::resize_copy(Vector3<long> nusize, Vector3<long> translate,
 					int fill_type, double fill)
 {
+	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG Bimage::resize_copy: " << nusize << endl;
+
 	if ( !data_pointer() ) return NULL;
 	
 	if ( nusize[0] < 1 ) nusize[0] = x;
@@ -138,14 +141,14 @@ Bimage*		Bimage::resize_copy(Vector3<long> nusize, Vector3<long> translate,
 	if ( fill_type == FILL_MAX ) fill = max;
 	
 	if ( verbose & VERB_PROCESS ) {
-		cout << "Resizing:" << endl;
+		cout << "Resizing and copying:" << endl;
 		cout << "Shift:                          " << translate << endl;
 		cout << "New size:                       " << nusize << endl;
 		if ( fill_type != FILL_BACKGROUND )
 			cout << "Fill value:                     " << fill << endl;
 		cout << endl;
 	} else if ( verbose & VERB_LABEL )
-		cout << "Resizing" << endl << endl;
+		cout << "Resizing and copying" << endl << endl;
 
 	Bimage*			pnu = copy_header();
 	pnu->size(nusize);

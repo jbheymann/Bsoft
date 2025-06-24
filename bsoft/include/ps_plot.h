@@ -1,9 +1,9 @@
 /**
 @file	ps_plot.h 
 @brief	Header file for postscript output functions.
-@author Bernard Heymann 
+@author 	Bernard Heymann 
 @date	Created: 20010515
-@date	Modified: 20200310
+@date	Modified: 20241020
 **/
 
 #ifndef _ps_plot_
@@ -16,6 +16,8 @@
 // Function prototypes
 ofstream*	ps_open_and_init(Bstring filename, Bstring title, int npages, 
 					int width, int height);
+ofstream*	ps_open_and_init(string filename, string title, int npages, 
+					int width, int height);
 ofstream*	ps_open_and_init(Bstring filename, Bplot* plot);
 int			ps_close(ofstream* fps);
 int			ps_plot(Bstring filename, Bplot* plot);
@@ -27,6 +29,7 @@ int 		ps_scale(ofstream* fps, double x1, double y1, double x2, double y2,
 					int digits, int fontsize, int inverse);
 Bplot*		plot_curve(unsigned long nrow, double* c0, double* c1, double* c2, double* c3);
 int			ps_define_arrowline(ofstream* fps);
+int			ps_ewald_scheme(string filename);
 
 #define _ps_plot_
 #endif

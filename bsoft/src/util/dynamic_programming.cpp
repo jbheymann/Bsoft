@@ -1,9 +1,9 @@
 /**
 @file	dynamic_programming.cpp
 @brief	Library functions for dynamic programming.
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20050622
-@date	Modified: 20110810
+@date	Modified: 20250509
 **/
 
 #include "dynamic_programming.h"
@@ -26,10 +26,13 @@ extern int 	verbose;		// Level of output to the screen
 **/
 long		dp_matrix_scoring(Matrix mat, double gapopen, double gapextend)
 {
-	int			m = mat.columns(), n = mat.rows();
-	int			t, pt(0);
+	long		m = mat.columns(), n = mat.rows();
+	long		t, pt(0);
 	long		i, j, k, kmax(0);
 	double		value, max, maxall(0);
+	
+//	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG dp_matrix_scoring: rows=" << n << " columns=" << m << endl;
 	
 	for ( k=j=0; j<n; j++ ) {
 		for ( i=0; i<m; i++, k++ ) {
@@ -62,6 +65,9 @@ long		dp_matrix_scoring(Matrix mat, double gapopen, double gapextend)
 		}
 	}
 	
+//	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG dp_matrix_scoring: kmax=" << kmax << endl;
+
 	return kmax;
 }
 
@@ -70,7 +76,6 @@ long		dp_matrix_scoring(Matrix mat, double gapopen, double gapextend)
 @param 	mat			matrix.
 @param 	gapopen		gap opening penalty.
 @param 	gapextend	gap extension penalty.
-@param 	*length		length of alignment.
 @return int* 			alignment array with indices.
 
 	Implementation of the Needleman-Wunsch algorithm.
@@ -81,19 +86,21 @@ long		dp_matrix_scoring(Matrix mat, double gapopen, double gapextend)
 	The length of the alignment is returned in the pointer of the last argument.
 
 **/
-int*		dp_matrix_backtrace(Matrix mat, double gapopen, double gapextend, long& length)
+pair<vector<int>, vector<int>>	dp_matrix_backtrace(Matrix mat, double gapopen, double gapextend)
 {
-	int			m = mat.columns(), n = mat.rows();
-	int			t, pt(0);
-	long		i, j, k, h, hbeg(0), hend, imax(0), jmax(0);
+	long		m = mat.columns(), n = mat.rows();
+	long		t, pt(0);
+	long		i, j, h, hbeg(0), hend, imax(0), jmax(0);
 	long		tlen = m + n;
 	double		max(0), tmax(0), value;
-	int*		aln = new int[2*tlen];
+	vector<int>	aln1(tlen, -1);
+	vector<int>	aln2(tlen, -1);
+
+//	if ( verbose & VERB_DEBUG )
+		cout << "DEBUG dp_matrix_backtrace: rows=" << n << " columns=" << m << endl;
 	
-	for ( h=0; h<tlen*2; h++ ) aln[h] = -1;
-	
-	for ( k=j=0; j<n; j++ ) {
-		for ( i=0; i<m; i++, k++ ) {
+	for ( j=0; j<n; j++ ) {
+		for ( i=0; i<m; i++ ) {
 			if ( tmax < mat[j][i] ) {
 				tmax = mat[j][i];
 				imax = i;
@@ -106,12 +113,11 @@ int*		dp_matrix_backtrace(Matrix mat, double gapopen, double gapextend, long& le
 	hend = m - imax;
 	if ( n - jmax > hend ) hend = n - jmax;
 	hend = tlen - hend;
-	for ( h=hend, i=imax; h<tlen && i<m; h++, i++ ) aln[h] = i;
-	for ( h=hend + tlen, j=jmax; h<2*tlen && j<n; h++, j++ ) aln[h] = j;
+	for ( h=hend, i=imax; h<tlen && i<m; h++, i++ ) aln2[h] = i;
+	for ( h=hend, j=jmax; h<tlen && j<n; h++, j++ ) aln1[h] = j;
 	
 	// Trace back to get the central aligned pieces
 	for ( h=hend, i=imax, j=jmax; i>0 && j>0; h-- ) {
-		k = m*j + i;
 		mat[j][i] = 2*tmax;
 		t = 0;
 		max = mat[j-1][i-1];
@@ -128,35 +134,35 @@ int*		dp_matrix_backtrace(Matrix mat, double gapopen, double gapextend, long& le
 			t = 2;
 		}
 		if ( t < 2 ) {
-			aln[h] = i;
+			aln2[h] = i;
 			i--;
 		}
 		if ( t%2 == 0 ) {
-			aln[h+tlen] = j;
+			aln1[h] = j;
 			j--;
 		}
 		pt = t;
 	}
-	k = m*j + i;
 	mat[j][i] = 2*tmax;
 	
 	// Fill in the leading pieces
 	for ( ; h >= 0; i--, j--, h-- ) {
-		if ( i >= 0 ) aln[h] = i;
-		if ( j >= 0 ) aln[h+tlen] = j;
+		if ( i >= 0 ) aln2[h] = i;
+		if ( j >= 0 ) aln1[h] = j;
 		if ( i >= 0 || j >= 0 ) hbeg = h;
 	}
 	
-	// Generate the return array
-	length = tlen - hbeg;
-	int*		align = new int[2*length];
+	// Generate the return arrays
+	long			len = tlen - hbeg;
+	vector<int>		align1(len, '-');
+	vector<int>		align2(len, '-');
 	
-	for ( i=0, h=hbeg; i<length; i++, h++ ) {
-		align[i] = aln[h];
-		align[i+length] = aln[h+tlen];
+	for ( i=0, h=hbeg; i<len; i++, h++ ) {
+		align2[i] = aln2[h];
+		align1[i] = aln1[h];
 	}
 
-	delete[] aln;
+	pair<vector<int>, vector<int>>	align_ind = make_pair(align1, align2);
 	
-	return align;
+	return align_ind;
 }

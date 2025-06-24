@@ -3,7 +3,7 @@
 @brief	Projecting a 3D map and calculating comparison statistics of the projections.
 @author Bernard Heymann
 @date	Created: 20010420
-@date	Modified: 20240311
+@date	Modified: 20250407
 **/
 
 #include "rwimg.h"
@@ -50,7 +50,8 @@ const char* use[] = {
 " ",
 "Actions for frequency space projection:",
 "-kernel 6,2              Interpolation kernel size and power.",
-"-ewald 200k,lower        Ewald sphere projection for given voltage, upper/lower/both (default combine).",
+//"-ewald 200k,lower        Ewald sphere projection for given voltage, upper/lower/both (default combine).",
+"-ewald lower             Ewald sphere projection: upper/lower/combine/both.",
 "-back                    Back transform to real space (default not).",
 "-convert real            Convert the complex transform: real, imag, Amp, Int (default not).",
 " ",
@@ -64,6 +65,7 @@ const char* use[] = {
 "-symmetry D6             Symmetry: Point group identifier.",
 "-angles 8,6              Step sizes for theta and phi in the asymmetric unit, one value sets both.",
 "-unitcell 10,23,77,90,90,90 Unit cell parameters.",
+"-Volt 200k               Acceleration voltage for Ewald sphere (default 300k).",
 " ",
 "Output:",
 "-Plotviews plot.ps       Output postscript file with a plot of projection vectors.",
@@ -173,7 +175,7 @@ int 		main(int argc, char **argv)
  		if ( curropt->tag == "edgewidth" )
 			if ( ( edge_width = curropt->value.real() ) < 0.001 )
 				cerr << "-edgewidth: An edge width must be specified!" << endl;
-		if ( curropt->tag == "ewald" ) {
+/*		if ( curropt->tag == "ewald" ) {
 			if ( ( ewald_volt = curropt->value.real() ) < 0.001 )
 				cerr << "-ewald: An acceleration voltage must be specified!" << endl;
 			else {
@@ -183,7 +185,12 @@ int 		main(int argc, char **argv)
 				if ( curropt->value.contains(",l") ) ewald_flag = -1;
 				if ( curropt->value.contains(",b") ) ewald_flag = 3;
 			}
-		}
+		}*/
+		if ( curropt->tag == "ewald" )
+			ewald_flag = curropt->ewald_flag();
+		if ( curropt->tag == "Volt" )
+			if ( ( ewald_volt = curropt->real_units() ) < 0.001 )
+				cerr << "-Volt: An acceleration voltage must be specified!" << endl;
 		if ( curropt->tag == "random" )
 			if ( ( nviews = curropt->value.integer() ) < 1 )
 				cerr << "-random: A number of views must be specified!" << endl;

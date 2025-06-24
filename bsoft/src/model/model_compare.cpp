@@ -1,14 +1,18 @@
 /**
 @file	model_compare.cpp
 @brief	Functions to compare models and components
-@author Bernard Heymann
+@author 	Bernard Heymann
 @date	Created: 20060908
-@date	Modified: 20161012
+@date	Modified: 20250615
 **/
 
+#include "model_compare.h"
 #include "model_select.h"
+#include "model_transform.h"
 #include "model_util.h"
+//#include "Bimage.h"
 #include "Matrix3.h"
+//#include "rwresprop.h"
 #include "utilities.h"
 
 // Declaration of global variables
@@ -31,6 +35,9 @@ long		model_component_number_difference(Bmodel* model1, Bmodel* model2)
 	for ( n1 = 0, comp1 = model1->comp; comp1; comp1 = comp1->next ) n1++;
 
 	for ( n2 = 0, comp2 = model2->comp; comp2; comp2 = comp2->next ) n2++;
+	
+	if ( verbose & VERB_PROCESS ) if ( n1 - n2 )
+		cout << "Component numbers are different:   " << n1 << " != " << n2 << endl;
 
 	return n1 - n2;
 }
@@ -55,7 +62,7 @@ long		model_maxnum_components(Bmodel* model)
 }
 
 /**
-@brief	Compares two models.
+@brief	Compares two models by corresponding selected compoents.
 @param 	*model1			first model structure.
 @param 	*model2			second model structure.
 @return double			RMSD.
@@ -65,17 +72,61 @@ long		model_maxnum_components(Bmodel* model)
 **/
 double		model_compare(Bmodel* model1, Bmodel* model2)
 {
+	long			n(0);
+	double			d, R(0);
+	Bcomponent*		comp1;
+	Bcomponent*		comp2;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Comparing " << model1->identifier() << " with " << model2->identifier() << ":" << endl;
+
+	// The first selected component on both models sets the alignment mapping
+	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) break; 	
+	for ( comp2 = model2->comp; comp1 && comp2; comp1 = comp1->next ) if ( comp1->select() ) {
+		for ( ; comp2; comp2 = comp2->next ) if ( comp2->select() ) break;
+		if ( !comp2 ) {
+			cerr << "Error: No second component selected!" << endl;
+			bexit(-1);
+		}	
+		if ( verbose & VERB_FULL )
+			cout << "Mapping component " << comp1->identifier() << " to " << comp2->identifier() << endl;
+		d = comp1->location().distance(comp2->location());
+		R += d*d;
+		n++;
+		comp2 = comp2->next;
+		if ( verbose & VERB_FULL )
+			cout << comp1->description()[4] << tab << comp1->description()[2] << tab << 
+				comp2->description()[4] << tab << comp2->description()[2] << tab << d << endl;
+	}
+	
+	R = sqrt(R/n);
+
+	if ( verbose & VERB_PROCESS )
+		cout << "RMSD:                           " << R << " (" << n << ")" << endl;
+	
+	return R;
+}
+
+/**
+@brief	Compares two models by closest distance between selected components.
+@param 	*model1			first model structure.
+@param 	*model2			second model structure.
+@return double			RMSD.
+
+	Only the first models in the linked lists are compared.
+
+**/
+double		model_compare_by_distance(Bmodel* model1, Bmodel* model2)
+{
 	Bcomponent*		comp1;
 	Bcomponent*		comp2;
 	Bcomponent*		compsel;
 	
-	long	n(0), n1(0), n2(0);
+	long			n(0), n1(0), n2(0);
 	double			d, dmin, R(0);
 
-	if ( verbose ) {
+	if ( verbose & VERB_PROCESS )
 		cout << "Comparing " << model1->identifier() << " with " << model2->identifier() << ":" << endl;
-		cout << "Comp1\tComp2\tDmin" << endl;
-	}
 	
 	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) {
 		dmin = 1e30;
@@ -111,26 +162,292 @@ double		model_compare(Bmodel* model1, Bmodel* model2)
 		n2++;
 	}
 
+	if ( verbose & VERB_FULL )
+		cout << "Comp1\tComp2\tDmin" << endl;
 	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) {
 		for ( comp2 = model2->comp; comp2 && comp1->select() != stoi(comp2->identifier()); comp2 = comp2->next ) ;
 		if ( comp2 && comp2->select() == stoi(comp1->identifier()) ) {
 			R += comp1->FOM()*comp1->FOM();
 			n++;
-			if ( verbose )
+			if ( verbose & VERB_FULL )
 				cout << comp1->identifier() << tab << comp2->identifier() << tab << comp1->FOM() << endl;
 		}
 	}
 
 	R = sqrt(R/n);
 	
-	if ( verbose ) {
-		cout << "Components compared: " << n << endl;
-		cout << "Model 1 components:  " << n1 << " (" << n*100.0/n1 << "%)" << endl;
-		cout << "Model 2 components:  " << n2 << " (" << n*100.0/n2 << "%)" << endl;
-		cout << "RMSD:                " << R << endl << endl;
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Components compared:            " << n << endl;
+		cout << "Model 1 components:             " << n1 << " (" << n*100.0/n1 << "%)" << endl;
+		cout << "Model 2 components:             " << n2 << " (" << n*100.0/n2 << "%)" << endl;
+		cout << "RMSD:                           " << R << endl << endl;
 	}
 	
 	return R;
+}
+
+/**
+@brief	Compares two models by corresponding selected components.
+@param 	*model1			first model structure.
+@param 	*model2			second model structure.
+@return double			RMSD.
+
+	Only the first models in the linked lists are compared.
+
+**/
+double		model_compare_corresponding(Bmodel* model1, Bmodel* model2)
+{
+	Bcomponent*		comp1;
+	Bcomponent*		comp2;
+	
+	long			n(0);
+	double			d, R(0);
+
+	if ( verbose & VERB_PROCESS )
+		cout << "Comparing " << model1->identifier() << " with " << model2->identifier() << ":" << endl;
+
+	if ( model1->component_count_selected() != model2->component_count_selected() ) {
+		cerr << "Different selected component counts!" << endl;
+		return 0;
+	}
+		
+	for ( comp1 = model1->comp, comp2 = model2->comp; comp1 && comp2; comp1 = comp1->next, comp2 = comp2->next ) 
+		if ( comp1->select() && comp2->select() ) {
+			d = comp1->location().distance(comp2->location());
+			R += d*d;
+			n++;
+	}
+
+	if ( n ) R = sqrt(R/n);
+	
+	if ( verbose & VERB_PROCESS ) {
+		cout << "Components compared:            " << n << endl;
+		cout << "RMSD:                           " << R << endl << endl;
+	}
+	
+	return R;
+}
+
+/**
+@brief	Calculates the RMSD between two corresponding sets of models.
+@param 	*model1			first model set.
+@param 	*model2			second model set.
+@return vector<double>	array of RMSDs.
+
+	The number of selected models and their order must correspond.
+
+**/
+vector<double>	models_compare_corresponding(Bmodel* model1, Bmodel* model2)
+{
+	long			n(0);
+	vector<double>	rmsd;
+
+	if ( !model1 || !model2 ) return rmsd;
+	
+	long			nmod1 = model1->count_selected();
+	long			nmod2 = model2->count_selected();
+	if ( nmod1 != nmod2 ) {
+		cerr << "The two sets of models must ahve the same number selected!" << endl;
+		return rmsd;
+	}
+	
+	rmsd.resize(nmod1);
+	
+	if ( verbose ) cout << "Comparing corresponding models:" << endl;
+	
+	Bmodel*			mp1;
+	Bmodel*			mp2;
+	
+	if ( verbose )
+		cout << "#\tModel1\tModel2\tRMSD" << endl;
+	for ( mp1 = model1, mp2 = model2; mp1 && mp2; mp1 = mp1->next, mp2 = mp2->next ) 
+		if ( mp1->select() && mp2->select() ) {
+			rmsd[n] = model_compare_corresponding(mp1, mp2);
+			if ( verbose )
+				cout << n << tab << mp1->identifier() << tab << mp2->identifier() << tab << rmsd[n] << endl;
+			n++;
+	}
+
+	return rmsd;
+}
+
+
+/**
+@brief	Counts the number of components overlapping between two sets of models.
+@param 	*model1			first model set.
+@param 	*model2			second model set.
+@param 	dcut			distance between components to define an interface.
+@return Matrix			matrixs of interface counts.
+
+	Only the selected models in the linked lists are compared.
+
+**/
+Matrix		models_interfaces(Bmodel* model1, Bmodel* model2, double dcut)
+{
+	long			n(0), n1(0), n2(0);
+	double			d;
+	Matrix			mat;
+
+	if ( !model2 ) model2 = model1;
+	
+	if ( !model1 ) return mat;
+	
+	long			nmod1 = model1->count_selected();
+	long			nmod2 = model2->count_selected();
+	if ( nmod1<1 || nmod2<1 ) return mat;
+	
+	mat = Matrix(nmod1,nmod2);
+	
+	Bmodel*			mp1;
+	Bmodel*			mp2;
+	Bcomponent*		comp1;
+	Bcomponent*		comp2;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "#1\tModel1\t#2\tModel2\tOverlap" << endl;
+	for ( mp1 = model1; mp1; mp1 = mp1->next ) if ( mp1->select() ) {
+		n2 = 0;
+		for ( mp2 = model2; mp2; mp2 = mp2->next ) if ( mp2->select() ) {
+			if ( mp1 != mp2 ) {
+				n = 0;
+				for ( comp1 = mp1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) {
+					for ( comp2 = mp2->comp; comp2; comp2 = comp2->next ) if ( comp2->select() ) {
+						d = comp1->location().distance(comp2->location());
+						if ( d <= dcut ) n++;
+					}
+				}
+				if ( verbose & VERB_PROCESS )
+					cout << n1 << tab << mp1->identifier() << tab << n2 << tab << mp2->identifier() << tab << n << endl;
+				mat[n1][n2] = n;
+			}
+			n2++;
+		}
+		n1++;
+	}
+
+	return mat;
+}
+
+/**
+@brief	Finds the interfaces between two models.
+@param 	*model1			first model structure.
+@param 	*model2			second model structure.
+@param 	dcut			distance between components to define the interface.
+@return long				number of components in interfaces.
+
+	Only the first models in the linked lists are compared.
+
+**/
+long		model_interface(Bmodel* model1, Bmodel* model2, double dcut)
+{
+	Bcomponent*		comp1;
+	Bcomponent*		comp2;
+	
+	long			n(0), n1(0), n2(0);
+	double			d;
+
+	if ( verbose )
+		cout << "Interface between " << model1->identifier() << " and " << model2->identifier() << ":" << endl;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Comp1\tType1\tComp2\tType2\tDist" << endl;
+	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) {
+		for ( comp2 = model2->comp; comp2; comp2 = comp2->next ) if ( comp2->select() ) {
+			d = comp1->location().distance(comp2->location());
+			if ( d <= dcut ) {
+				if ( verbose & VERB_PROCESS )
+					cout << comp1->description()[4] << tab << comp1->description()[2] << tab 
+						<< comp2->description()[4] << tab << comp2->description()[2] << tab << d << endl;
+				comp1->select(2);
+				comp2->select(2);
+				n++;
+			}
+		}
+	}
+
+	if ( verbose )
+		cout << "Comp1\tType1" << endl;
+	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() == 2 ) {
+		cout << comp1->description()[4] << tab << comp1->description()[2] << endl; 
+		n1++;
+	}
+
+	if ( verbose )
+		cout << "Comp2\tType2" << endl;
+	for ( comp2 = model2->comp; comp2; comp2 = comp2->next ) if ( comp2->select() == 2 ) {
+		cout << comp2->description()[4] << tab << comp2->description()[2] << endl; 
+		n2++;
+	}
+
+	if ( verbose ) {
+		cout << "Components in interfaces:       " << n << endl;
+		cout << "Components in model 1:          " << n1 << endl;
+		cout << "Components in model 2:          " << n2 << endl;
+	}
+	
+	return n;
+}
+
+/**
+@brief	Finds the interfaces between two models.
+@param 	*model1			first model structure.
+@param 	*model2			second model structure.
+@param 	res_prop		residue properties.
+@return long				number of components in interfaces.
+
+	Only the first models in the linked lists are compared.
+
+**/
+long		model_interface(Bmodel* model1, Bmodel* model2, map<string,Bresidue_type> res_prop)
+{
+	Bcomponent*		comp1;
+	Bcomponent*		comp2;
+	
+	long			n(0), n1(0), n2(0);
+	double			d, res1_ext, res2_ext;
+
+	if ( verbose )
+		cout << "Interface between " << model1->identifier() << " and " << model2->identifier() << ":" << endl;
+	
+	if ( verbose & VERB_PROCESS )
+		cout << "Comp1\tType1\tComp2\tType2\tDist" << endl;
+	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() ) {
+		res1_ext = res_prop[comp1->description()[2]].extension();
+		for ( comp2 = model2->comp; comp2; comp2 = comp2->next ) if ( comp2->select() ) {
+			res2_ext = res_prop[comp2->description()[2]].extension();
+			d = comp1->location().distance(comp2->location());
+			if ( d <= res1_ext + res2_ext ) {
+				if ( verbose & VERB_PROCESS )
+					cout << comp1->description()[4] << tab << comp1->description()[2] << tab 
+						<< comp2->description()[4] << tab << comp2->description()[2] << tab << d << endl;
+				comp1->select(2);
+				comp2->select(2);
+				n++;
+			}
+		}
+	}
+
+	if ( verbose )
+		cout << "Comp1\tType1" << endl;
+	for ( comp1 = model1->comp; comp1; comp1 = comp1->next ) if ( comp1->select() == 2 ) {
+		cout << comp1->description()[4] << tab << comp1->description()[2] << endl; 
+		n1++;
+	}
+
+	if ( verbose )
+		cout << "Comp2\tType2" << endl;
+	for ( comp2 = model2->comp; comp2; comp2 = comp2->next ) if ( comp2->select() == 2 ) {
+		cout << comp2->description()[4] << tab << comp2->description()[2] << endl; 
+		n2++;
+	}
+
+	if ( verbose ) {
+		cout << "Components in interfaces:       " << n << endl;
+		cout << "Components in model 1:          " << n1 << endl;
+		cout << "Components in model 2:          " << n2 << endl;
+	}
+	
+	return n;
 }
 
 /**
@@ -342,7 +659,7 @@ Bmodel*		models_consensus(Bmodel* model, double distance)
 		}
 	}
 	
-	models_process(model, model_reset_selection);
+	models_select_all(model);
 
 	for ( i=0, m1 = model; m1->next; m1 = m1->next ) {
 		for ( m2 = m1->next; m2; m2 = m2->next, ++i ) {
@@ -402,5 +719,31 @@ Bmodel*		models_consensus(Bmodel* model, double distance)
 	return numod;
 }
 
+/**
+@brief 	Fits a model to a reference model.
+@param 	model			model structure.
+@param 	refmod			reference model.
+@param 	id				model id to fit.
+@return int				0.
+
+**/
+int			model_fit(Bmodel* model, Bmodel* refmod, string id)
+{
+	Bmodel*			mp = model;
+	
+	if ( id.length() )
+		while ( mp && mp->identifier() != id ) mp = mp->next;
+	
+	if ( !mp ) {
+		cerr << "Error: Model with id " << id << " not found!" << endl;
+		bexit(-1);
+	}
+	
+	Transform		t = model_find_transform(mp, refmod);
+
+	models_rotate(model, t);
+	
+	return 0;
+}
 
 

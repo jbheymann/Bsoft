@@ -1,4 +1,4 @@
-# Environmental variables for Bsoft on Darwin (x86_64)
+# Environmental variables for Bsoft on Darwin (arm64)
  
 setenv BSOFT .
 setenv BPARAM $BSOFT/parameters/

@@ -3,12 +3,12 @@
 @brief	Header file for reading and writing PIR sequence files
 @author Bernard Heymann
 @date	Created: 19990123
-@date	Modified: 20000729
+@date	Modified: 20250509
 	Format: Protein sequence file format
 **/
 
-#include "rwmolecule.h"
+#include "Bsequence.h"
 
 // I/O prototypes
-int			readPIR(Bstring& filename, Bmolgroup* molgroup);
-int			writePIR(Bstring& filename, Bmolgroup* molgroup);
+vector<Bsequence>	readPIR(string& filename);
+int			writePIR(string& filename, vector<Bsequence> seqs);
